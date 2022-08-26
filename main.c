@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <SDL2/SDL.h>
 #include "kingdom_defs.h"
 #include "kingdom_logic.h"
@@ -58,7 +59,7 @@ int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, ch
     while (*appState == KD_APPSTATE_RUNNING) {
         Uint64 startTime = SDL_GetTicks64();
 
-        simulateWorld(input, world);
+        //kd_simulateWorld(input, world);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -81,14 +82,19 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
     terrain = SDL_CreateRGBSurfaceWithFormatFrom(bmp, width, height, sizeof(Uint32) / 8, width * sizeof(Uint32), terrainFormat);
     */
 
-    htw_vkContext *vkContext = htw_createVkContext();
+    kd_GraphicsState graphics;
+    graphics.vkContext = kd_createWindow();
+    graphics.pipeline = kd_createPipeline(graphics.vkContext);
+    graphics.frame = 0;
+    kd_mapCamera(&graphics);
+    kd_createTerrainBuffer(&graphics, world);
 
     while (*appState == KD_APPSTATE_RUNNING) {
-        Uint64 startTime = SDL_GetTicks64();
+        Uint64 startTime = graphics.milliSeconds = SDL_GetTicks64();
 
-        handleInputs(ui, logicInput, appState);
+        kd_handleInputs(ui, logicInput, appState);
 
-        kd_renderFrame(vkContext, ui, world);
+        kd_renderFrame(&graphics, ui, world);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -96,9 +102,11 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
         if (duration < interval) {
             SDL_Delay(interval - duration);
         }
+        graphics.frame++;
     }
 
-    htw_destroyVkContext(vkContext);
+    // TODO: move this and all htw_vulkan code to kd_window
+    htw_destroyVkContext(graphics.vkContext);
     return 0;
 }
 
@@ -112,9 +120,9 @@ int main(int argc, char *argv[])
     printf("Initizlizing SDL...\n");
     SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
 
-    kd_UiState *ui = createUiState();
-    kd_WorldState *world = createWorldState("Test World");
-    initializeWorldState(world);
+    kd_UiState ui = kd_createUiState();
+    kd_WorldState *world = kd_createWorldState("Test World");
+    kd_initializeWorldState(world, 100, 100);
     kd_LogicInputState *logicInput = createLogicInputState();
 
     Uint32 logicInterval = 1000 / LOGIC_TPS;
@@ -124,7 +132,7 @@ int main(int argc, char *argv[])
     SDL_Thread *logicThread = SDL_CreateThread(logicLoop, "logic", &logicLoopParams);
     int logicThreadResult;
 
-    interactiveWindowLoop(ui, logicInput, world, frameInterval, &appState);
+    interactiveWindowLoop(&ui, logicInput, world, frameInterval, &appState);
 
     SDL_WaitThread(logicThread, &logicThreadResult);
 
