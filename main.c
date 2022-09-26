@@ -59,7 +59,7 @@ int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, ch
     while (*appState == KD_APPSTATE_RUNNING) {
         Uint64 startTime = SDL_GetTicks64();
 
-        //kd_simulateWorld(input, world);
+        kd_simulateWorld(input, world);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -83,10 +83,7 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
     */
 
     kd_GraphicsState graphics;
-    graphics.vkContext = kd_createWindow();
-    graphics.pipeline = kd_createPipeline(graphics.vkContext);
-    graphics.frame = 0;
-    kd_mapCamera(&graphics);
+    kd_InitGraphics(&graphics, 1280, 720);
     kd_createTerrainBuffer(&graphics, world);
 
     while (*appState == KD_APPSTATE_RUNNING) {

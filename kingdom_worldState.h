@@ -5,7 +5,7 @@
 
 typedef struct kd_worldState {
     char *name;
-    ValueMap *heightMap;
+    htw_ValueMap *heightMap;
 } kd_WorldState;
 
 #endif // KINGDOM_WORLDSTATE_H_INCLUDED

@@ -16,27 +16,48 @@ typedef struct {
     mat4x4 view;
 } kd_Camera;
 
+typedef struct kd_BufferPool {
+    htw_Buffer *buffers;
+    unsigned int count;
+    unsigned int maxCount;
+} kd_BufferPool;
+
 typedef struct kd_HexmapTerrain {
-    ValueMap *heightMap;
-    htw_Buffer vertexBuffer;
-    uint32_t *tileVertexIndicies;
+    htw_ValueMap *heightMap;
+    uint32_t subdivisions;
+    htw_PipelineHandle pipeline;
+    htw_ShaderLayout shaderLayout;
+    htw_ModelData modelData;
+    htw_Buffer *worldInfoBuffer;
+    htw_Buffer *terrainDataBuffer;
+    //uint32_t *tileVertexIndicies;
 } kd_HexmapTerrain;
 
+typedef struct kd_InstanceTerrain {
+    htw_ValueMap *heightMap;
+    htw_PipelineHandle pipeline;
+    htw_ModelData modelData;
+} kd_InstanceTerrain;
+
+typedef struct kd_HexmapVertexData {
+    vec3 position;
+} kd_HexmapVertexData;
+
 typedef struct {
+    unsigned int width, height;
     uint64_t milliSeconds;
     uint64_t frame;
     // TODO: time of last frame or deltatime?
     htw_VkContext *vkContext;
-    htw_PipelineHandle pipeline;
-    htw_Buffer surfaceBuffer;
-    htw_Buffer caveBuffer;
+    kd_BufferPool bufferPool;
+    kd_HexmapTerrain surfaceTerrain;
+    kd_HexmapTerrain caveTerrain;
+    kd_InstanceTerrain instanceTerrain;
     kd_Camera camera;
 } kd_GraphicsState;
 
-htw_VkContext *kd_createWindow();
-htw_PipelineHandle kd_createPipeline(htw_VkContext *vkContext);
+void kd_InitGraphics(kd_GraphicsState *graphics, unsigned int width, unsigned int height);
 void kd_createTerrainBuffer(kd_GraphicsState *graphics, kd_WorldState *world);
-void kd_mapCamera(kd_GraphicsState *graphics);
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world);
 
 #endif // KINGDOM_MAIN_H_INCLUDED
