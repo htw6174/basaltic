@@ -11,10 +11,21 @@ typedef enum kd_WorldLayer { // TODO: make this into a general rendering layer m
     KD_WORLD_LAYER_CAVE = 1
 } kd_WorldLayer;
 
+typedef struct kd_Mouse {
+    int x;
+    int y;
+    // position on last ui tick
+    int lastX;
+    int lasyY;
+    // 0 when not held; if held, counts up by 1 per millisecond
+    int leftHeld;
+    int rightHeld;
+} kd_Mouse;
+
 typedef struct kd_UiState {
-    int testValue;
     kd_WorldLayer activeLayer;
     kd_CameraMode cameraMode;
+    kd_Mouse mouse;
     float cameraDistance;
     float cameraPitch;
     float cameraYaw;

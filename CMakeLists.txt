@@ -21,18 +21,20 @@ add_custom_command(TARGET kingdom PRE_BUILD COMMENT "Compiling shaders..." COMMA
     VERBATIM )
 # copy to build directory FIXME: why no copy cmake???? only works when makefile is regenerated?
 file(COPY shaders DESTINATION .)
+file(COPY resources DESTINATION .)
 
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
 # .cmake files under /usr/lib/cmake can be located this way to load variables
 find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(Freetype REQUIRED)
 # SDL2_INCLUDE_DIRS and SDL2_LIBRARIES are defined in /usr/lib/cmake/SDL2/SDL2Config.cmake (included with most SDL installations)
-include_directories(${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+include_directories(${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIR_ft2build} ${FREETYPE_INCLUDE_DIR_freetype2})
 
 #add_subdirectory(htw_libs)
 include_directories(../htw_libs)
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(kingdom PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES})
+target_link_libraries(kingdom PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} ${FREETYPE_LIBRARIES})
 
 #target_include_directories(kingdom PUBLIC "${PROJECT_SOURCE_DIR}/htw_libs")
 

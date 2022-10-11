@@ -7,6 +7,20 @@
 #include "kingdom_logicInputState.h"
 #include "kingdom_worldState.h"
 
+// TEST
+//#define STB_IMAGE_WRITE_IMPLEMENTATION
+//#include "stb_image_write.h"
+
+#define FT_CHECK(x) { FT_Error error = x; \
+                    if(error) fprintf(stderr, "FreeType Error: %s failed with code %i\n", #x, x); }
+
+typedef struct TextBufferData {
+    float x;
+    float y;
+    float u;
+    float v;
+} TextBufferData;
+
 typedef struct WorldInfoData {
     int timeOfDay;
 } WorldInfoData;
@@ -16,13 +30,21 @@ typedef struct TerrainBufferData {
     uint16_t palleteIndex;
     int16_t unused1; // weather / temporary effect bitmask?
     int16_t unused2; // lighting / player visibility bitmask?
+    //int64_t aligner;
 } TerrainBufferData; // TODO: move this to a world logic source file; keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
 
 static htw_VkContext *createWindow(unsigned int width, unsigned int height);
 static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline);
 
-static kd_BufferPool createBufferPool(unsigned int maxCount);
+static kd_BufferPool createBufferPool(unsigned int maxCount); // TODO: if buffer collection management is done by htw_vulkan, is this still needed?
 static htw_Buffer* getNextBuffer(kd_BufferPool *pool);
+
+static void initTextGraphics(kd_GraphicsState *graphics);
+static void updateTextGraphics(kd_GraphicsState *graphics);
+
+static void drawText(kd_GraphicsState *graphics, char *text, vec3 position);
+
+static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 
 static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldState *world);
 static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
@@ -45,16 +67,206 @@ htw_VkContext *createWindow(unsigned int width, unsigned int height) {
     return context;
 }
 
-void kd_createTerrainBuffer(kd_GraphicsState *graphics, kd_WorldState *world) {
-    createHexmapMesh(graphics, world, &graphics->surfaceTerrain);
-    //createHexmapInstanceBuffers(graphics, world);
+void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
+    initTextGraphics(graphics);
+    initTerrainGraphics(graphics, world);
+
     htw_finalizeBuffers(graphics->vkContext, graphics->bufferPool.count, graphics->bufferPool.buffers);
     htw_bindBuffers(graphics->vkContext, graphics->bufferPool.count, graphics->bufferPool.buffers);
     htw_updateBuffers(graphics->vkContext, graphics->bufferPool.count, graphics->bufferPool.buffers);
+
+    htw_beginOneTimeCommands(graphics->vkContext);
+    updateTextGraphics(graphics);
     updateHexmapDescriptors(graphics, &graphics->surfaceTerrain);
+    htw_endOneTimeCommands(graphics->vkContext);
+
 }
 
-void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline) {
+static void initTextGraphics(kd_GraphicsState *graphics) {
+    static const int glyphCount = 128;
+    kd_TextRenderContext *tc = &graphics->textRenderContext;
+    FT_CHECK(FT_Init_FreeType(&tc->freetypeLibrary));
+    FT_CHECK(FT_New_Face(tc->freetypeLibrary, "resources/fonts/NotoSansMono-Regular.ttf", 0, &tc->face));
+    FT_CHECK(FT_Set_Pixel_Sizes(tc->face, 0, 48)); // NOTE: can also set size using dots+dpi
+
+    // load required glyphs
+    tc->glyphMetrics = malloc(sizeof(kd_GlyphMetrics) * glyphCount);
+    // get bitmap size info for assembling full bitmap later
+    int totalWidth = 0;
+    int maxHeight = 0;
+    for (unsigned char c = 0; c < glyphCount; c++) {
+        FT_CHECK(FT_Load_Char(tc->face, c, FT_LOAD_DEFAULT));
+        totalWidth += tc->face->glyph->bitmap.width;
+        maxHeight = max_int(maxHeight, tc->face->glyph->bitmap.rows);
+    }
+    tc->lineDistance = tc->face->ascender - tc->face->descender; // technically should add line_gap here, but it is part of the truetype specific interface and this is good enough for now
+    tc->ascent = tc->face->ascender;
+
+    static const int bytesPerTexel = sizeof(char);
+    int bitmapWidth = htw_nextPow(totalWidth);
+    int bitmapHeight = htw_nextPow(maxHeight);
+    size_t bitmapSize = bytesPerTexel * bitmapWidth * bitmapHeight;
+
+    // create resource buffers
+    tc->uniformBuffer = getNextBuffer(&graphics->bufferPool);
+    tc->bitmapBuffer = getNextBuffer(&graphics->bufferPool);
+    *tc->uniformBuffer = htw_createBuffer(graphics->vkContext, 256, HTW_BUFFER_USAGE_UNIFORM); // TODO: determine full size
+    *tc->bitmapBuffer = htw_createBuffer(graphics->vkContext, bitmapSize, HTW_BUFFER_USAGE_TEXTURE);
+
+    // assemble full ASCII font bitmap
+    unsigned char *bitmap = tc->bitmapBuffer->hostData;
+    int bitmapX = 0;
+    for (int i = 0; i < glyphCount; i++) {
+        FT_CHECK(FT_Load_Char(tc->face, i, FT_LOAD_RENDER));
+        // save glyph metrics
+        FT_GlyphSlot glyph = tc->face->glyph;
+        kd_GlyphMetrics gm = {
+            .offsetX = bitmapX,
+            .offsetY = 0, // change if using a 2d glyph layout
+            .width = glyph->bitmap.width,
+            .height = glyph->bitmap.rows,
+            .bearingX = glyph->bitmap_left,
+            .bearingY = glyph->bitmap_top,
+            .advance = (float)glyph->advance.x / 64.0,
+            .u1 = (float)bitmapX / bitmapWidth,
+            .v1 = 0.0,
+            .u2 = gm.u1 + ((float)glyph->bitmap.width / bitmapWidth),
+            .v2 = gm.v1 + ((float)glyph->bitmap.rows / bitmapHeight)
+        };
+        tc->glyphMetrics[i] = gm;
+        //printf("width, height for %c: %i, %i\n", (char)i, gm.width, gm.height);
+
+        // insert glyph into bitmap
+        unsigned char *buffer = glyph->bitmap.buffer;
+        for (int row = 0; row < gm.height; row++) {
+            unsigned char *dest = bitmap + bitmapX + (row * bitmapWidth);
+            unsigned char *src = buffer + (row * gm.width);
+            memcpy(dest, src, gm.width);
+        }
+        bitmapX += gm.width;
+    }
+
+    // TEST: write bitmap
+    //int result = stbi_write_bmp("/home/htw/projects/c/kingdom/output/font.bmp", bitmapWidth, bitmapHeight, 1, bitmap);
+    //printf("bitmap write returned %i\n", result);
+
+    // create texture
+    tc->glyphBitmap = htw_createGlyphTexture(graphics->vkContext, bitmapWidth, bitmapHeight);
+
+    // create mesh buffers
+    tc->textModel.vertexBuffer = getNextBuffer(&graphics->bufferPool);
+    tc->textModel.indexBuffer = getNextBuffer(&graphics->bufferPool);
+    tc->textModel.instanceCount = 0;
+    *tc->textModel.vertexBuffer = htw_createBuffer(graphics->vkContext, sizeof(TextBufferData) * MAX_TEXT_LENGTH * 4, HTW_BUFFER_USAGE_VERTEX);
+    *tc->textModel.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(uint32_t) * MAX_TEXT_LENGTH * 6, HTW_BUFFER_USAGE_INDEX);
+
+    // setup shaders
+    htw_ShaderInputInfo vertInfo = {
+        .size = sizeof(TextBufferData),
+        .offset = 0
+    };
+    htw_ShaderSet shaderInfo = {
+        .vertexShader = htw_loadShader(graphics->vkContext, "shaders/text.vert.spv"),
+        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/text.frag.spv"),
+        .vertexInputStride = sizeof(TextBufferData),
+        .vertexInputCount = 1,
+        .vertexInputInfos = &vertInfo,
+        .instanceInputCount = 0
+    };
+    tc->shaderLayout = htw_createTextShaderLayout(graphics->vkContext);
+
+    // create pipeline
+    tc->textPipeline = htw_createPipeline(graphics->vkContext, tc->shaderLayout, shaderInfo);
+}
+
+static void updateTextGraphics(kd_GraphicsState *graphics) {
+    kd_TextRenderContext *tc = &graphics->textRenderContext;
+
+    htw_updateTextDescriptors(graphics->vkContext, tc->shaderLayout, *tc->uniformBuffer, tc->glyphBitmap);
+    htw_updateBuffer(graphics->vkContext, tc->bitmapBuffer);
+    htw_updateTexture(graphics->vkContext, *tc->bitmapBuffer, tc->glyphBitmap);
+
+}
+
+static void drawText(kd_GraphicsState *graphics, char *text, vec3 position) {
+    kd_TextRenderContext *tc = &graphics->textRenderContext;
+
+    // fill buffer
+    TextBufferData *vertexBuffer = (TextBufferData*)tc->textModel.vertexBuffer->hostData;
+    uint32_t *indexBuffer = (uint32_t*)tc->textModel.indexBuffer->hostData;
+    int vIndex = 0;
+    int tIndex = 0;
+    float xOrigin = position.x;
+    float yOrigin = position.y;
+    for (int i = 0; i < MAX_TEXT_LENGTH; i++) {
+        unsigned char c = text[i];
+        if (c == '\0') break;
+        kd_GlyphMetrics gm = tc->glyphMetrics[c];
+        float top = gm.bearingY + yOrigin;
+        float bottom = top - gm.height;
+        float left = gm.bearingX + xOrigin;
+        float right = left + gm.width;
+
+        // fill index buffer
+        indexBuffer[tIndex++] = vIndex + 0;
+        indexBuffer[tIndex++] = vIndex + 1;
+        indexBuffer[tIndex++] = vIndex + 3;
+        indexBuffer[tIndex++] = vIndex + 0;
+        indexBuffer[tIndex++] = vIndex + 3;
+        indexBuffer[tIndex++] = vIndex + 2;
+
+        // fill vertex buffer
+        {
+        TextBufferData v1 = {
+            .x = left,
+            .y = top,
+            .u = gm.u1,
+            .v = gm.v1
+        };
+        vertexBuffer[vIndex++] = v1;
+
+        TextBufferData v2 = {
+            .x = right,
+            .y = top,
+            .u = gm.u2,
+            .v = gm.v1
+        };
+        vertexBuffer[vIndex++] = v2;
+
+        TextBufferData v3 = {
+            .x = left,
+            .y = bottom,
+            .u = gm.u1,
+            .v = gm.v2
+        };
+        vertexBuffer[vIndex++] = v3;
+
+        TextBufferData v4 = {
+            .x = right,
+            .y = bottom,
+            .u = gm.u2,
+            .v = gm.v2
+        };
+        vertexBuffer[vIndex++] = v4;
+        }
+
+        xOrigin += gm.advance;
+    }
+
+    tc->textModel.vertexCount = vIndex;
+    tc->textModel.indexCount = tIndex;
+    htw_updateBuffer(graphics->vkContext, tc->textModel.vertexBuffer);
+    htw_updateBuffer(graphics->vkContext, tc->textModel.indexBuffer);
+
+    htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->shaderLayout, &tc->textModel, HTW_DRAW_TYPE_INDEXED);
+}
+
+static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
+    createHexmapMesh(graphics, world, &graphics->surfaceTerrain);
+    //createHexmapInstanceBuffers(graphics, world);
+}
+
+static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline) {
     htw_mapPipelinePushConstant(graphics->vkContext, pipeline, &graphics->camera);
 }
 
@@ -83,19 +295,29 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
                     (vec3){ {0.f, 0.f, 1.f} });
     }
 
-    htw_Frame frame = htw_beginFrame(graphics->vkContext);
+    htw_beginFrame(graphics->vkContext);
 
     // draw full terrain mesh
-    htw_drawPipeline(graphics->vkContext, frame, graphics->surfaceTerrain.pipeline, graphics->surfaceTerrain.shaderLayout, graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
+    htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.shaderLayout, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
+
+    // draw text overlays
+    drawText(graphics, "Hello World! 'Sup, lazy dog?", (vec3){{0.f, 0.f, 0.f}});
+    //drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
+//     char allChars[128];
+//     for (int i = 0; i < 128; i++) {
+//         allChars[i] = (char)i;
+//     }
+//     allChars[0] = '0';
+//     drawText(graphics, allChars, (vec3){{-1280.f, 0.f, 0.f}});
 
     // draw instanced hexagons
     if (ui->activeLayer == KD_WORLD_LAYER_SURFACE) {
-        //htw_drawPipeline(graphics->vkContext, frame, graphics->instanceTerrain.pipeline, graphics->instanceTerrain.modelData, HTW_DRAW_TYPE_INSTANCED);
+        //htw_drawPipeline(graphics->vkContext, graphics->instanceTerrain.pipeline, graphics->instanceTerrain.modelData, HTW_DRAW_TYPE_INSTANCED);
     }
 //     else if (ui->activeLayer == KD_WORLD_LAYER_CAVE) {
-//         htw_drawPipeline(graphics->vkContext, frame, graphics->pipeline, graphics->caveInstanceBuffer, 54, instanceCount);
+//         htw_drawPipeline(graphics->vkContext, graphics->pipeline, graphics->caveInstanceBuffer, 54, instanceCount);
 //     }
-    htw_endFrame(graphics->vkContext, frame);
+    htw_endFrame(graphics->vkContext);
 
     return 0;
 }
@@ -448,9 +670,13 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             unsigned int c = x + (y * width);
+            int elevation = getMapValue(terrain->heightMap, x, y);
             TerrainBufferData d = {
-                .elevation = getMapValue(terrain->heightMap, x, y) / 10,
-                .palleteIndex = rand() % 256
+                .elevation = elevation / 10,
+                .palleteIndex = elevation,
+//                 .unused1 = 32,
+//                 .unused2 = 64,
+//                 .aligner = 69
             };
             bufferData[c] = d;
         }

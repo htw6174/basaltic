@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <SDL2/SDL.h>
 #include "kingdom_interaction.h"
 
@@ -18,6 +19,11 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
                     ui->activeLayer = ui->activeLayer ^ 1; // invert
             }
         }
+        else if (e.type == SDL_MOUSEBUTTONDOWN) {
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                printf("mouse at: %i ,%i\n", ui->mouse.x, ui->mouse.y);
+            }
+        }
     }
 
     // handle continuous button presses
@@ -32,6 +38,15 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
     if (k[SDL_SCANCODE_F]) ui->cameraPitch -= ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_Z]) ui->cameraDistance += ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_X]) ui->cameraDistance -= ui->cameraMovementSpeed;
+
+    // get mouse state
+    Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
+    //ui->mouse.left =
+    if (mouseStateMask & SDL_BUTTON_LMASK) ui->mouse.leftHeld += 1; // TODO: add frame time instead of constant
+    else ui->mouse.leftHeld = 0;
+
+    // handle mouse events
+
 
     // update logic input
     logicInput->ticks = SDL_GetTicks64();

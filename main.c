@@ -84,7 +84,7 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
 
     kd_GraphicsState graphics;
     kd_InitGraphics(&graphics, 1280, 720);
-    kd_createTerrainBuffer(&graphics, world);
+    kd_initWorldGraphics(&graphics, world);
 
     while (*appState == KD_APPSTATE_RUNNING) {
         Uint64 startTime = graphics.milliSeconds = SDL_GetTicks64();
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 
     kd_UiState ui = kd_createUiState();
     kd_WorldState *world = kd_createWorldState("Test World");
-    kd_initializeWorldState(world, 100, 100);
+    kd_initializeWorldState(world, 64, 64);
     kd_LogicInputState *logicInput = createLogicInputState();
 
     Uint32 logicInterval = 1000 / LOGIC_TPS;
