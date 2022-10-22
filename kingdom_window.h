@@ -13,7 +13,8 @@
 #define PI 3.141592f
 #define DEG_TO_RAD 0.017453f
 
-#define MAX_TEXT_LENGTH 1024
+#define MAX_TEXT_LENGTH 256
+#define TEXT_POOL_CAPACITY 256
 
 typedef struct {
     mat4x4 projection;
@@ -25,6 +26,12 @@ typedef struct kd_BufferPool {
     unsigned int count;
     unsigned int maxCount;
 } kd_BufferPool;
+
+typedef struct kd_TextPoolItem {
+    mat4x4 modelMatrix;
+} kd_TextPoolItem;
+
+typedef uint32_t kd_TextPoolItemHandle;
 
 typedef struct kd_GlyphMetrics {
     // texel position - pixel distance
@@ -45,13 +52,25 @@ typedef struct kd_GlyphMetrics {
     float v2;
 } kd_GlyphMetrics;
 
+/**
+ * @brief state data needed to render text with a single font face.
+ * Text is handled in pools: to render text, first request an item from the pool with aquireTextPoolItem()
+ * Set the text you want to render by passing a pool item + your string to updateTextBuffer()
+ * Update the position of rendered text by passing a pool item + transform matrix to setTextTransform()
+ * To stop rendering text, pass a pool item to freeTextPoolItem() (internally this sets the scale to 0 and leaves the buffer unchanged)
+ * After updating all the text you want displayed, calling drawText() will render everything in the text pool (although free pool items are effectively invisible)
+ *
+ */
 typedef struct kd_TextRenderContext {
     FT_Library freetypeLibrary;
     FT_Face face;
+    unsigned int pixelSize; // pixels per EM square; rough font size
     kd_GlyphMetrics *glyphMetrics;
-    unsigned int lineDistance; // distance between baselines when adding a new line
-    unsigned int ascent; // when positioning by the top of a line, this is the distance to the baseline
-    htw_ModelData textModel; // TODO: this is only good for a single text object. Need a way to take from a 'text buffer pool', instead of having many fixed max size models
+    float unitsToPixels; // conversion factor from font units to pixels
+    float lineDistance; // distance between baselines when adding a new line, in pixels
+    float ascent; // when positioning by the top of a line, this is the distance to the baseline, in pixels
+    htw_ModelData textModel;
+    kd_TextPoolItem *textPool;
     htw_Buffer *uniformBuffer;
     htw_Buffer *bitmapBuffer;
     htw_Texture glyphBitmap;

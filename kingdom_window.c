@@ -8,8 +8,8 @@
 #include "kingdom_worldState.h"
 
 // TEST
-//#define STB_IMAGE_WRITE_IMPLEMENTATION
-//#include "stb_image_write.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #define FT_CHECK(x) { FT_Error error = x; \
                     if(error) fprintf(stderr, "FreeType Error: %s failed with code %i\n", #x, x); }
@@ -40,9 +40,12 @@ static kd_BufferPool createBufferPool(unsigned int maxCount); // TODO: if buffer
 static htw_Buffer* getNextBuffer(kd_BufferPool *pool);
 
 static void initTextGraphics(kd_GraphicsState *graphics);
-static void updateTextGraphics(kd_GraphicsState *graphics);
-
-static void drawText(kd_GraphicsState *graphics, char *text, vec3 position);
+static void updateTextDescriptors(kd_GraphicsState *graphics);
+static kd_TextPoolItemHandle aquireTextPoolItem(kd_TextRenderContext *tc);
+static void updateTextBuffer(kd_GraphicsState *graphics, kd_TextPoolItemHandle poolItem, char *text);
+static void setTextTransform(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem, mat4x4 modelMatrix);
+static void freeTextPoolItem(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem); // TODO: consider returning something to indicate result (success, item doesn't exist, item already free)
+static void drawText(kd_GraphicsState *graphics);
 
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 
@@ -76,31 +79,39 @@ void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
     htw_updateBuffers(graphics->vkContext, graphics->bufferPool.count, graphics->bufferPool.buffers);
 
     htw_beginOneTimeCommands(graphics->vkContext);
-    updateTextGraphics(graphics);
+    updateTextDescriptors(graphics);
     updateHexmapDescriptors(graphics, &graphics->surfaceTerrain);
     htw_endOneTimeCommands(graphics->vkContext);
 
 }
 
 static void initTextGraphics(kd_GraphicsState *graphics) {
-    static const int glyphCount = 128;
+    static const uint64_t glyphCount = 256;
     kd_TextRenderContext *tc = &graphics->textRenderContext;
+    // initialize pool
+    tc->textPool = malloc(sizeof(kd_TextPoolItem) * TEXT_POOL_CAPACITY);
+    for (int i = 0; i < TEXT_POOL_CAPACITY; i++) {
+        mat4x4Zero(tc->textPool[i].modelMatrix);
+    }
+
+    tc->pixelSize = 48;
     FT_CHECK(FT_Init_FreeType(&tc->freetypeLibrary));
     FT_CHECK(FT_New_Face(tc->freetypeLibrary, "resources/fonts/NotoSansMono-Regular.ttf", 0, &tc->face));
-    FT_CHECK(FT_Set_Pixel_Sizes(tc->face, 0, 48)); // NOTE: can also set size using dots+dpi
+    FT_CHECK(FT_Set_Pixel_Sizes(tc->face, 0, tc->pixelSize)); // NOTE: can also set size using dots+dpi
+    tc->unitsToPixels = (float)tc->pixelSize / tc->face->units_per_EM;
 
     // load required glyphs
     tc->glyphMetrics = malloc(sizeof(kd_GlyphMetrics) * glyphCount);
     // get bitmap size info for assembling full bitmap later
     int totalWidth = 0;
     int maxHeight = 0;
-    for (unsigned char c = 0; c < glyphCount; c++) {
+    for (uint64_t c = 0; c < glyphCount; c++) {
         FT_CHECK(FT_Load_Char(tc->face, c, FT_LOAD_DEFAULT));
         totalWidth += tc->face->glyph->bitmap.width;
         maxHeight = max_int(maxHeight, tc->face->glyph->bitmap.rows);
     }
-    tc->lineDistance = tc->face->ascender - tc->face->descender; // technically should add line_gap here, but it is part of the truetype specific interface and this is good enough for now
-    tc->ascent = tc->face->ascender;
+    tc->lineDistance = (tc->face->ascender - tc->face->descender) * tc->unitsToPixels; // technically should add line_gap here, but it is part of the truetype specific interface and this is good enough for now
+    tc->ascent = tc->face->ascender * tc->unitsToPixels;
 
     static const int bytesPerTexel = sizeof(char);
     int bitmapWidth = htw_nextPow(totalWidth);
@@ -114,6 +125,7 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     *tc->bitmapBuffer = htw_createBuffer(graphics->vkContext, bitmapSize, HTW_BUFFER_USAGE_TEXTURE);
 
     // assemble full ASCII font bitmap
+    // TODO: eliminate duplicate 'missing' characters, reuse glyph metrics for special characters
     unsigned char *bitmap = tc->bitmapBuffer->hostData;
     int bitmapX = 0;
     for (int i = 0; i < glyphCount; i++) {
@@ -127,8 +139,8 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
             .height = glyph->bitmap.rows,
             .bearingX = glyph->bitmap_left,
             .bearingY = glyph->bitmap_top,
-            .advance = (float)glyph->advance.x / 64.0,
-            .u1 = (float)bitmapX / bitmapWidth,
+            .advance = (float)glyph->advance.x / 64.0, // glyph gives this in dots, we want it in pixels
+            .u1 = ((float)bitmapX + 0.5) / bitmapWidth, // adding 0.5 to the base bitmap coord here fixes an alignment issue with glyph uvs. Without this correction, you can see one line of the previous glyph on the left side of every character
             .v1 = 0.0,
             .u2 = gm.u1 + ((float)glyph->bitmap.width / bitmapWidth),
             .v2 = gm.v1 + ((float)glyph->bitmap.rows / bitmapHeight)
@@ -157,8 +169,25 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     tc->textModel.vertexBuffer = getNextBuffer(&graphics->bufferPool);
     tc->textModel.indexBuffer = getNextBuffer(&graphics->bufferPool);
     tc->textModel.instanceCount = 0;
-    *tc->textModel.vertexBuffer = htw_createBuffer(graphics->vkContext, sizeof(TextBufferData) * MAX_TEXT_LENGTH * 4, HTW_BUFFER_USAGE_VERTEX);
-    *tc->textModel.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(uint32_t) * MAX_TEXT_LENGTH * 6, HTW_BUFFER_USAGE_INDEX);
+    uint32_t vertsPerString = MAX_TEXT_LENGTH * 4;
+    uint32_t vertexCount = vertsPerString * TEXT_POOL_CAPACITY;
+    tc->textModel.vertexCount = vertexCount;
+    *tc->textModel.vertexBuffer = htw_createBuffer(graphics->vkContext, sizeof(TextBufferData) * vertexCount, HTW_BUFFER_USAGE_VERTEX);
+    uint32_t indexCount = MAX_TEXT_LENGTH * 6;
+    tc->textModel.indexCount = indexCount;
+    *tc->textModel.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(uint32_t) * indexCount, HTW_BUFFER_USAGE_INDEX);
+
+    // fill index buffer (same for all buffers in a pool)
+    uint32_t *indexBuffer = (uint32_t*)tc->textModel.indexBuffer->hostData;
+    uint32_t tIndex = 0;
+    for (int v = 0; v < vertsPerString; v += 4) {
+        indexBuffer[tIndex++] = v + 0;
+        indexBuffer[tIndex++] = v + 1;
+        indexBuffer[tIndex++] = v + 2;
+        indexBuffer[tIndex++] = v + 1;
+        indexBuffer[tIndex++] = v + 3;
+        indexBuffer[tIndex++] = v + 2;
+    }
 
     // setup shaders
     htw_ShaderInputInfo vertInfo = {
@@ -179,84 +208,101 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     tc->textPipeline = htw_createPipeline(graphics->vkContext, tc->shaderLayout, shaderInfo);
 }
 
-static void updateTextGraphics(kd_GraphicsState *graphics) {
+static void updateTextDescriptors(kd_GraphicsState *graphics) {
     kd_TextRenderContext *tc = &graphics->textRenderContext;
 
     htw_updateTextDescriptors(graphics->vkContext, tc->shaderLayout, *tc->uniformBuffer, tc->glyphBitmap);
     htw_updateBuffer(graphics->vkContext, tc->bitmapBuffer);
     htw_updateTexture(graphics->vkContext, *tc->bitmapBuffer, tc->glyphBitmap);
 
+    htw_updateBuffer(graphics->vkContext, tc->textModel.indexBuffer);
 }
 
-static void drawText(kd_GraphicsState *graphics, char *text, vec3 position) {
+static kd_TextPoolItemHandle aquireTextPoolItem(kd_TextRenderContext *tc) {
+    // TODO: determine next free pool item
+    return 0;
+}
+
+static void updateTextBuffer(kd_GraphicsState *graphics, kd_TextPoolItemHandle poolItem, char *text) {
     kd_TextRenderContext *tc = &graphics->textRenderContext;
 
     // fill buffer
-    TextBufferData *vertexBuffer = (TextBufferData*)tc->textModel.vertexBuffer->hostData;
-    uint32_t *indexBuffer = (uint32_t*)tc->textModel.indexBuffer->hostData;
+    size_t bufferOffset = poolItem * MAX_TEXT_LENGTH;
+    TextBufferData *vertexBuffer = (TextBufferData*)tc->textModel.vertexBuffer->hostData + bufferOffset;
     int vIndex = 0;
-    int tIndex = 0;
-    float xOrigin = position.x;
-    float yOrigin = position.y;
+    float xOrigin = 0.0;
+    float yOrigin = tc->ascent;
     for (int i = 0; i < MAX_TEXT_LENGTH; i++) {
         unsigned char c = text[i];
-        if (c == '\0') break;
-        kd_GlyphMetrics gm = tc->glyphMetrics[c];
-        float top = gm.bearingY + yOrigin;
-        float bottom = top - gm.height;
-        float left = gm.bearingX + xOrigin;
-        float right = left + gm.width;
+        if (c == '\0') break; // FIXME: change behavior here - go through the entire available space, but set everything to 0 after end of string
+        if (c == '\n') {
+            // CR, LF
+            xOrigin = 0.0;
+            yOrigin += tc->lineDistance;
+        } else {
+            kd_GlyphMetrics gm = tc->glyphMetrics[c];
+            float top = yOrigin - gm.bearingY;
+            float bottom = top + gm.height;
+            float left = gm.bearingX + xOrigin;
+            float right = left + gm.width;
 
-        // fill index buffer
-        indexBuffer[tIndex++] = vIndex + 0;
-        indexBuffer[tIndex++] = vIndex + 1;
-        indexBuffer[tIndex++] = vIndex + 3;
-        indexBuffer[tIndex++] = vIndex + 0;
-        indexBuffer[tIndex++] = vIndex + 3;
-        indexBuffer[tIndex++] = vIndex + 2;
+            // fill vertex buffer
+            {
+            TextBufferData v1 = {
+                .x = left,
+                .y = top,
+                .u = gm.u1,
+                .v = gm.v1
+            };
+            vertexBuffer[vIndex++] = v1;
 
-        // fill vertex buffer
-        {
-        TextBufferData v1 = {
-            .x = left,
-            .y = top,
-            .u = gm.u1,
-            .v = gm.v1
-        };
-        vertexBuffer[vIndex++] = v1;
+            TextBufferData v2 = {
+                .x = right,
+                .y = top,
+                .u = gm.u2,
+                .v = gm.v1
+            };
+            vertexBuffer[vIndex++] = v2;
 
-        TextBufferData v2 = {
-            .x = right,
-            .y = top,
-            .u = gm.u2,
-            .v = gm.v1
-        };
-        vertexBuffer[vIndex++] = v2;
+            TextBufferData v3 = {
+                .x = left,
+                .y = bottom,
+                .u = gm.u1,
+                .v = gm.v2
+            };
+            vertexBuffer[vIndex++] = v3;
 
-        TextBufferData v3 = {
-            .x = left,
-            .y = bottom,
-            .u = gm.u1,
-            .v = gm.v2
-        };
-        vertexBuffer[vIndex++] = v3;
+            TextBufferData v4 = {
+                .x = right,
+                .y = bottom,
+                .u = gm.u2,
+                .v = gm.v2
+            };
+            vertexBuffer[vIndex++] = v4;
+            }
 
-        TextBufferData v4 = {
-            .x = right,
-            .y = bottom,
-            .u = gm.u2,
-            .v = gm.v2
-        };
-        vertexBuffer[vIndex++] = v4;
+            xOrigin += gm.advance;
         }
-
-        xOrigin += gm.advance;
     }
 
-    tc->textModel.vertexCount = vIndex;
-    tc->textModel.indexCount = tIndex;
-    htw_updateBuffer(graphics->vkContext, tc->textModel.vertexBuffer);
-    htw_updateBuffer(graphics->vkContext, tc->textModel.indexBuffer);
+    htw_updateBuffer(graphics->vkContext, tc->textModel.vertexBuffer); // TODO: update only the subset of the buffer that changed
+}
+
+static void setTextTransform(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem, mat4x4 modelMatrix) {
+    // TODO
+    memcpy(tc->textPool[poolItem].modelMatrix, modelMatrix, sizeof(mat4x4));
+}
+
+static void freeTextPoolItem(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem) {
+    // TODO
+}
+
+static void drawText(kd_GraphicsState *graphics) {
+    kd_TextRenderContext *tc = &graphics->textRenderContext;
+
+    // TEST
+    memcpy(tc->uniformBuffer->hostData, tc->textPool[0].modelMatrix, sizeof(mat4x4));
+    htw_updateBuffer(graphics->vkContext, tc->uniformBuffer);
 
     htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->shaderLayout, &tc->textModel, HTW_DRAW_TYPE_INDEXED);
 }
@@ -301,7 +347,16 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.shaderLayout, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
 
     // draw text overlays
-    drawText(graphics, "Hello World! 'Sup, lazy dog?", (vec3){{0.f, 0.f, 0.f}});
+    kd_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
+    updateTextBuffer(graphics, textItem, "Hello World! 'Sup, lazy dog?\nNow with more lines!\nMouse Position: 0000, 0000");
+    mat4x4 textTransform;
+    // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
+    // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
+    //mat4x4Identity(textTransform);
+    mat4x4SetScale(textTransform, 1.0); // TODO: figure out how to resolve bleed from neighboring glyphs when scaling text mesh
+    mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
+    setTextTransform(&graphics->textRenderContext, textItem, textTransform);
+    drawText(graphics);
     //drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
 //     char allChars[128];
 //     for (int i = 0; i < 128; i++) {
