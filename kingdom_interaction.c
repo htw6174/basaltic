@@ -21,7 +21,14 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
         }
         else if (e.type == SDL_MOUSEBUTTONDOWN) {
             if (e.button.button == SDL_BUTTON_LEFT) {
-                printf("mouse at: %i ,%i\n", ui->mouse.x, ui->mouse.y);
+                //printf("clicked cell %u\n", ui->hoveredCellIndex);
+                kd_MapEditAction newAction = {
+                    .editType = KD_MAP_EDIT_ADD,
+                    .cellIndex = ui->hoveredCellIndex,
+                    .value = 1
+                };
+                logicInput->currentEdit = newAction;
+                logicInput->isEditPending = 1;
             }
         }
     }

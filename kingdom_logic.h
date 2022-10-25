@@ -2,7 +2,6 @@
 #define KINGDOM_LOGIC_H_INCLUDED
 
 #include "htw_core.h"
-#include "htw_geomap.h"
 #include "kingdom_logicInputState.h"
 #include "kingdom_worldState.h"
 

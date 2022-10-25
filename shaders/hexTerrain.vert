@@ -40,6 +40,7 @@ layout(std430, set = 0, binding = 1) readonly buffer terrainBuffer { // requires
 layout(location = 0) in vec3 in_position;
 
 layout(location = 0) out vec3 out_color;
+layout(location = 1) out flat int out_cellIndex;
 
 float rand(float x) {
     return fract(sin(x) * 43758.5453123);
@@ -68,4 +69,5 @@ void main()
 
     //out_color = vec3(rand(cell + 0.0), rand(cell + 0.3), rand(cell + 0.6));
     out_color = cosGrad(paletteIndex / 255.0);
+    out_cellIndex = cell;
 }

@@ -2,6 +2,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 #include "ccVector.h"
+#include "htw_core.h"
 #include "htw_vulkan.h"
 #include "kingdom_window.h"
 #include "kingdom_logicInputState.h"
@@ -26,18 +27,20 @@ typedef struct WorldInfoData {
 } WorldInfoData;
 
 typedef struct TerrainBufferData {
-    int16_t elevation;
-    uint16_t palleteIndex;
-    int16_t unused1; // weather / temporary effect bitmask?
-    int16_t unused2; // lighting / player visibility bitmask?
+    s16 elevation;
+    u16 palleteIndex;
+    s16 unused1; // weather / temporary effect bitmask?
+    s16 unused2; // lighting / player visibility bitmask?
     //int64_t aligner;
 } TerrainBufferData; // TODO: move this to a world logic source file; keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
 
-static htw_VkContext *createWindow(unsigned int width, unsigned int height);
+static htw_VkContext *createWindow(u32 width, u32 height);
 static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline);
 
-static kd_BufferPool createBufferPool(unsigned int maxCount); // TODO: if buffer collection management is done by htw_vulkan, is this still needed?
+static kd_BufferPool createBufferPool(u32 maxCount); // TODO: if buffer collection management is done by htw_vulkan, is this still needed?
 static htw_Buffer* getNextBuffer(kd_BufferPool *pool);
+
+static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY);
 
 static void initTextGraphics(kd_GraphicsState *graphics);
 static void updateTextDescriptors(kd_GraphicsState *graphics);
@@ -56,15 +59,18 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
 
 static vec3 getRandomColor();
 
-void kd_InitGraphics(kd_GraphicsState *graphics, unsigned int width, unsigned int height) {
+void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height) {
     graphics->width = width;
     graphics->height = height;
     graphics->vkContext = createWindow(width, height);
     graphics->bufferPool = createBufferPool(100);
     graphics->frame = 0;
+
+    graphics->windowInfoBuffer = getNextBuffer(&graphics->bufferPool);
+    *graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(kd_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
 }
 
-htw_VkContext *createWindow(unsigned int width, unsigned int height) {
+htw_VkContext *createWindow(u32 width, u32 height) {
     SDL_Window *sdlWindow = SDL_CreateWindow("kingdom", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, HTW_VK_WINDOW_FLAGS);
     htw_VkContext *context = htw_createVkContext(sdlWindow);
     return context;
@@ -85,8 +91,15 @@ void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
 
 }
 
+static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY) {
+    kd_WindowInfo *wdi = (kd_WindowInfo*)graphics->windowInfoBuffer->hostData;
+    wdi->windowSize = (vec2){{graphics->width, graphics->height}};
+    wdi->mousePosition = (vec2){{mouseX, mouseY}};
+    htw_updateBuffer(graphics->vkContext, graphics->windowInfoBuffer);
+}
+
 static void initTextGraphics(kd_GraphicsState *graphics) {
-    static const uint64_t glyphCount = 256;
+    static const u64 glyphCount = 256;
     kd_TextRenderContext *tc = &graphics->textRenderContext;
     // initialize pool
     tc->textPool = malloc(sizeof(kd_TextPoolItem) * TEXT_POOL_CAPACITY);
@@ -103,9 +116,9 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     // load required glyphs
     tc->glyphMetrics = malloc(sizeof(kd_GlyphMetrics) * glyphCount);
     // get bitmap size info for assembling full bitmap later
-    int totalWidth = 0;
-    int maxHeight = 0;
-    for (uint64_t c = 0; c < glyphCount; c++) {
+    u32 totalWidth = 0;
+    u32 maxHeight = 0;
+    for (u64 c = 0; c < glyphCount; c++) {
         FT_CHECK(FT_Load_Char(tc->face, c, FT_LOAD_DEFAULT));
         totalWidth += tc->face->glyph->bitmap.width;
         maxHeight = max_int(maxHeight, tc->face->glyph->bitmap.rows);
@@ -114,8 +127,8 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     tc->ascent = tc->face->ascender * tc->unitsToPixels;
 
     static const int bytesPerTexel = sizeof(char);
-    int bitmapWidth = htw_nextPow(totalWidth);
-    int bitmapHeight = htw_nextPow(maxHeight);
+    u32 bitmapWidth = htw_nextPow(totalWidth);
+    u32 bitmapHeight = htw_nextPow(maxHeight);
     size_t bitmapSize = bytesPerTexel * bitmapWidth * bitmapHeight;
 
     // create resource buffers
@@ -169,17 +182,17 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
     tc->textModel.vertexBuffer = getNextBuffer(&graphics->bufferPool);
     tc->textModel.indexBuffer = getNextBuffer(&graphics->bufferPool);
     tc->textModel.instanceCount = 0;
-    uint32_t vertsPerString = MAX_TEXT_LENGTH * 4;
-    uint32_t vertexCount = vertsPerString * TEXT_POOL_CAPACITY;
+    u32 vertsPerString = MAX_TEXT_LENGTH * 4;
+    u32 vertexCount = vertsPerString * TEXT_POOL_CAPACITY;
     tc->textModel.vertexCount = vertexCount;
     *tc->textModel.vertexBuffer = htw_createBuffer(graphics->vkContext, sizeof(TextBufferData) * vertexCount, HTW_BUFFER_USAGE_VERTEX);
-    uint32_t indexCount = MAX_TEXT_LENGTH * 6;
+    u32 indexCount = MAX_TEXT_LENGTH * 6;
     tc->textModel.indexCount = indexCount;
-    *tc->textModel.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(uint32_t) * indexCount, HTW_BUFFER_USAGE_INDEX);
+    *tc->textModel.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(u32) * indexCount, HTW_BUFFER_USAGE_INDEX);
 
     // fill index buffer (same for all buffers in a pool)
-    uint32_t *indexBuffer = (uint32_t*)tc->textModel.indexBuffer->hostData;
-    uint32_t tIndex = 0;
+    u32 *indexBuffer = (u32*)tc->textModel.indexBuffer->hostData;
+    u32 tIndex = 0;
     for (int v = 0; v < vertsPerString; v += 4) {
         indexBuffer[tIndex++] = v + 0;
         indexBuffer[tIndex++] = v + 1;
@@ -318,8 +331,9 @@ static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline) {
 
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world) {
 
-    updateHexmapDataBuffer (graphics, world, &graphics->surfaceTerrain);
-    uint32_t instanceCount = world->heightMap->width * world->heightMap->height;
+    updateWindowInfoBuffer(graphics, ui->mouse.x, ui->mouse.y);
+    updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain);
+    u32 instanceCount = world->heightMap->width * world->heightMap->height;
     //instanceCount = min_int(instanceCount, graphics->frame % instanceCount);
 
     // translate camera parameters to projection and view matricies TODO: camera position interpolation, from current to target
@@ -346,9 +360,17 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     // draw full terrain mesh
     htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.shaderLayout, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
 
+    // update ui with view info from shaders
+    u32 *hoveredCell = graphics->surfaceTerrain.viewInfoBuffer->hostData;
+    ui->hoveredCellIndex = *hoveredCell;
+
     // draw text overlays
     kd_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
-    updateTextBuffer(graphics, textItem, "Hello World! 'Sup, lazy dog?\nNow with more lines!\nMouse Position: 0000, 0000");
+    char statusText[256];
+    sprintf(statusText,
+            "Mouse Position: %4.4i, %4.4i\nHighlighted Cell: %4.4u",
+            ui->mouse.x, ui->mouse.y, *hoveredCell);
+    updateTextBuffer(graphics, textItem, statusText);
     mat4x4 textTransform;
     // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
     // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
@@ -357,7 +379,8 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
     setTextTransform(&graphics->textRenderContext, textItem, textTransform);
     drawText(graphics);
-    //drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
+
+//     drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
 //     char allChars[128];
 //     for (int i = 0; i < 128; i++) {
 //         allChars[i] = (char)i;
@@ -393,8 +416,8 @@ static htw_Buffer* getNextBuffer(kd_BufferPool *pool) {
 static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldState *world) {
     int width = world->heightMap->width;
     int height = world->heightMap->height;
-    uint32_t tileCount = width * height;
-    uint32_t size = sizeof(vec4) * tileCount;
+    u32 tileCount = width * height;
+    u32 size = sizeof(vec4) * tileCount;
 
     kd_InstanceTerrain instanceTerrain;
 
@@ -512,11 +535,11 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
         .indexCount = triangleCount
     };
     *modelData.vertexBuffer = htw_createBuffer(graphics->vkContext, vertexDataSize * vertexCount, HTW_BUFFER_USAGE_VERTEX);
-    *modelData.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(uint32_t) * triangleCount, HTW_BUFFER_USAGE_INDEX);
+    *modelData.indexBuffer = htw_createBuffer(graphics->vkContext, sizeof(u32) * triangleCount, HTW_BUFFER_USAGE_INDEX);
     terrain->modelData = modelData;
     // fill mesh buffer data
     kd_HexmapVertexData *vertexData = modelData.vertexBuffer->hostData;
-    uint32_t *triData = modelData.indexBuffer->hostData;
+    u32 *triData = modelData.indexBuffer->hostData;
     static const float halfHeight = 0.433012701892;
     static const vec3 hexagonPositions[] = {
         { {0.0, 0.0, 0.0} }, // center
@@ -539,11 +562,17 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     // create cell data texture and buffer
     terrain->worldInfoBuffer = getNextBuffer(&graphics->bufferPool);
     terrain->terrainDataBuffer = getNextBuffer(&graphics->bufferPool);
+    terrain->viewInfoBuffer = getNextBuffer(&graphics->bufferPool);
     *terrain->worldInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WorldInfoData), HTW_BUFFER_USAGE_UNIFORM);
     *terrain->terrainDataBuffer = htw_createBuffer(graphics->vkContext, sizeof(TerrainBufferData) * cellCount, HTW_BUFFER_USAGE_STORAGE);
+    *terrain->viewInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(s32), HTW_BUFFER_USAGE_STORAGE);
 
     // TODO: write world info
     WorldInfoData *worldInfo = terrain->worldInfoBuffer->hostData;
+
+    // initialize highlighted cell
+    s32 *viewInfo = terrain->viewInfoBuffer->hostData;
+    *viewInfo = 0;
 
     // create and write model data for each cell
     TerrainBufferData *terrainData = (TerrainBufferData*)terrain->terrainDataBuffer->hostData;
@@ -552,7 +581,7 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             unsigned int c = x + (y * width);
             // terrain data
             TerrainBufferData cellData = {
-                .elevation = getMapValue(terrain->heightMap, x, y) / 10,
+                .elevation = htw_geo_getMapValue(terrain->heightMap, x, y) / 10,
                 .palleteIndex = rand() % 256
             };
             terrainData[c] = cellData;
@@ -711,7 +740,7 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
 }
 
 static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain *terrain){
-    htw_updateTerrainDescriptors(graphics->vkContext, terrain->shaderLayout, *terrain->worldInfoBuffer, *terrain->terrainDataBuffer);
+    htw_updateTerrainDescriptors(graphics->vkContext, terrain->shaderLayout, *terrain->worldInfoBuffer, *terrain->terrainDataBuffer, *graphics->windowInfoBuffer, *terrain->viewInfoBuffer);
 }
 
 static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain) {
@@ -725,9 +754,9 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             unsigned int c = x + (y * width);
-            int elevation = getMapValue(terrain->heightMap, x, y);
+            int elevation = htw_geo_getMapValue(terrain->heightMap, x, y);
             TerrainBufferData d = {
-                .elevation = elevation / 10,
+                .elevation = elevation,
                 .palleteIndex = elevation,
 //                 .unused1 = 32,
 //                 .unused2 = 64,
@@ -738,6 +767,7 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     }
 
     htw_updateBuffer(graphics->vkContext, terrain->terrainDataBuffer);
+    htw_retreiveBuffer(graphics->vkContext, terrain->viewInfoBuffer);
 }
 
 static vec3 getRandomColor() {

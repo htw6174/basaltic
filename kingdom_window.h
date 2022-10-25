@@ -6,6 +6,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include "ccVector.h"
+#include "htw_core.h"
 #include "htw_vulkan.h"
 #include "kingdom_uiState.h"
 #include "kingdom_worldState.h"
@@ -23,9 +24,14 @@ typedef struct {
 
 typedef struct kd_BufferPool {
     htw_Buffer *buffers;
-    unsigned int count;
-    unsigned int maxCount;
+    u32 count;
+    u32 maxCount;
 } kd_BufferPool;
+
+typedef struct kd_WindowInfo {
+    vec2 windowSize;
+    vec2 mousePosition;
+} kd_WindowInfo;
 
 typedef struct kd_TextPoolItem {
     mat4x4 modelMatrix;
@@ -35,14 +41,14 @@ typedef uint32_t kd_TextPoolItemHandle;
 
 typedef struct kd_GlyphMetrics {
     // texel position - pixel distance
-    unsigned int offsetX;
-    unsigned int offsetY;
+    u32 offsetX;
+    u32 offsetY;
 
     // glyph placement - pixel distance
-    unsigned int width;
-    unsigned int height;
-    int bearingX;
-    int bearingY;
+    u32 width;
+    u32 height;
+    s32 bearingX;
+    s32 bearingY;
     float advance;
 
     // texture uv - normalized position
@@ -64,7 +70,7 @@ typedef struct kd_GlyphMetrics {
 typedef struct kd_TextRenderContext {
     FT_Library freetypeLibrary;
     FT_Face face;
-    unsigned int pixelSize; // pixels per EM square; rough font size
+    u32 pixelSize; // pixels per EM square; rough font size
     kd_GlyphMetrics *glyphMetrics;
     float unitsToPixels; // conversion factor from font units to pixels
     float lineDistance; // distance between baselines when adding a new line, in pixels
@@ -86,7 +92,7 @@ typedef struct kd_HexmapTerrain {
     htw_ModelData modelData;
     htw_Buffer *worldInfoBuffer;
     htw_Buffer *terrainDataBuffer;
-    //uint32_t *tileVertexIndicies;
+    htw_Buffer *viewInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
 } kd_HexmapTerrain;
 
 typedef struct kd_InstanceTerrain {
@@ -100,12 +106,13 @@ typedef struct kd_HexmapVertexData {
 } kd_HexmapVertexData;
 
 typedef struct kd_GraphicsState {
-    unsigned int width, height;
-    uint64_t milliSeconds;
-    uint64_t frame;
+    u32 width, height;
+    u64 milliSeconds;
+    u64 frame;
     // TODO: time of last frame or deltatime?
     htw_VkContext *vkContext;
     kd_BufferPool bufferPool;
+    htw_Buffer *windowInfoBuffer;
     kd_TextRenderContext textRenderContext;
     kd_HexmapTerrain surfaceTerrain;
     kd_HexmapTerrain caveTerrain;
@@ -113,7 +120,7 @@ typedef struct kd_GraphicsState {
     kd_Camera camera;
 } kd_GraphicsState;
 
-void kd_InitGraphics(kd_GraphicsState *graphics, unsigned int width, unsigned int height);
+void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height);
 void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world);
 
