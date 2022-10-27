@@ -2,6 +2,15 @@
 
 precision mediump float;
 
+#define SPECULAR 0.5
+#define DIFFUSE 0.7
+#define REFLECTION 1.0
+#define SHININESS 10.0
+
+#define LIGHT_AMBIENT 0.1
+#define LIGHT1_SPECULAR 1.0
+#define LIGHT1_DIFFUSE 1.0
+
 // NOTE: because we only want to write to the view buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
 
@@ -15,7 +24,8 @@ layout(std430, set = 1, binding = 1) buffer viewBuffer {
 } ViewBuffer;
 
 layout(location = 0) in vec3 in_color;
-layout(location = 1) in flat int in_cellIndex;
+layout(location = 1) in vec3 in_pos;
+layout(location = 2) in flat int in_cellIndex;
 
 layout(location = 0) out vec4 out_color;
 
@@ -27,13 +37,30 @@ layout(location = 0) out vec4 out_color;
 // 	return vec3(rand(seed), rand(seed + 13.0), rand(seed + 37.0));
 // }
 
+float phong(vec3 normal, vec3 lightDir) {
+	float ambient = REFLECTION * LIGHT_AMBIENT;
+	vec3 reflection = normalize(reflect(-lightDir, normal));
+	float dotLN = dot(lightDir, normal);
+	if (dotLN < 0.0) {
+		return ambient;
+	}
+	float diffuse = DIFFUSE * dotLN * LIGHT1_DIFFUSE;
+	return ambient + diffuse;
+}
+
 void main()
 {
+	// compute normal from position deriviatives
+	vec3 normal = normalize(cross(dFdy(in_pos), dFdx(in_pos)));
+
 	vec2 windowPos = gl_FragCoord.xy;
 	vec2 mousePos = WindowInfo.mousePosition;
 	float mouseDist = distance(windowPos, mousePos);
 	if (mouseDist < 1.0) {
 		ViewBuffer.hoveredCell = in_cellIndex;
 	}
-	out_color = vec4(in_color, 1.0);
+	vec3 litColor = in_color * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	out_color = vec4(litColor, 1.0);
+	//out_color = vec4(in_color, 1.0);
+	//out_color = vec4(normal, 1.0);
 }

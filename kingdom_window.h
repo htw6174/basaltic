@@ -11,11 +11,8 @@
 #include "kingdom_uiState.h"
 #include "kingdom_worldState.h"
 
-#define PI 3.141592f
-#define DEG_TO_RAD 0.017453f
-
 #define MAX_TEXT_LENGTH 256
-#define TEXT_POOL_CAPACITY 256
+#define TEXT_POOL_CAPACITY 8
 
 typedef struct {
     mat4x4 projection;
@@ -85,7 +82,6 @@ typedef struct kd_TextRenderContext {
 } kd_TextRenderContext;
 
 typedef struct kd_HexmapTerrain {
-    htw_ValueMap *heightMap;
     uint32_t subdivisions;
     htw_PipelineHandle pipeline;
     htw_ShaderLayout shaderLayout;

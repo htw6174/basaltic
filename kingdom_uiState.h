@@ -28,6 +28,7 @@ typedef struct kd_UiState {
     // camera
     kd_CameraMode cameraMode;
     float cameraDistance;
+    float cameraElevation;
     float cameraPitch;
     float cameraYaw;
     float cameraX;

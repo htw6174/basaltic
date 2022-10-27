@@ -3,6 +3,7 @@
 #include <SDL2/SDL_vulkan.h>
 #include "ccVector.h"
 #include "htw_core.h"
+#include "htw_random.h"
 #include "htw_vulkan.h"
 #include "kingdom_window.h"
 #include "kingdom_logicInputState.h"
@@ -28,7 +29,9 @@ typedef struct WorldInfoData {
 
 typedef struct TerrainBufferData {
     s16 elevation;
-    u16 palleteIndex;
+    //u16 palleteIndex;
+    u8 paletteX;
+    u8 paletteY;
     s16 unused1; // weather / temporary effect bitmask?
     s16 unused2; // lighting / player visibility bitmask?
     //int64_t aligner;
@@ -342,9 +345,9 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
         float yaw = ui->cameraYaw * DEG_TO_RAD;
         float radius = cos(pitch) * ui->cameraDistance;
         float height = sin(pitch) * ui->cameraDistance;
-        float floor = 0; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
+        float floor = ui->cameraElevation; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
         if (ui->cameraMode == KD_CAMERA_MODE_ORTHOGRAPHIC) {
-            mat4x4Orthographic(graphics->camera.projection, 8 * ui->cameraDistance, 6 * ui->cameraDistance, 0.1f, 1000.f);
+            mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * ui->cameraDistance, ui->cameraDistance, 0.1f, 1000.f);
         }
         else {
             mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 1000.f);
@@ -453,7 +456,7 @@ static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldStat
         for (int x = 0; x < width; x++) {
             float worldX;
             float worldY;
-            htw_getHexCellPositionSkewed(x, y, &worldX, &worldY);
+            htw_geo_getHexCellPositionSkewed(x, y, &worldX, &worldY);
             float height = (float)world->heightMap->values[x + (y * width)] / 10.f;
             vec4 s = {
                 .x = worldX,
@@ -494,9 +497,6 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
      * subdivisions may not be needed, use simplest version for now (hex, quad, tri)
      */
 
-    // store reference to world heightmap
-    terrain->heightMap = world->heightMap;
-
     // create rendering pipeline
     htw_ShaderInputInfo positionInputInfo = {
         .size = sizeof(((kd_HexmapVertexData*)0)->position),
@@ -516,12 +516,12 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     mapCamera(graphics, terrain->pipeline);
 
     // determine required size for vertex and triangle buffers
-    const unsigned int width = terrain->heightMap->width;
-    const unsigned int height = terrain->heightMap->height;
+    const unsigned int width = world->chunkWidth;
+    const unsigned int height = world->chunkHeight;
     const unsigned int cellCount = width * height;
     const unsigned int vertsPerCell = 7;
     const unsigned int vertexCount = vertsPerCell * cellCount;
-    const unsigned int vertexDataSize = sizeof(kd_HexmapVertexData); // includes vec3 position, vec3 normal, biome information?, color?, uv?
+    const unsigned int vertexDataSize = sizeof(kd_HexmapVertexData); // includes vec3 position, maybe texture uv's later
     const unsigned int trisPerHex = 3 * 6;
     const unsigned int trisPerQuad = 3 * 2;
     const unsigned int trisPerCorner = 3 * 1;
@@ -579,17 +579,21 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             unsigned int c = x + (y * width);
-            // terrain data
+            // terrain data // TODO: move part of this to its own method, needs to be repeated when updating the buffer
+            s32 rawElevation = htw_geo_getMapValue(world->heightMap, x, y);
+            s32 rawTemperature = htw_geo_getMapValue(world->temperatureMap, x, y);
+            s32 rawRainfall = htw_geo_getMapValue(world->rainfallMap, x, y);
             TerrainBufferData cellData = {
-                .elevation = htw_geo_getMapValue(terrain->heightMap, x, y) / 10,
-                .palleteIndex = rand() % 256
+                .elevation = rawElevation / 10,
+                .paletteX = (u8)remap_int(rawTemperature, 0, world->temperatureMap->maxMagnitude, 0, 255),
+                .paletteY = (u8)remap_int(rawRainfall, 0, world->rainfallMap->maxMagnitude, 0, 255),
             };
             terrainData[c] = cellData;
             // vertex data
             for (int v = 0; v < vertsPerCell; v++) {
                 unsigned int i = (c * vertsPerCell) + v;
                 float posX, posY;
-                htw_getHexCellPositionSkewed(x, y, &posX, &posY);
+                htw_geo_getHexCellPositionSkewed(x, y, &posX, &posY);
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
                 kd_HexmapVertexData newVertex = {
                     .position = pos
@@ -744,8 +748,8 @@ static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain
 }
 
 static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain) {
-    const unsigned int width = terrain->heightMap->width;
-    const unsigned int height = terrain->heightMap->height;
+    const unsigned int width = world->chunkWidth;
+    const unsigned int height = world->chunkHeight;
     const unsigned int cellCount = width * height;
 
 
@@ -753,16 +757,18 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            unsigned int c = x + (y * width);
-            int elevation = htw_geo_getMapValue(terrain->heightMap, x, y);
-            TerrainBufferData d = {
-                .elevation = elevation,
-                .palleteIndex = elevation,
-//                 .unused1 = 32,
-//                 .unused2 = 64,
-//                 .aligner = 69
-            };
-            bufferData[c] = d;
+            u32 c = x + (y * width);
+            u32 elevation = htw_geo_getMapValue(world->heightMap, x, y);
+//             TerrainBufferData d = {
+//                 .elevation = elevation,
+//                 //.palleteIndex = elevation,
+//                 .paletteX = htw_randRange(256),
+//                 .paletteY = htw_randRange(256),
+// //                 .unused1 = 32,
+// //                 .unused2 = 64,
+// //                 .aligner = 69
+//             };
+            bufferData[c].elevation = elevation;
         }
     }
 
@@ -770,9 +776,9 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     htw_retreiveBuffer(graphics->vkContext, terrain->viewInfoBuffer);
 }
 
-static vec3 getRandomColor() {
-    float r = (float)rand() / (float)RAND_MAX;
-    float g = (float)rand() / (float)RAND_MAX;
-    float b = (float)rand() / (float)RAND_MAX;
-    return (vec3){ {r, g, b} };
-}
+// static vec3 getRandomColor() {
+//     float r = (float)rand() / (float)RAND_MAX;
+//     float g = (float)rand() / (float)RAND_MAX;
+//     float b = (float)rand() / (float)RAND_MAX;
+//     return (vec3){ {r, g, b} };
+// }

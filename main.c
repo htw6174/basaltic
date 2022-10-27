@@ -118,8 +118,8 @@ int main(int argc, char *argv[])
     SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
 
     kd_UiState ui = kd_createUiState();
-    kd_WorldState *world = kd_createWorldState("Test World");
-    kd_initializeWorldState(world, 64, 64);
+    kd_WorldState *world = kd_createWorldState(1, 1, 64, 64);
+    kd_initializeWorldState(world);
     kd_LogicInputState *logicInput = createLogicInputState();
 
     Uint32 logicInterval = 1000 / LOGIC_TPS;

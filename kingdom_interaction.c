@@ -1,6 +1,11 @@
 #include <stdio.h>
+#include <math.h>
 #include <SDL2/SDL.h>
+#include "htw_core.h"
 #include "kingdom_interaction.h"
+
+void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement);
+void editMap(kd_LogicInputState *logicInput, u32 cellIndex, s32 value);
 
 int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE *volatile appState) {
     SDL_Event e;
@@ -17,34 +22,43 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
                     break;
                 case SDLK_c:
                     ui->activeLayer = ui->activeLayer ^ 1; // invert
+                    break;
+                case SDLK_UP:
+                    editMap(logicInput, ui->hoveredCellIndex, 1);
+                    break;
+                case SDLK_DOWN:
+                    editMap(logicInput, ui->hoveredCellIndex, -1);
+                    break;
             }
         }
         else if (e.type == SDL_MOUSEBUTTONDOWN) {
             if (e.button.button == SDL_BUTTON_LEFT) {
-                //printf("clicked cell %u\n", ui->hoveredCellIndex);
-                kd_MapEditAction newAction = {
-                    .editType = KD_MAP_EDIT_ADD,
-                    .cellIndex = ui->hoveredCellIndex,
-                    .value = 1
-                };
-                logicInput->currentEdit = newAction;
-                logicInput->isEditPending = 1;
+                editMap(logicInput, ui->hoveredCellIndex, 1);
+            } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                editMap(logicInput, ui->hoveredCellIndex, -1);
             }
         }
     }
 
     // handle continuous button presses
     const Uint8 *k = SDL_GetKeyboardState(NULL);
-    if (k[SDL_SCANCODE_A]) ui->cameraX -= ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_D]) ui->cameraX += ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_W]) ui->cameraY += ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_S]) ui->cameraY -= ui->cameraMovementSpeed;
+    // camera
+    float xMovement = 0.0;
+    float yMovement = 0.0;
+    if (k[SDL_SCANCODE_A]) xMovement -= ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_D]) xMovement += ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_W]) yMovement += ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_S]) yMovement -= ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_Q]) ui->cameraYaw -= ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_E]) ui->cameraYaw += ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_R]) ui->cameraPitch += ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_F]) ui->cameraPitch -= ui->cameraRotationSpeed;
+    if (k[SDL_SCANCODE_T]) ui->cameraElevation += ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_G]) ui->cameraElevation -= ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_Z]) ui->cameraDistance += ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_X]) ui->cameraDistance -= ui->cameraMovementSpeed;
+
+    moveCamera(ui, xMovement, yMovement);
 
     // get mouse state
     Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
@@ -58,4 +72,25 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
     // update logic input
     logicInput->ticks = SDL_GetTicks64();
     return 0;
+}
+
+void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
+    float yaw = ui->cameraYaw * DEG_TO_RAD;
+    float sinYaw = sin(yaw);
+    float cosYaw = cos(yaw);
+    float xGlobalMovement = (xLocalMovement * cosYaw) + (yLocalMovement * -sinYaw);
+    float yGlobalMovement = (yLocalMovement * cosYaw) + (xLocalMovement * sinYaw);
+
+    ui->cameraX += xGlobalMovement;
+    ui->cameraY += yGlobalMovement;
+}
+
+void editMap(kd_LogicInputState *logicInput, u32 cellIndex, s32 value) {
+            kd_MapEditAction newAction = {
+                .editType = KD_MAP_EDIT_ADD,
+                .cellIndex = cellIndex,
+                .value = value
+            };
+            logicInput->currentEdit = newAction;
+            logicInput->isEditPending = 1;
 }

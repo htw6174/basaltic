@@ -4,15 +4,29 @@
 #include "kingdom_logicInputState.h"
 #include "kingdom_worldState.h"
 
-kd_WorldState *kd_createWorldState(char *name) {
+kd_WorldState *kd_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWidth, u32 chunkHeight) {
     kd_WorldState *newWorld = malloc(sizeof(kd_WorldState));
-    newWorld->name = name; // Need to copy first?
+    newWorld->chunkCountX = chunkCountX;
+    newWorld->chunkCountY = chunkCountY;
+    newWorld->chunkWidth = chunkWidth;
+    newWorld->chunkHeight = chunkHeight;
+    newWorld->worldWidth = chunkCountX * chunkWidth;
+    newWorld->worldHeight = chunkCountY * chunkHeight;
     return newWorld;
 }
 
-int kd_initializeWorldState(kd_WorldState *world, unsigned int width, unsigned int height) {
-    world->heightMap = htw_geo_createValueMap(width, height, 255);
-    htw_geo_fillGradient(world->heightMap, 0, 32);
+int kd_initializeWorldState(kd_WorldState *world) {
+    u32 width = world->chunkWidth;
+    u32 height = world->chunkHeight;
+
+    world->heightMap = htw_geo_createValueMap(width, height, 64);
+    htw_geo_fillPerlin(world->heightMap, 6174, 6, 0.05);
+
+    world->temperatureMap = htw_geo_createValueMap(width, height, 255);
+    htw_geo_fillGradient(world->temperatureMap, 0, 255);
+
+    world->rainfallMap = htw_geo_createValueMap(width, height, 255);
+    htw_geo_fillPerlin(world->rainfallMap, 8, 2, 0.1);
     return 0;
 }
 
