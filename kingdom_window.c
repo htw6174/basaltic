@@ -55,10 +55,10 @@ static void drawText(kd_GraphicsState *graphics);
 
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 
-static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldState *world);
 static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
+//static void createHexmapTerrain(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
 static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain *terrain);
-static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
+static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex);
 
 static vec3 getRandomColor();
 
@@ -71,6 +71,24 @@ void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height) {
 
     graphics->windowInfoBuffer = getNextBuffer(&graphics->bufferPool);
     *graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(kd_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
+
+    graphics->perFrameLayout = htw_createPerFrameSetLayout(graphics->vkContext);
+    graphics->perPassLayout = htw_createPerPassSetLayout(graphics->vkContext);
+    graphics->perFrameDescriptorSet = htw_allocateDescriptor(graphics->vkContext, graphics->perFrameLayout);
+    graphics->perPassDescriptorSet = htw_allocateDescriptor(graphics->vkContext, graphics->perPassLayout);
+
+    // create per frame descriptor buffers
+    graphics->worldInfoBuffer = getNextBuffer(&graphics->bufferPool);
+    graphics->feedbackInfoBuffer = getNextBuffer(&graphics->bufferPool);
+    *graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WorldInfoData), HTW_BUFFER_USAGE_UNIFORM);
+    *graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(s32), HTW_BUFFER_USAGE_STORAGE);
+
+    // TODO: write world info
+    WorldInfoData *worldInfo = graphics->worldInfoBuffer->hostData;
+
+    // initialize highlighted cell
+    s32 *viewInfo = graphics->feedbackInfoBuffer->hostData;
+    *viewInfo = 0;
 }
 
 htw_VkContext *createWindow(u32 width, u32 height) {
@@ -88,6 +106,7 @@ void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
     htw_updateBuffers(graphics->vkContext, graphics->bufferPool.count, graphics->bufferPool.buffers);
 
     htw_beginOneTimeCommands(graphics->vkContext);
+    htw_updatePerFrameDescriptor(graphics->vkContext, graphics->perFrameDescriptorSet, *graphics->windowInfoBuffer, *graphics->feedbackInfoBuffer, *graphics->worldInfoBuffer);
     updateTextDescriptors(graphics);
     updateHexmapDescriptors(graphics, &graphics->surfaceTerrain);
     htw_endOneTimeCommands(graphics->vkContext);
@@ -218,16 +237,19 @@ static void initTextGraphics(kd_GraphicsState *graphics) {
         .vertexInputInfos = &vertInfo,
         .instanceInputCount = 0
     };
-    tc->shaderLayout = htw_createTextShaderLayout(graphics->vkContext);
 
     // create pipeline
-    tc->textPipeline = htw_createPipeline(graphics->vkContext, tc->shaderLayout, shaderInfo);
+    tc->textPipelineLayout = htw_createTextPipelineSetLayout(graphics->vkContext);
+    tc->textPipelineDescriptorSet = htw_allocateDescriptor(graphics->vkContext, tc->textPipelineLayout);
+    htw_DescriptorSetLayout textPipelineLayouts[] = {graphics->perFrameLayout, graphics->perPassLayout, tc->textPipelineLayout, NULL};
+    tc->textPipeline = htw_createPipeline(graphics->vkContext, textPipelineLayouts, shaderInfo);
 }
 
 static void updateTextDescriptors(kd_GraphicsState *graphics) {
     kd_TextRenderContext *tc = &graphics->textRenderContext;
 
-    htw_updateTextDescriptors(graphics->vkContext, tc->shaderLayout, *tc->uniformBuffer, tc->glyphBitmap);
+    htw_updateTextDescriptor(graphics->vkContext, tc->textPipelineDescriptorSet, *tc->uniformBuffer, tc->glyphBitmap);
+    // TODO: does anything below this line need to be in this method?
     htw_updateBuffer(graphics->vkContext, tc->bitmapBuffer);
     htw_updateTexture(graphics->vkContext, *tc->bitmapBuffer, tc->glyphBitmap);
 
@@ -320,7 +342,9 @@ static void drawText(kd_GraphicsState *graphics) {
     memcpy(tc->uniformBuffer->hostData, tc->textPool[0].modelMatrix, sizeof(mat4x4));
     htw_updateBuffer(graphics->vkContext, tc->uniformBuffer);
 
-    htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->shaderLayout, &tc->textModel, HTW_DRAW_TYPE_INDEXED);
+    htw_bindPipeline(graphics->vkContext, tc->textPipeline);
+    htw_bindDescriptorSet(graphics->vkContext, tc->textPipeline, tc->textPipelineDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PIPELINE);
+    htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->textModel, HTW_DRAW_TYPE_INDEXED);
 }
 
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
@@ -335,19 +359,20 @@ static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline) {
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world) {
 
     updateWindowInfoBuffer(graphics, ui->mouse.x, ui->mouse.y);
-    updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain);
-    u32 instanceCount = world->heightMap->width * world->heightMap->height;
-    //instanceCount = min_int(instanceCount, graphics->frame % instanceCount);
+    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
+        updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain, c);
+    }
 
     // translate camera parameters to projection and view matricies TODO: camera position interpolation, from current to target
     {
         float pitch = ui->cameraPitch * DEG_TO_RAD;
         float yaw = ui->cameraYaw * DEG_TO_RAD;
-        float radius = cos(pitch) * ui->cameraDistance;
-        float height = sin(pitch) * ui->cameraDistance;
+        float correctedDistance = powf(ui->cameraDistance, 2.0);
+        float radius = cos(pitch) * correctedDistance;
+        float height = sin(pitch) * correctedDistance;
         float floor = ui->cameraElevation; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
         if (ui->cameraMode == KD_CAMERA_MODE_ORTHOGRAPHIC) {
-            mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * ui->cameraDistance, ui->cameraDistance, 0.1f, 1000.f);
+            mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * correctedDistance, correctedDistance, 0.1f, 1000.f);
         }
         else {
             mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 1000.f);
@@ -359,12 +384,23 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     }
 
     htw_beginFrame(graphics->vkContext);
+    // TODO: if a pipeline layout must be used to bind descriptor sets, create some default pipeline that can be used for per-frame and per-pass bindings
+    htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
+    htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
     // draw full terrain mesh
-    htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.shaderLayout, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
+    // TODO: use camera position to determine which chunks should be drawn
+    // TODO: create correct model matrix to use for each chunk's transform
+    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
+        htw_bindPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline);
+        mat4x4Translate(graphics->camera.view, (vec3){{0.0, 20 * c, 0.0}});
+        htw_bindDescriptorSet(graphics->vkContext, graphics->surfaceTerrain.pipeline, graphics->surfaceTerrain.chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
+        htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
+    }
 
-    // update ui with view info from shaders
-    u32 *hoveredCell = graphics->surfaceTerrain.viewInfoBuffer->hostData;
+    // update ui with view info from shadersy
+    htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer);
+    u32 *hoveredCell = graphics->feedbackInfoBuffer->hostData;
     ui->hoveredCellIndex = *hoveredCell;
 
     // draw text overlays
@@ -377,7 +413,6 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     mat4x4 textTransform;
     // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
     // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
-    //mat4x4Identity(textTransform);
     mat4x4SetScale(textTransform, 1.0); // TODO: figure out how to resolve bleed from neighboring glyphs when scaling text mesh
     mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
     setTextTransform(&graphics->textRenderContext, textItem, textTransform);
@@ -411,11 +446,13 @@ static kd_BufferPool createBufferPool(unsigned int maxCount) {
     };
     return newPool;
 }
+
 static htw_Buffer* getNextBuffer(kd_BufferPool *pool) {
     if (pool->count >= pool->maxCount) return NULL;
     return &pool->buffers[pool->count++];
 }
 
+/*
 static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldState *world) {
     int width = world->heightMap->width;
     int height = world->heightMap->height;
@@ -475,6 +512,7 @@ static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldStat
         }
     }
 }
+*/
 
 /**
  * @brief Creates hexagonal tile surface geometry based on an input heightmap, and saves the location of each tile's geometry data for later changes
@@ -511,8 +549,15 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
         .vertexInputInfos = vertexInputInfos,
         .instanceInputCount = 0,
     };
-    terrain->shaderLayout = htw_createTerrainShaderLayout(graphics->vkContext);
-    terrain->pipeline = htw_createPipeline(graphics->vkContext, terrain->shaderLayout, shaderInfo);
+
+    terrain->chunkObjectLayout = htw_createTerrainObjectSetLayout(graphics->vkContext);
+    htw_DescriptorSetLayout terrainPipelineLayouts[] = {graphics->perFrameLayout, graphics->perPassLayout, NULL, terrain->chunkObjectLayout};
+    terrain->pipeline = htw_createPipeline(graphics->vkContext, terrainPipelineLayouts, shaderInfo);
+
+    // create descriptor set for each chunk, to swap between during each frame
+    terrain->chunkObjectDescriptorSets = malloc(sizeof(htw_DescriptorSet) * MAX_VISIBLE_CHUNKS);
+    htw_allocateDescriptors(graphics->vkContext, terrain->chunkObjectLayout, MAX_VISIBLE_CHUNKS, terrain->chunkObjectDescriptorSets);
+
     mapCamera(graphics, terrain->pipeline);
 
     // determine required size for vertex and triangle buffers
@@ -559,36 +604,19 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
         0, 6, 1,
     };
 
-    // create cell data texture and buffer
-    terrain->worldInfoBuffer = getNextBuffer(&graphics->bufferPool);
+    // best way to handle using multiple sub-buffers and binding a different one each draw call?
+    // Options:
+    // a. create a descriptor set for every sub buffer, and set a different buffer offset for each. When drawing, most descriptors sets can be bound once per frame. A new terrain data descriptor set will be bound before every draw call.
+    // b. create one descriptor set with a dynamic storage buffer. When drawing, bind the terrain data descriptor set with a different dynamic offset before every draw call.
+    // because I don't need to change the size of these sub buffers at runtime, there shouldn't be much of a difference between these approaches.
+    terrain->terrainChunkHostSize = sizeof(TerrainBufferData) * cellCount;
     terrain->terrainDataBuffer = getNextBuffer(&graphics->bufferPool);
-    terrain->viewInfoBuffer = getNextBuffer(&graphics->bufferPool);
-    *terrain->worldInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WorldInfoData), HTW_BUFFER_USAGE_UNIFORM);
-    *terrain->terrainDataBuffer = htw_createBuffer(graphics->vkContext, sizeof(TerrainBufferData) * cellCount, HTW_BUFFER_USAGE_STORAGE);
-    *terrain->viewInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(s32), HTW_BUFFER_USAGE_STORAGE);
-
-    // TODO: write world info
-    WorldInfoData *worldInfo = terrain->worldInfoBuffer->hostData;
-
-    // initialize highlighted cell
-    s32 *viewInfo = terrain->viewInfoBuffer->hostData;
-    *viewInfo = 0;
+    *terrain->terrainDataBuffer = htw_createSplitBuffer(graphics->vkContext, sizeof(TerrainBufferData) * cellCount, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE, &terrain->terrainChunkDeviceSize);
 
     // create and write model data for each cell
-    TerrainBufferData *terrainData = (TerrainBufferData*)terrain->terrainDataBuffer->hostData;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             unsigned int c = x + (y * width);
-            // terrain data // TODO: move part of this to its own method, needs to be repeated when updating the buffer
-            s32 rawElevation = htw_geo_getMapValue(world->heightMap, x, y);
-            s32 rawTemperature = htw_geo_getMapValue(world->temperatureMap, x, y);
-            s32 rawRainfall = htw_geo_getMapValue(world->rainfallMap, x, y);
-            TerrainBufferData cellData = {
-                .elevation = rawElevation / 10,
-                .paletteX = (u8)remap_int(rawTemperature, 0, world->temperatureMap->maxMagnitude, 0, 255),
-                .paletteY = (u8)remap_int(rawRainfall, 0, world->rainfallMap->maxMagnitude, 0, 255),
-            };
-            terrainData[c] = cellData;
             // vertex data
             for (int v = 0; v < vertsPerCell; v++) {
                 unsigned int i = (c * vertsPerCell) + v;
@@ -744,36 +772,36 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
 }
 
 static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain *terrain){
-    htw_updateTerrainDescriptors(graphics->vkContext, terrain->shaderLayout, *terrain->worldInfoBuffer, *terrain->terrainDataBuffer, *graphics->windowInfoBuffer, *terrain->viewInfoBuffer);
+    // TEST
+    htw_updateTerrainObjectDescriptors(graphics->vkContext, terrain->chunkObjectDescriptorSets, MAX_VISIBLE_CHUNKS, terrain->terrainChunkDeviceSize, *terrain->terrainDataBuffer);
 }
 
-static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain) {
+static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex) {
     const unsigned int width = world->chunkWidth;
     const unsigned int height = world->chunkHeight;
     const unsigned int cellCount = width * height;
+    kd_MapChunk *chunk = &world->chunks[chunkIndex];
 
-
-    TerrainBufferData *bufferData = terrain->terrainDataBuffer->hostData;
+    size_t subBufferHostOffset = chunkIndex * terrain->terrainChunkHostSize;
+    size_t subBufferDeviceOffset = chunkIndex * terrain->terrainChunkDeviceSize;
+    TerrainBufferData *bufferData = terrain->terrainDataBuffer->hostData + subBufferHostOffset;
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             u32 c = x + (y * width);
-            u32 elevation = htw_geo_getMapValue(world->heightMap, x, y);
-//             TerrainBufferData d = {
-//                 .elevation = elevation,
-//                 //.palleteIndex = elevation,
-//                 .paletteX = htw_randRange(256),
-//                 .paletteY = htw_randRange(256),
-// //                 .unused1 = 32,
-// //                 .unused2 = 64,
-// //                 .aligner = 69
-//             };
-            bufferData[c].elevation = elevation;
+            s32 rawElevation = htw_geo_getMapValue(chunk->heightMap, x, y);
+            s32 rawTemperature = htw_geo_getMapValue(chunk->temperatureMap, x, y);
+            s32 rawRainfall = htw_geo_getMapValue(chunk->rainfallMap, x, y);
+            TerrainBufferData cellData = {
+                .elevation = rawElevation,
+                .paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
+                .paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
+            };
+            bufferData[c] = cellData;
         }
     }
 
-    htw_updateBuffer(graphics->vkContext, terrain->terrainDataBuffer);
-    htw_retreiveBuffer(graphics->vkContext, terrain->viewInfoBuffer);
+    htw_updateSubBuffer(graphics->vkContext, terrain->terrainDataBuffer, subBufferHostOffset, subBufferDeviceOffset, terrain->terrainChunkDeviceSize);
 }
 
 // static vec3 getRandomColor() {

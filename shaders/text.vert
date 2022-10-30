@@ -1,6 +1,6 @@
 #version 420
 
-layout(set = 0, binding = 0) uniform displayInfo { // TODO: write to and use this uniform. NOTE: May be better to normalize glyph rect sizes and just pass the aspect ratio here
+layout(set = 2, binding = 0) uniform displayInfo { // TODO: write to and use this uniform. NOTE: May be better to normalize glyph rect sizes and just pass the aspect ratio here
     //int width;
     //int height;
     //float aspect;

@@ -14,6 +14,10 @@
 #define MAX_TEXT_LENGTH 256
 #define TEXT_POOL_CAPACITY 8
 
+#define MAX_VISIBLE_CHUNKS 9
+
+// TODO: enums to describe the binding indicies for each descriptor set?
+
 typedef struct {
     mat4x4 projection;
     mat4x4 view;
@@ -77,18 +81,21 @@ typedef struct kd_TextRenderContext {
     htw_Buffer *uniformBuffer;
     htw_Buffer *bitmapBuffer;
     htw_Texture glyphBitmap;
-    htw_ShaderLayout shaderLayout;
+    htw_DescriptorSetLayout textPipelineLayout;
+    htw_DescriptorSet textPipelineDescriptorSet;
     htw_PipelineHandle textPipeline;
 } kd_TextRenderContext;
 
 typedef struct kd_HexmapTerrain {
     uint32_t subdivisions;
     htw_PipelineHandle pipeline;
-    htw_ShaderLayout shaderLayout;
+    htw_DescriptorSetLayout chunkObjectLayout;
+    htw_DescriptorSet *chunkObjectDescriptorSets;
     htw_ModelData modelData;
-    htw_Buffer *worldInfoBuffer;
-    htw_Buffer *terrainDataBuffer;
-    htw_Buffer *viewInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
+    u32 maxVisibleChunks;
+    size_t terrainChunkHostSize;
+    size_t terrainChunkDeviceSize;
+    htw_Buffer *terrainDataBuffer; // split into multiple logical buffers used to describe each terrain chunk
 } kd_HexmapTerrain;
 
 typedef struct kd_InstanceTerrain {
@@ -109,6 +116,12 @@ typedef struct kd_GraphicsState {
     htw_VkContext *vkContext;
     kd_BufferPool bufferPool;
     htw_Buffer *windowInfoBuffer;
+    htw_Buffer *feedbackInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
+    htw_Buffer *worldInfoBuffer;
+    htw_DescriptorSetLayout perFrameLayout;
+    htw_DescriptorSet perFrameDescriptorSet;
+    htw_DescriptorSetLayout perPassLayout;
+    htw_DescriptorSet perPassDescriptorSet;
     kd_TextRenderContext textRenderContext;
     kd_HexmapTerrain surfaceTerrain;
     kd_HexmapTerrain caveTerrain;

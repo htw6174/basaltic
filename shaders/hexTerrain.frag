@@ -14,14 +14,14 @@ precision mediump float;
 // NOTE: because we only want to write to the view buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
 
-layout(set = 1, binding = 0) uniform windowInfo {
+layout(set = 0, binding = 0) uniform windowInfo {
 	vec2 windowSize;
 	vec2 mousePosition;
 } WindowInfo;
 
-layout(std430, set = 1, binding = 1) buffer viewBuffer {
+layout(std430, set = 0, binding = 1) buffer feedbackBuffer {
 	int hoveredCell;
-} ViewBuffer;
+} FeedbackBuffer;
 
 layout(location = 0) in vec3 in_color;
 layout(location = 1) in vec3 in_pos;
@@ -57,7 +57,7 @@ void main()
 	vec2 mousePos = WindowInfo.mousePosition;
 	float mouseDist = distance(windowPos, mousePos);
 	if (mouseDist < 1.0) {
-		ViewBuffer.hoveredCell = in_cellIndex;
+		FeedbackBuffer.hoveredCell = in_cellIndex;
 	}
 	vec3 litColor = in_color * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 	out_color = vec4(litColor, 1.0);

@@ -11,6 +11,7 @@ typedef enum kd_MapEditType {
 
 typedef struct {
     kd_MapEditType editType;
+    u32 chunkIndex;
     u32 cellIndex;
     s32 value;
 } kd_MapEditAction;

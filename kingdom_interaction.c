@@ -45,10 +45,10 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
     // camera
     float xMovement = 0.0;
     float yMovement = 0.0;
-    if (k[SDL_SCANCODE_A]) xMovement -= ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_D]) xMovement += ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_W]) yMovement += ui->cameraMovementSpeed;
-    if (k[SDL_SCANCODE_S]) yMovement -= ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_A]) xMovement -= ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
+    if (k[SDL_SCANCODE_D]) xMovement += ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
+    if (k[SDL_SCANCODE_W]) yMovement += ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
+    if (k[SDL_SCANCODE_S]) yMovement -= ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
     if (k[SDL_SCANCODE_Q]) ui->cameraYaw -= ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_E]) ui->cameraYaw += ui->cameraRotationSpeed;
     if (k[SDL_SCANCODE_R]) ui->cameraPitch += ui->cameraRotationSpeed;
@@ -88,6 +88,7 @@ void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
 void editMap(kd_LogicInputState *logicInput, u32 cellIndex, s32 value) {
             kd_MapEditAction newAction = {
                 .editType = KD_MAP_EDIT_ADD,
+                .chunkIndex = 0,
                 .cellIndex = cellIndex,
                 .value = value
             };
