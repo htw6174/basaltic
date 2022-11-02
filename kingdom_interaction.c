@@ -5,7 +5,7 @@
 #include "kingdom_interaction.h"
 
 void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement);
-void editMap(kd_LogicInputState *logicInput, u32 cellIndex, s32 value);
+void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
 
 int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE *volatile appState) {
     SDL_Event e;
@@ -24,18 +24,18 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
                     ui->activeLayer = ui->activeLayer ^ 1; // invert
                     break;
                 case SDLK_UP:
-                    editMap(logicInput, ui->hoveredCellIndex, 1);
+                    editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
                     break;
                 case SDLK_DOWN:
-                    editMap(logicInput, ui->hoveredCellIndex, -1);
+                    editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
                     break;
             }
         }
         else if (e.type == SDL_MOUSEBUTTONDOWN) {
             if (e.button.button == SDL_BUTTON_LEFT) {
-                editMap(logicInput, ui->hoveredCellIndex, 1);
+                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
             } else if (e.button.button == SDL_BUTTON_RIGHT) {
-                editMap(logicInput, ui->hoveredCellIndex, -1);
+                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
             }
         }
     }
@@ -85,10 +85,10 @@ void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
     ui->cameraY += yGlobalMovement;
 }
 
-void editMap(kd_LogicInputState *logicInput, u32 cellIndex, s32 value) {
+void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
             kd_MapEditAction newAction = {
                 .editType = KD_MAP_EDIT_ADD,
-                .chunkIndex = 0,
+                .chunkIndex = chunkIndex,
                 .cellIndex = cellIndex,
                 .value = value
             };

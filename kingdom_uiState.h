@@ -38,6 +38,7 @@ typedef struct kd_UiState {
     // world
     kd_WorldLayer activeLayer;
     kd_Mouse mouse;
+    u32 hoveredChunkIndex;
     u32 hoveredCellIndex;
     u32 selectedCellIndex;
     // menus

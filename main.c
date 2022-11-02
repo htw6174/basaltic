@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
     SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
 
     kd_UiState ui = kd_createUiState();
-    kd_WorldState *world = kd_createWorldState(3, 3, 64, 64);
+    kd_WorldState *world = kd_createWorldState(8, 8, 64, 64);
     kd_initializeWorldState(world);
     kd_LogicInputState *logicInput = createLogicInputState();
 

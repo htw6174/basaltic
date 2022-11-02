@@ -22,18 +22,22 @@ int kd_initializeWorldState(kd_WorldState *world) {
     u32 chunkCount = world->chunkCountX * world->chunkCountY;
     // TODO: single malloc for all world data, get offset of each array
     world->chunks = malloc(sizeof(kd_MapChunk) * chunkCount);
-    for (int c = 0; c < chunkCount; c++) {
-        // generate chunk data
-        kd_MapChunk *chunk = &world->chunks[c];
-        // TODO: use chunk's world position in generation parameters
-        chunk->heightMap = htw_geo_createValueMap(width, height, 64);
-        htw_geo_fillPerlin(chunk->heightMap, 6174 + c, 6, 0.05);
+    for (int c = 0, y = 0; y < world->chunkCountY; y++) {
+        for (int x = 0; x < world->chunkCountX; x++, c++) {
+            // generate chunk data
+            kd_MapChunk *chunk = &world->chunks[c];
+            s32 cellPosX = x * width;
+            s32 cellPosY = y * height;
+            chunk->heightMap = htw_geo_createValueMap(width, height, 64);
+            htw_geo_fillPerlin(chunk->heightMap, 6174, 6, cellPosX, cellPosY, 0.05);
 
-        chunk->temperatureMap = htw_geo_createValueMap(width, height, 255);
-        htw_geo_fillGradient(chunk->temperatureMap, 0, 255);
+            chunk->temperatureMap = htw_geo_createValueMap(width, height, world->chunkCountY * height);
+            htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
 
-        chunk->rainfallMap = htw_geo_createValueMap(width, height, 255);
-        htw_geo_fillPerlin(chunk->rainfallMap, 8 + c, 2, 0.1);
+            chunk->rainfallMap = htw_geo_createValueMap(width, height, 255);
+            htw_geo_fillPerlin(chunk->rainfallMap, 8, 2, cellPosX, cellPosY, 0.1);
+
+        }
     }
 
     return 0;
@@ -52,11 +56,4 @@ int kd_simulateWorld(kd_LogicInputState *input, kd_WorldState *world) {
         input->isEditPending = 0;
     }
     return 0;
-}
-
-u32 kd_getChunkIndex(kd_WorldState *world, s32 worldX, s32 worldY) {
-    s32 chunkX = worldX / world->chunkWidth;
-    s32 chunkY = worldY / world->chunkHeight;
-    u32 chunkIndex = (chunkY * world->chunkCountX) + chunkX;
-    return chunkIndex;
 }

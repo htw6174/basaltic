@@ -16,18 +16,36 @@
 #define FT_CHECK(x) { FT_Error error = x; \
                     if(error) fprintf(stderr, "FreeType Error: %s failed with code %i\n", #x, x); }
 
-typedef struct TextBufferData {
+typedef struct {
+    mat4x4 pv;
+    mat4x4 m;
+} PushConstantData;
+
+typedef struct {
+    vec2 windowSize;
+    vec2 mousePosition;
+    // only xyz used, but needs to be vec4 for shader uniform buffer alignment
+    vec4 cameraPosition;
+    vec4 cameraFocalPoint;
+} WindowInfo;
+
+typedef struct {
+    u32 chunkIndex;
+    u32 cellIndex;
+} FeedbackInfo;
+
+typedef struct {
+    int timeOfDay;
+} WorldInfo;
+
+typedef struct {
     float x;
     float y;
     float u;
     float v;
 } TextBufferData;
 
-typedef struct WorldInfoData {
-    int timeOfDay;
-} WorldInfoData;
-
-typedef struct TerrainBufferData {
+typedef struct {
     s16 elevation;
     //u16 palleteIndex;
     u8 paletteX;
@@ -35,7 +53,7 @@ typedef struct TerrainBufferData {
     s16 unused1; // weather / temporary effect bitmask?
     s16 unused2; // lighting / player visibility bitmask?
     //int64_t aligner;
-} TerrainBufferData; // TODO: move this to a world logic source file; keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
+} TerrainBufferData; // TODO: move this to a world logic source file? keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
 
 static htw_VkContext *createWindow(u32 width, u32 height);
 static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline);
@@ -43,7 +61,7 @@ static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline);
 static kd_BufferPool createBufferPool(u32 maxCount); // TODO: if buffer collection management is done by htw_vulkan, is this still needed?
 static htw_Buffer* getNextBuffer(kd_BufferPool *pool);
 
-static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY);
+static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
 
 static void initTextGraphics(kd_GraphicsState *graphics);
 static void updateTextDescriptors(kd_GraphicsState *graphics);
@@ -58,7 +76,8 @@ static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world
 static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
 //static void createHexmapTerrain(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
 static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain *terrain);
-static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex);
+static void updateHexmapVisibleChunks(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 centerChunk);
+static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
 
 static vec3 getRandomColor();
 
@@ -70,7 +89,7 @@ void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height) {
     graphics->frame = 0;
 
     graphics->windowInfoBuffer = getNextBuffer(&graphics->bufferPool);
-    *graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(kd_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
+    *graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
 
     graphics->perFrameLayout = htw_createPerFrameSetLayout(graphics->vkContext);
     graphics->perPassLayout = htw_createPerPassSetLayout(graphics->vkContext);
@@ -80,15 +99,16 @@ void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height) {
     // create per frame descriptor buffers
     graphics->worldInfoBuffer = getNextBuffer(&graphics->bufferPool);
     graphics->feedbackInfoBuffer = getNextBuffer(&graphics->bufferPool);
-    *graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WorldInfoData), HTW_BUFFER_USAGE_UNIFORM);
-    *graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(s32), HTW_BUFFER_USAGE_STORAGE);
+    *graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
+    *graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, sizeof(FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
 
     // TODO: write world info
-    WorldInfoData *worldInfo = graphics->worldInfoBuffer->hostData;
+    WorldInfo *worldInfo = graphics->worldInfoBuffer->hostData;
 
     // initialize highlighted cell
-    s32 *viewInfo = graphics->feedbackInfoBuffer->hostData;
-    *viewInfo = 0;
+    FeedbackInfo *feedbackInfo = graphics->feedbackInfoBuffer->hostData;
+    feedbackInfo->cellIndex = 0;
+    feedbackInfo->chunkIndex = 0;
 }
 
 htw_VkContext *createWindow(u32 width, u32 height) {
@@ -113,10 +133,12 @@ void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
 
 }
 
-static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY) {
-    kd_WindowInfo *wdi = (kd_WindowInfo*)graphics->windowInfoBuffer->hostData;
+static void updateWindowInfoBuffer(kd_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
+    WindowInfo *wdi = (WindowInfo *)graphics->windowInfoBuffer->hostData;
     wdi->windowSize = (vec2){{graphics->width, graphics->height}};
     wdi->mousePosition = (vec2){{mouseX, mouseY}};
+    wdi->cameraPosition = cameraPosition;
+    wdi->cameraFocalPoint = cameraFocalPoint;
     htw_updateBuffer(graphics->vkContext, graphics->windowInfoBuffer);
 }
 
@@ -348,6 +370,11 @@ static void drawText(kd_GraphicsState *graphics) {
 }
 
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
+    graphics->surfaceTerrain.closestChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
+    graphics->surfaceTerrain.loadedChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
+    for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+        graphics->surfaceTerrain.loadedChunks[i] = -1;
+    }
     createHexmapMesh(graphics, world, &graphics->surfaceTerrain);
     //createHexmapInstanceBuffers(graphics, world);
 }
@@ -358,12 +385,11 @@ static void mapCamera(kd_GraphicsState *graphics, htw_PipelineHandle pipeline) {
 
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world) {
 
-    updateWindowInfoBuffer(graphics, ui->mouse.x, ui->mouse.y);
-    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
-        updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain, c);
-    }
+    // determine the indicies of chunks closest to the camera
+    u32 centerChunk = kd_getChunkIndexByWorldPosition(world, ui->cameraX, ui->cameraY);
+    updateHexmapVisibleChunks(graphics, world, &graphics->surfaceTerrain, centerChunk);
 
-    // translate camera parameters to projection and view matricies TODO: camera position interpolation, from current to target
+    // translate camera parameters to uniform buffer info + projection and view matricies TODO: camera position interpolation, from current to target
     {
         float pitch = ui->cameraPitch * DEG_TO_RAD;
         float yaw = ui->cameraYaw * DEG_TO_RAD;
@@ -371,44 +397,66 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
         float radius = cos(pitch) * correctedDistance;
         float height = sin(pitch) * correctedDistance;
         float floor = ui->cameraElevation; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
+        vec4 cameraPosition = {
+            .x = ui->cameraX + radius * sin(yaw),
+            .y = ui->cameraY + radius * -cos(yaw),
+            .z = floor + height
+        };
+        vec4 cameraFocalPoint = {
+            .x = ui->cameraX,
+            .y = ui->cameraY,
+            .z = floor
+        };
+        updateWindowInfoBuffer(graphics, ui->mouse.x, ui->mouse.y, cameraPosition, cameraFocalPoint);
+
         if (ui->cameraMode == KD_CAMERA_MODE_ORTHOGRAPHIC) {
             mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * correctedDistance, correctedDistance, 0.1f, 1000.f);
-        }
-        else {
+        } else {
             mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 1000.f);
         }
         mat4x4LookAt(graphics->camera.view,
-                    (vec3){ {ui->cameraX + radius * sin(yaw), ui->cameraY + radius * -cos(yaw), floor + height} },
-                    (vec3){ {ui->cameraX, ui->cameraY, floor} },
+                    cameraPosition.xyz,
+                    cameraFocalPoint.xyz,
                     (vec3){ {0.f, 0.f, 1.f} });
     }
+    PushConstantData mvp;
+    mat4x4MultiplyMatrix(mvp.pv, graphics->camera.view, graphics->camera.projection);
+    mat4x4Identity(mvp.m); // remember to reinitialize those matricies every frame
 
     htw_beginFrame(graphics->vkContext);
     // TODO: if a pipeline layout must be used to bind descriptor sets, create some default pipeline that can be used for per-frame and per-pass bindings
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
+    htw_bindPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline);
     // draw full terrain mesh
     // TODO: use camera position to determine which chunks should be drawn
     // TODO: create correct model matrix to use for each chunk's transform
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
-        htw_bindPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline);
-        mat4x4Translate(graphics->camera.view, (vec3){{0.0, 20 * c, 0.0}});
+        //mat4x4SetTranslation(model, );
+        u32 chunkIndex = graphics->surfaceTerrain.loadedChunks[c];
+        static float chunkX, chunkY;
+        kd_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
+        mat4x4SetTranslation(mvp.m, (vec3){{chunkX, chunkY, 0.0}});
+        htw_pushConstants(graphics->vkContext, graphics->surfaceTerrain.pipeline, &mvp);
         htw_bindDescriptorSet(graphics->vkContext, graphics->surfaceTerrain.pipeline, graphics->surfaceTerrain.chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
         htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.modelData, HTW_DRAW_TYPE_INDEXED);
     }
 
-    // update ui with view info from shadersy
+    // update ui with feedback info from shaders
     htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer);
-    u32 *hoveredCell = graphics->feedbackInfoBuffer->hostData;
-    ui->hoveredCellIndex = *hoveredCell;
+    FeedbackInfo *feedbackData = graphics->feedbackInfoBuffer->hostData;
+    u32 hoveredChunk = feedbackData->chunkIndex;
+    u32 hoveredCell = feedbackData->cellIndex;
+    ui->hoveredChunkIndex = hoveredChunk;
+    ui->hoveredCellIndex = hoveredCell;
 
     // draw text overlays
     kd_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
     char statusText[256];
     sprintf(statusText,
-            "Mouse Position: %4.4i, %4.4i\nHighlighted Cell: %4.4u",
-            ui->mouse.x, ui->mouse.y, *hoveredCell);
+            "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
+            ui->mouse.x, ui->mouse.y, hoveredChunk, hoveredCell);
     updateTextBuffer(graphics, textItem, statusText);
     mat4x4 textTransform;
     // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
@@ -609,9 +657,10 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     // a. create a descriptor set for every sub buffer, and set a different buffer offset for each. When drawing, most descriptors sets can be bound once per frame. A new terrain data descriptor set will be bound before every draw call.
     // b. create one descriptor set with a dynamic storage buffer. When drawing, bind the terrain data descriptor set with a different dynamic offset before every draw call.
     // because I don't need to change the size of these sub buffers at runtime, there shouldn't be much of a difference between these approaches.
-    terrain->terrainChunkHostSize = sizeof(TerrainBufferData) * cellCount;
+    // Chunk data includes the chunk index out front
+    terrain->terrainChunkHostSize = sizeof(u32) + (sizeof(TerrainBufferData) * cellCount);
     terrain->terrainDataBuffer = getNextBuffer(&graphics->bufferPool);
-    *terrain->terrainDataBuffer = htw_createSplitBuffer(graphics->vkContext, sizeof(TerrainBufferData) * cellCount, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE, &terrain->terrainChunkDeviceSize);
+    *terrain->terrainDataBuffer = htw_createSplitBuffer(graphics->vkContext, terrain->terrainChunkHostSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE, &terrain->terrainChunkDeviceSize);
 
     // create and write model data for each cell
     for (int y = 0; y < height; y++) {
@@ -776,15 +825,114 @@ static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain
     htw_updateTerrainObjectDescriptors(graphics->vkContext, terrain->chunkObjectDescriptorSets, MAX_VISIBLE_CHUNKS, terrain->terrainChunkDeviceSize, *terrain->terrainDataBuffer);
 }
 
-static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex) {
+static void updateHexmapVisibleChunks(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 centerChunk) {
+    // update list a to contain all elements of list b while changing as few elements as possible of list a
+    // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
+    // b doesn't contain 0, so 0 must be replaced
+    // b contains 1, so 1 must stay in place
+    // b contains 2, so 2 must be inserted into a
+    // complexity shaping up to be n^2 at least, any way to do better?
+    // for every element of a: need to know if it definitely isn't in b
+    // for every element of b: need to know it is already in a
+    // update a and b with this information: a = [-1, 1], b = [-1, 2]
+    // loop through a and b at the same time: advance through a until a negative value is found, then advance through b until a positive value is found, and move it to a. Repeat from last position through all of a
+    // closestChunks.chunkIndex[] = b
+    // loadedChunks.chunkIndex[] = a
+    // NOTE: there *has* to be a better way to do this, feels very messy right now.
+    s32 *closestChunks = graphics->surfaceTerrain.closestChunks;
+    s32 *loadedChunks = graphics->surfaceTerrain.loadedChunks;
+    for (int c = 0, y = 1 - MAX_VISIBLE_CHUNK_DISTANCE; y < MAX_VISIBLE_CHUNK_DISTANCE; y++) {
+        for (int x = 1 - MAX_VISIBLE_CHUNK_DISTANCE; x < MAX_VISIBLE_CHUNK_DISTANCE; x++, c++) {
+            closestChunks[c] = kd_getChunkIndexAtOffset(world, centerChunk, x, y);
+        }
+    }
+
+    // // TEST
+    // printf("closest chunks: ");
+    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    //     printf("%i, ", closestChunks[i]);
+    // }
+    // printf("\n");
+    // printf("loaded chunks: ");
+    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    //     printf("%i, ", loadedChunks[i]);
+    // }
+    // printf("\n");
+
+    // compare closest chunks to currently loaded chunks
+    for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+        s32 loadedTarget = loadedChunks[i];
+        u8 foundMatch = 0;
+        for (int k = 0; k < MAX_VISIBLE_CHUNKS; k++) {
+            u32 requiredTarget = closestChunks[k];
+            if (requiredTarget != -1 && loadedTarget == requiredTarget) {
+                // found a position in a that already contains an element of b
+                // mark b[k] -1 so we know it doesn't need to be touched later
+                closestChunks[k] = -1;
+                foundMatch = 1;
+                break;
+            }
+        }
+        if (!foundMatch) {
+            // a[i] needs to be replaced with an element of b
+            loadedChunks[i] = -1;
+        }
+    }
+
+    // // TEST
+    // printf("closest chunks: ");
+    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    //     printf("%i, ", closestChunks[i]);
+    // }
+    // printf("\n");
+    // printf("loaded chunks: ");
+    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    //     printf("%i, ", loadedChunks[i]);
+    // }
+    // printf("\n");
+
+    // move all positive values from b into negative values of a
+    u32 ia = 0, ib = 0;
+    while (ia < MAX_VISIBLE_CHUNKS) {
+        if (loadedChunks[ia] == -1) {
+            // find next positive value in b
+            while (1) {
+                if (closestChunks[ib] != -1) {
+                    loadedChunks[ia] = closestChunks[ib];
+                    break;
+                }
+                ib++;
+            }
+        }
+        ia++;
+    }
+
+    // // TEST
+    // printf("loaded chunks: ");
+    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    //     printf("%i, ", loadedChunks[i]);
+    // }
+    // printf("\n\n");
+
+    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
+        // TODO: only update chunk if freshly visible or has pending updates
+        // TODO: also find some way to avoid loading duplicate chunks when near the top or bottom of the world (causes flickering as higher chunks are moved down)
+        updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain, loadedChunks[c], c);
+    }
+}
+
+static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
     const unsigned int width = world->chunkWidth;
     const unsigned int height = world->chunkHeight;
     const unsigned int cellCount = width * height;
     kd_MapChunk *chunk = &world->chunks[chunkIndex];
 
-    size_t subBufferHostOffset = chunkIndex * terrain->terrainChunkHostSize;
-    size_t subBufferDeviceOffset = chunkIndex * terrain->terrainChunkDeviceSize;
-    TerrainBufferData *bufferData = terrain->terrainDataBuffer->hostData + subBufferHostOffset;
+    size_t subBufferHostOffset = subBufferIndex * terrain->terrainChunkHostSize;
+    size_t subBufferDeviceOffset = subBufferIndex * terrain->terrainChunkDeviceSize;
+    u32 *bufferIndex = terrain->terrainDataBuffer->hostData + subBufferHostOffset; // address of chunk index
+    TerrainBufferData *bufferData = (TerrainBufferData*)(bufferIndex + 1); // address of terrain data array
+
+    *bufferIndex = chunkIndex;
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {

@@ -14,7 +14,10 @@
 #define MAX_TEXT_LENGTH 256
 #define TEXT_POOL_CAPACITY 8
 
-#define MAX_VISIBLE_CHUNKS 9
+// Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
+#define MAX_VISIBLE_CHUNK_DISTANCE 3
+#define VISIBLE_CHUNK_AREA_DIAMETER ((MAX_VISIBLE_CHUNK_DISTANCE * 2) - 1)
+#define MAX_VISIBLE_CHUNKS (VISIBLE_CHUNK_AREA_DIAMETER * VISIBLE_CHUNK_AREA_DIAMETER)
 
 // TODO: enums to describe the binding indicies for each descriptor set?
 
@@ -23,24 +26,19 @@ typedef struct {
     mat4x4 view;
 } kd_Camera;
 
-typedef struct kd_BufferPool {
+typedef struct {
     htw_Buffer *buffers;
     u32 count;
     u32 maxCount;
 } kd_BufferPool;
 
-typedef struct kd_WindowInfo {
-    vec2 windowSize;
-    vec2 mousePosition;
-} kd_WindowInfo;
-
-typedef struct kd_TextPoolItem {
+typedef struct {
     mat4x4 modelMatrix;
 } kd_TextPoolItem;
 
 typedef uint32_t kd_TextPoolItemHandle;
 
-typedef struct kd_GlyphMetrics {
+typedef struct {
     // texel position - pixel distance
     u32 offsetX;
     u32 offsetY;
@@ -68,7 +66,7 @@ typedef struct kd_GlyphMetrics {
  * After updating all the text you want displayed, calling drawText() will render everything in the text pool (although free pool items are effectively invisible)
  *
  */
-typedef struct kd_TextRenderContext {
+typedef struct {
     FT_Library freetypeLibrary;
     FT_Face face;
     u32 pixelSize; // pixels per EM square; rough font size
@@ -86,29 +84,31 @@ typedef struct kd_TextRenderContext {
     htw_PipelineHandle textPipeline;
 } kd_TextRenderContext;
 
-typedef struct kd_HexmapTerrain {
+typedef struct {
+    vec3 position;
+} kd_HexmapVertexData;
+
+typedef struct {
+    u32 chunkIndex;
+    s32 bufferIndex;
+} _htw_ChunkLoadTracker;
+
+typedef struct {
     uint32_t subdivisions;
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout chunkObjectLayout;
     htw_DescriptorSet *chunkObjectDescriptorSets;
     htw_ModelData modelData;
-    u32 maxVisibleChunks;
+    // length MAX_VISIBLE_CHUNKS arrays that are compared to determine what chunks to reload each frame, and where to place them
+    s32 *closestChunks;
+    s32 *loadedChunks;
+    // TODO: structure to keep track of both closest and currently loaded chunks, that can be easily compared every frame to determine what needs reloading
     size_t terrainChunkHostSize;
     size_t terrainChunkDeviceSize;
     htw_Buffer *terrainDataBuffer; // split into multiple logical buffers used to describe each terrain chunk
 } kd_HexmapTerrain;
 
-typedef struct kd_InstanceTerrain {
-    htw_ValueMap *heightMap;
-    htw_PipelineHandle pipeline;
-    htw_ModelData modelData;
-} kd_InstanceTerrain;
-
-typedef struct kd_HexmapVertexData {
-    vec3 position;
-} kd_HexmapVertexData;
-
-typedef struct kd_GraphicsState {
+typedef struct {
     u32 width, height;
     u64 milliSeconds;
     u64 frame;
@@ -125,7 +125,6 @@ typedef struct kd_GraphicsState {
     kd_TextRenderContext textRenderContext;
     kd_HexmapTerrain surfaceTerrain;
     kd_HexmapTerrain caveTerrain;
-    kd_InstanceTerrain instanceTerrain;
     kd_Camera camera;
 } kd_GraphicsState;
 
