@@ -39,6 +39,7 @@ layout(set = 0, binding = 0) uniform windowInfo {
 
 // also available in the fragment stage
 layout(std140, set = 0, binding = 2) uniform worldInfo {
+    float totalWidth;
     int timeOfDay;
     // season info, weather, etc.
 } WorldInfo;
@@ -49,6 +50,7 @@ layout(std430, set = 3, binding = 0) readonly buffer terrainBuffer { // requires
 } TerrainBuffer;
 
 layout(location = 0) in vec3 in_position;
+layout(location = 1) in uint cellIndex;
 
 layout(location = 0) out vec3 out_color;
 layout(location = 1) out vec3 out_pos;
@@ -63,10 +65,36 @@ layout(location = 3) out flat uint out_cellIndex;
 //     return terrainGrad.bias + terrainGrad.amp * cos(6.28318 * (terrainGrad.freq * t + terrainGrad.phase));
 // }
 
+vec4 cylinderWarp(vec4 worldPosition) {
+    float worldCircumference = WorldInfo.totalWidth;
+    float worldRadius = worldCircumference / TAU;
+    float focusRelativeX = worldPosition.x - WindowInfo.cameraFocalPoint.x;
+    float theta = (focusRelativeX / worldCircumference) * TAU;
+    vec4 warpedPosition = vec4(
+        WindowInfo.cameraFocalPoint.x + (sin(theta) * worldRadius) + (worldPosition.z * sin(theta)),
+        worldPosition.y,
+        (worldPosition.z * cos(theta)) + (cos(theta) * worldRadius) - worldRadius,
+        1.0);
+    return warpedPosition;
+}
+
+vec4 sphereWarp(vec4 worldPosition) {
+    float worldCircumference = WorldInfo.totalWidth;
+    float worldRadius = worldCircumference / TAU;
+    vec2 focusRelative = worldPosition.xy - WindowInfo.cameraFocalPoint.xy;
+    vec2 theta = (focusRelative / worldCircumference) * TAU;
+    float latitude = min(cos(theta.x), cos(theta.y)); // TODO: figure out the correct way to modify z around a sphere
+    vec4 warpedPosition = vec4(
+        WindowInfo.cameraFocalPoint.x + (sin(theta.x) * worldRadius) + (worldPosition.z * sin(theta.x)),
+        WindowInfo.cameraFocalPoint.y + (sin(theta.y) * worldRadius) + (worldPosition.z * sin(theta.y)),
+        (worldPosition.z * latitude) + (latitude * worldRadius) - worldRadius,
+        1.0);
+    return warpedPosition;
+}
+
 void main()
 {
-    uint cell = gl_VertexIndex / 7;
-    terrainData cellData = TerrainBuffer.data[cell];
+    terrainData cellData = TerrainBuffer.data[cellIndex];
     // extract a 16 bit int and uint from one 32 bit int
     int elevation = bitfieldExtract(cellData.packed1, 0, 16);
     // convert to uint to ignore sign bit in bitfieldExtract
@@ -75,21 +103,15 @@ void main()
     uint paletteX = bitfieldExtract(uPacked1, 16, 8);
     uint paletteY = bitfieldExtract(uPacked1, 24, 8);
     vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * 0.2), 1.0);
-    vec4 globalPosition = MVP.m * localPosition;
-    out_pos = globalPosition.xyz;
-    // warp position around a cylinder
-    float focusRelativeX = globalPosition.x - WindowInfo.cameraFocalPoint.x;
-    float theta = (focusRelativeX / WORLD_CIRCUMFERENCE) * TAU;
-    vec4 warpedPosition = vec4(
-        WindowInfo.cameraFocalPoint.x + (sin(theta) * WORLD_RADIUS) + (globalPosition.z * sin(theta)),
-        globalPosition.y,
-        (globalPosition.z * cos(theta)) + (cos(theta) * WORLD_RADIUS) - WORLD_RADIUS,
-        1.0);
-    gl_Position = MVP.pv * warpedPosition * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
+    vec4 worldPosition = MVP.m * localPosition;
+    out_pos = worldPosition.xyz;
+    // warp position for a false horizon
+    //worldPosition = sphereWarp(worldPosition);
+    gl_Position = MVP.pv * worldPosition * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
 
-    //out_color = vec3(rand(cell + 0.0), rand(cell + 0.3), rand(cell + 0.6));
+    //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
     out_color = vec3(paletteX / 255.0, paletteY / 255.0, 0.0);
     out_chunkIndex = TerrainBuffer.chunkIndex;
-    out_cellIndex = cell;
+    out_cellIndex = cellIndex;
 }

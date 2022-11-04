@@ -78,6 +78,7 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
 static void updateHexmapDescriptors(kd_GraphicsState *graphics, kd_HexmapTerrain *terrain);
 static void updateHexmapVisibleChunks(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 centerChunk);
 static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
+static void setHexmapBufferFromCell(kd_MapChunk *chunk, u32 cellX, u32 cellY, TerrainBufferData *target);
 
 static vec3 getRandomColor();
 
@@ -390,6 +391,8 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     updateHexmapVisibleChunks(graphics, world, &graphics->surfaceTerrain, centerChunk);
 
     // translate camera parameters to uniform buffer info + projection and view matricies TODO: camera position interpolation, from current to target
+    vec4 cameraPosition;
+    vec4 cameraFocalPoint;
     {
         float pitch = ui->cameraPitch * DEG_TO_RAD;
         float yaw = ui->cameraYaw * DEG_TO_RAD;
@@ -397,12 +400,12 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
         float radius = cos(pitch) * correctedDistance;
         float height = sin(pitch) * correctedDistance;
         float floor = ui->cameraElevation; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
-        vec4 cameraPosition = {
+        cameraPosition = (vec4){
             .x = ui->cameraX + radius * sin(yaw),
             .y = ui->cameraY + radius * -cos(yaw),
             .z = floor + height
         };
-        vec4 cameraFocalPoint = {
+        cameraFocalPoint = (vec4){
             .x = ui->cameraX,
             .y = ui->cameraY,
             .z = floor
@@ -430,13 +433,17 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
 
     htw_bindPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline);
     // draw full terrain mesh
-    // TODO: use camera position to determine which chunks should be drawn
-    // TODO: create correct model matrix to use for each chunk's transform
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         //mat4x4SetTranslation(model, );
         u32 chunkIndex = graphics->surfaceTerrain.loadedChunks[c];
         static float chunkX, chunkY;
         kd_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
+
+        // FIXME: quick hack to get world wrapping; need to wrap camera position too, shader position derivatives get weird far from the origin
+        float worldDistance = (cameraFocalPoint.x - chunkX) / world->worldWidth;
+        worldDistance = roundf(worldDistance);
+        chunkX += worldDistance * world->worldWidth;
+
         mat4x4SetTranslation(mvp.m, (vec3){{chunkX, chunkY, 0.0}});
         htw_pushConstants(graphics->vkContext, graphics->surfaceTerrain.pipeline, &mvp);
         htw_bindDescriptorSet(graphics->vkContext, graphics->surfaceTerrain.pipeline, graphics->surfaceTerrain.chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
@@ -500,68 +507,6 @@ static htw_Buffer* getNextBuffer(kd_BufferPool *pool) {
     return &pool->buffers[pool->count++];
 }
 
-/*
-static void createHexmapInstanceBuffers(kd_GraphicsState *graphics, kd_WorldState *world) {
-    int width = world->heightMap->width;
-    int height = world->heightMap->height;
-    u32 tileCount = width * height;
-    u32 size = sizeof(vec4) * tileCount;
-
-    kd_InstanceTerrain instanceTerrain;
-
-    htw_ShaderInputInfo instanceInputInfo = {
-        .size = sizeof(vec4),
-        .offset = 0
-    };
-    htw_ShaderSet shaderInfo = {
-        .vertexShader = htw_loadShader(graphics->vkContext, "shaders/hexagon.vert.spv"),
-        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/hexagon.frag.spv"),
-        .vertexInputCount = 0,
-        .instanceInputStride = sizeof(vec4),
-        .instanceInputCount = 1,
-        .instanceInputInfos = &instanceInputInfo
-    };
-    htw_ShaderLayout shaderLayout = htw_createStandardShaderLayout(graphics->vkContext);
-    instanceTerrain.pipeline = htw_createPipeline(graphics->vkContext, shaderLayout, shaderInfo);
-    mapCamera(graphics, instanceTerrain.pipeline);
-
-    htw_ModelData modelData = {
-        .instanceBuffer = getNextBuffer(&graphics->bufferPool),
-        .vertexCount = 54,
-        .instanceCount = tileCount
-    };
-    *modelData.instanceBuffer = htw_createBuffer(graphics->vkContext, size, HTW_BUFFER_USAGE_VERTEX);
-    instanceTerrain.modelData = modelData;
-
-    graphics->instanceTerrain = instanceTerrain;
-
-    vec4 *surfacePositions = (vec4*)modelData.instanceBuffer->hostData;
-    //vec4 *cavePositions = (vec4*)modelData.instanceBuffer->hostData;
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            float worldX;
-            float worldY;
-            htw_geo_getHexCellPositionSkewed(x, y, &worldX, &worldY);
-            float height = (float)world->heightMap->values[x + (y * width)] / 10.f;
-            vec4 s = {
-                .x = worldX,
-                .y = worldY,
-                .z = height,
-                .w = 0
-            };
-            vec4 c = {
-                .x = worldX,
-                .y = worldY,
-                .z = -height,
-                .w = 0
-            };
-            surfacePositions[x + (y * width)] = s;
-            //cavePositions[x + (y * width)] = c;
-        }
-    }
-}
-*/
-
 /**
  * @brief Creates hexagonal tile surface geometry based on an input heightmap, and saves the location of each tile's geometry data for later changes
  *
@@ -572,28 +517,29 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
      *
-     * hexagon edges are connected to each other by a grid of quads (each quad is really 2 tris)
-     * grid size is (subdivisions + 2) * (difference in tile height), in terms of heightmap increments
-     * may set a minimum size or multiplier to heightmap difference for connecting edge, to add more detail on tile edges
+     * hexagon edges are connected to each other by a grid of quads
      *
-     * between 3 edge connection grids, in the corner joining 3 tiles, is a triangular area with 1-3 different edge lengths, depending on height of surrounding tiles
-     * in the simplest case, this is just a single tri
-     * in the most complex case, this is a tri with the longest edge = highest difference between the 3 tiles, and the sum of the lengths of the other 2 edges
+     * between 3 edge connection grids, in the corner joining 3 tiles, is a triangular area
+     * (also use subdivisions for edges and corners?)
      *
-     * subdivisions may not be needed, use simplest version for now (hex, quad, tri)
+     * The mesh has one extra tri strip on the top and right sides, so that the gaps between chunks can be filled seamlessly
      */
 
     // create rendering pipeline
     htw_ShaderInputInfo positionInputInfo = {
-        .size = sizeof(((kd_HexmapVertexData*)0)->position),
+        .size = sizeof(((kd_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
         .offset = offsetof(kd_HexmapVertexData, position)
     };
-    htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo};
+    htw_ShaderInputInfo cellInputInfo = {
+        .size = sizeof(((kd_HexmapVertexData*)0)->cellIndex),
+        .offset = offsetof(kd_HexmapVertexData, cellIndex)
+    };
+    htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
     htw_ShaderSet shaderInfo = {
         .vertexShader = htw_loadShader(graphics->vkContext, "shaders/hexTerrain.vert.spv"),
         .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/hexTerrain.frag.spv"),
         .vertexInputStride = sizeof(kd_HexmapVertexData),
-        .vertexInputCount = 1,
+        .vertexInputCount = 2,
         .vertexInputInfos = vertexInputInfos,
         .instanceInputCount = 0,
     };
@@ -609,17 +555,25 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     mapCamera(graphics, terrain->pipeline);
 
     // determine required size for vertex and triangle buffers
-    const unsigned int width = world->chunkWidth;
-    const unsigned int height = world->chunkHeight;
-    const unsigned int cellCount = width * height;
-    const unsigned int vertsPerCell = 7;
-    const unsigned int vertexCount = vertsPerCell * cellCount;
-    const unsigned int vertexDataSize = sizeof(kd_HexmapVertexData); // includes vec3 position, maybe texture uv's later
-    const unsigned int trisPerHex = 3 * 6;
-    const unsigned int trisPerQuad = 3 * 2;
-    const unsigned int trisPerCorner = 3 * 1;
-    const unsigned int trisPerCell = 3 * ((6 * 1) + (2 * 3) + (1 * 2)); // 3 corners * 1 hexes, 3 quad edges, 2 tri corners
-    const unsigned int triangleCount = trisPerCell * cellCount;
+    const u32 width = world->chunkWidth;
+    const u32 height = world->chunkHeight;
+    const u32 cellCount = width * height;
+    const u32 vertsPerCell = 7;
+    // for connecting to adjacent chunks
+    const u32 rightSideVerts = height * 3;
+    const u32 topSideVerts = width * 3;
+    const u32 topRightCornerVerts = 1;
+    const u32 vertexCount = (vertsPerCell * cellCount) + rightSideVerts + topSideVerts + topRightCornerVerts;
+    const u32 vertexDataSize = sizeof(kd_HexmapVertexData);
+    // NOTE: tri variables contain the number of indicies for each area, not number of triangles
+    const u32 trisPerHex = 3 * 6;
+    const u32 trisPerQuad = 3 * 2;
+    const u32 trisPerCorner = 3 * 1;
+    const u32 trisPerCell = 3 * ((6 * 1) + (2 * 3) + (1 * 2)); // 3 corners * 1 hexes, 3 quad edges, 2 tri corners
+    // for connecting to adjacent chunks TODO: don't need the extra capacity here, edges for every cell are already factored in
+    const u32 rightSideTris = height * 6 * 3;
+    const u32 topSideTris = width * 6 * 3;
+    const u32 triangleCount = (trisPerCell * cellCount) + rightSideTris + topSideTris;
     // assign model data
     htw_ModelData modelData = {
         .vertexBuffer = getNextBuffer(&graphics->bufferPool),
@@ -657,32 +611,36 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
     // a. create a descriptor set for every sub buffer, and set a different buffer offset for each. When drawing, most descriptors sets can be bound once per frame. A new terrain data descriptor set will be bound before every draw call.
     // b. create one descriptor set with a dynamic storage buffer. When drawing, bind the terrain data descriptor set with a different dynamic offset before every draw call.
     // because I don't need to change the size of these sub buffers at runtime, there shouldn't be much of a difference between these approaches.
+    // include strips of adjacent chunk data in buffer size
+    u32 bufferCellCount = cellCount + width + height + 1;
     // Chunk data includes the chunk index out front
-    terrain->terrainChunkHostSize = sizeof(u32) + (sizeof(TerrainBufferData) * cellCount);
+    terrain->terrainChunkHostSize = sizeof(u32) + (sizeof(TerrainBufferData) * bufferCellCount);
     terrain->terrainDataBuffer = getNextBuffer(&graphics->bufferPool);
     *terrain->terrainDataBuffer = htw_createSplitBuffer(graphics->vkContext, terrain->terrainChunkHostSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE, &terrain->terrainChunkDeviceSize);
 
     // create and write model data for each cell
+    // vert and tri array layout: | main chunk data (left to right, bottom to top) | right chunk edge strip (bottom to top) | top chunk edge strip (left to right) | top-right corner infill |
+    u32 vIndex = 0;
+    u32 tIndex = 0;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            unsigned int c = x + (y * width);
+            unsigned int c = x + (y * width); // current cell
             // vertex data
             for (int v = 0; v < vertsPerCell; v++) {
-                unsigned int i = (c * vertsPerCell) + v;
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(x, y, &posX, &posY);
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
                 kd_HexmapVertexData newVertex = {
-                    .position = pos
+                    .position = pos,
+                    .cellIndex = c
                 };
-                vertexData[i] = newVertex;
+                vertexData[vIndex++] = newVertex;
             }
-            // triangle data
-            int tBase = 0; // tracks relative vert index for current part of cell mesh
+            // triangle data TODO: skip filling chunk edges with 0's, will use that part of the array later when creating edge strips
+            int tBase = 0; // tracks relative tri index for current part of cell mesh
             // central hexagon
             for (int t = tBase; t < trisPerHex; t++) {
-                unsigned int i = (c * trisPerCell) + t;
-                triData[i] = hexagonIndicies[t] + (c * vertsPerCell);
+                triData[tIndex++] = hexagonIndicies[t] + (c * vertsPerCell);
             }
             tBase += trisPerHex;
             // check if cell is on top, left, or right edge
@@ -693,24 +651,22 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             if (rightEdge) {
                 // fill right edge with 0s
                 for (int t = tBase; t < tBase + trisPerQuad; t++) {
-                    unsigned int i = (c * trisPerCell) + t;
-                    triData[i] = 0;
+                    triData[tIndex++] = 0;
                 }
             }
             else {
                 for (int t = tBase; t < tBase + trisPerQuad; t+= 6) {
-                    unsigned int i = (c * trisPerCell) + t;
                     // counter-clockwise from top left
                     unsigned int p1 = 2 + (c * vertsPerCell);
                     unsigned int p2 = 3 + (c * vertsPerCell);
                     unsigned int p3 = 5 + ((c + 1) * vertsPerCell);
                     unsigned int p4 = 6 + ((c + 1) * vertsPerCell);
-                    triData[i + 0] = p1;
-                    triData[i + 1] = p3;
-                    triData[i + 2] = p2;
-                    triData[i + 3] = p1;
-                    triData[i + 4] = p4;
-                    triData[i + 5] = p3;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p3;
+                    triData[tIndex++] = p2;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p4;
+                    triData[tIndex++] = p3;
                 }
             }
             tBase += trisPerQuad;
@@ -718,24 +674,22 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             if (topEdge) {
                 // fill edge with 0s
                 for (int t = tBase; t < tBase + trisPerQuad; t++) {
-                    unsigned int i = (c * trisPerCell) + t;
-                    triData[i] = 0;
+                    triData[tIndex++] = 0;
                 }
             }
             else {
                 for (int t = tBase; t < tBase + trisPerQuad; t+= 6) {
-                    unsigned int i = (c * trisPerCell) + t;
                     // counter-clockwise from top left
                     unsigned int p1 = 1 + (c * vertsPerCell);
                     unsigned int p2 = 2 + (c * vertsPerCell);
                     unsigned int p3 = 4 + ((c + width) * vertsPerCell);
                     unsigned int p4 = 5 + ((c + width) * vertsPerCell);
-                    triData[i + 0] = p1;
-                    triData[i + 1] = p3;
-                    triData[i + 2] = p2;
-                    triData[i + 3] = p1;
-                    triData[i + 4] = p4;
-                    triData[i + 5] = p3;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p3;
+                    triData[tIndex++] = p2;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p4;
+                    triData[tIndex++] = p3;
                 }
             }
             tBase += trisPerQuad;
@@ -743,24 +697,22 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             if (leftEdge || topEdge) {
                 // fill edge with 0s
                 for (int t = tBase; t < tBase + trisPerQuad; t++) {
-                    unsigned int i = (c * trisPerCell) + t;
-                    triData[i] = 0;
+                    triData[tIndex++] = 0;
                 }
             }
             else {
                 for (int t = tBase; t < tBase + trisPerQuad; t+= 6) {
-                    unsigned int i = (c * trisPerCell) + t;
                     // counter-clockwise from top left
                     unsigned int p1 = 6 + (c * vertsPerCell);
                     unsigned int p2 = 1 + (c * vertsPerCell);
                     unsigned int p3 = 3 + ((c + (width - 1)) * vertsPerCell);
                     unsigned int p4 = 4 + ((c + (width - 1)) * vertsPerCell);
-                    triData[i + 0] = p1;
-                    triData[i + 1] = p3;
-                    triData[i + 2] = p2;
-                    triData[i + 3] = p1;
-                    triData[i + 4] = p4;
-                    triData[i + 5] = p3;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p3;
+                    triData[tIndex++] = p2;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p4;
+                    triData[tIndex++] = p3;
                 }
             }
             tBase += trisPerQuad;
@@ -768,20 +720,18 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             if (rightEdge || topEdge) {
                 // fill edge with 0s
                 for (int t = tBase; t < tBase + trisPerCorner; t++) {
-                    unsigned int i = (c * trisPerCell) + t;
-                    triData[i] = 0;
+                    triData[tIndex++] = 0;
                 }
             }
             else {
                 for (int t = tBase; t < tBase + trisPerCorner; t+= 3) {
-                    unsigned int i = (c * trisPerCell) + t;
                     // clockwise from current hex
                     unsigned int p1 = 2 + (c * vertsPerCell);
                     unsigned int p2 = 4 + ((c + width) * vertsPerCell);
                     unsigned int p3 = 6 + ((c + 1) * vertsPerCell);
-                    triData[i + 0] = p1;
-                    triData[i + 1] = p2;
-                    triData[i + 2] = p3;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p2;
+                    triData[tIndex++] = p3;
                 }
             }
             tBase += trisPerCorner;
@@ -789,24 +739,153 @@ static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, k
             if (leftEdge || topEdge) {
                 // fill edge with 0s
                 for (int t = tBase; t < tBase + trisPerCorner; t++) {
-                    unsigned int i = (c * trisPerCell) + t;
-                    triData[i] = 0;
+                    triData[tIndex++] = 0;
                 }
             }
             else {
                 for (int t = tBase; t < tBase + trisPerCorner; t+= 3) {
-                    unsigned int i = (c * trisPerCell) + t;
                     // clockwise from current hex
                     unsigned int p1 = 1 + (c * vertsPerCell);
                     unsigned int p2 = 3 + ((c + (width - 1)) * vertsPerCell);
                     unsigned int p3 = 5 + ((c + width) * vertsPerCell);
-                    triData[i + 0] = p1;
-                    triData[i + 1] = p2;
-                    triData[i + 2] = p3;
+                    triData[tIndex++] = p1;
+                    triData[tIndex++] = p2;
+                    triData[tIndex++] = p3;
                 }
             }
         }
     }
+
+    // write model data for edge strips
+    // NOTE: 'newVertex.cellIndex' is misleading here, actually corresponds to the terrain buffer index where neighboring chunk data for these verts will be stored
+    // NOTE: there is an issue with the top-right corner infill, clicking there will try to access an out of bounds chunk position. TODO: disable cell detection when hovering over a connecting edge
+    // starting terrain buffer index for neighboring chunk data
+    u32 baseCell = width * height;
+    // right edge
+    static const u32 leftEdgeConnectionVerts[] = {5, 6, 1};
+    for (int y = 0; y < height; y++) {
+        u8 isTop = y == height - 1;
+        u32 x = width - 1;
+        u32 c1 = x + (y * width); // cell to the left of the current cell
+        u32 c2 = c1 + width; // cell to the top-left
+        u32 c3 = baseCell + y; // current cell
+        // vertex data; from bottom-left to top vertex
+        for (int v = 0; v < 3; v++) {
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(x + 1, y, &posX, &posY);
+            u32 hexPosIndex = leftEdgeConnectionVerts[v];
+            vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
+            kd_HexmapVertexData newVertex = {
+                .position = pos,
+                .cellIndex = c3
+            };
+            vertexData[vIndex++] = newVertex;
+        }
+        // triangle data
+        // reference verts run from the bottom up the left edge, then up the right edge
+        u32 p1 = 3 + (c1 * vertsPerCell);
+        u32 p2 = 2 + (c1 * vertsPerCell);
+        u32 p3 = 4 + (c2 * vertsPerCell);
+        u32 p4 = 3 + (c2 * vertsPerCell);
+        u32 p5 = vIndex - 3;
+        u32 p6 = vIndex - 2;
+        u32 p7 = vIndex - 1;
+        u32 p8 = vIndex;
+        // left edge quad
+        triData[tIndex++] = p2;
+        triData[tIndex++] = p5;
+        triData[tIndex++] = p1;
+        triData[tIndex++] = p2;
+        triData[tIndex++] = p6;
+        triData[tIndex++] = p5;
+        if (!isTop) {
+            // top left corner tri
+            triData[tIndex++] = p3;
+            triData[tIndex++] = p6;
+            triData[tIndex++] = p2;
+            // top left edge quad
+            triData[tIndex++] = p4;
+            triData[tIndex++] = p6;
+            triData[tIndex++] = p3;
+            triData[tIndex++] = p4;
+            triData[tIndex++] = p7;
+            triData[tIndex++] = p6;
+            // top center corner tri
+            triData[tIndex++] = p4;
+            triData[tIndex++] = p8;
+            triData[tIndex++] = p7;
+        }
+    }
+    u32 lastRightEdgeVertIndex = vIndex - 1; // save to fill the top right corner later
+    baseCell += height;
+    // top edge + top right corner
+    static const u32 topEdgeConnectionVerts[] = {5, 4, 3};
+    for (int x = 0; x < width; x++) {
+        u8 isRightEdge = x == width - 1;
+        u32 y = height - 1;
+        u32 c1 = x + (y * width); // cell below the current cell
+        u32 c2 = c1 + 1; // cell to the bottom-right
+        u32 c3 = baseCell + x; // current cell
+        // vertex data; from bottom-left to top vertex
+        for (int v = 0; v < 3; v++) {
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(x, y + 1, &posX, &posY);
+            u32 hexPosIndex = topEdgeConnectionVerts[v];
+            vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
+            kd_HexmapVertexData newVertex = {
+                .position = pos,
+                .cellIndex = c3
+            };
+            vertexData[vIndex++] = newVertex;
+        }
+        // triangle data
+        // reference verts run from the left across the bottom edge, then across from the top edge
+        u32 p1 = 1 + (c1 * vertsPerCell);
+        u32 p2 = 2 + (c1 * vertsPerCell);
+        u32 p3 = 6 + (c2 * vertsPerCell);
+        u32 p4 = 1 + (c2 * vertsPerCell);
+        u32 p5 = vIndex - 3;
+        u32 p6 = vIndex - 2;
+        u32 p7 = vIndex - 1;
+        u32 p8 = vIndex;
+        if (isRightEdge) {
+            // add top-right corner vertex
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(x + 1, y + 1, &posX, &posY);
+            vec3 pos = vec3Add(hexagonPositions[5], (vec3){{posX, posY, 0.0}});
+            kd_HexmapVertexData newVertex = {
+                .position = pos,
+                .cellIndex = baseCell + width
+            };
+            vertexData[vIndex++] = newVertex;
+            // redefine p3 and p4
+            p4 = lastRightEdgeVertIndex;
+            p3 = p4 - 1;
+        }
+        // bottom left edge quad
+        triData[tIndex++] = p1;
+        triData[tIndex++] = p6;
+        triData[tIndex++] = p2;
+        triData[tIndex++] = p1;
+        triData[tIndex++] = p5;
+        triData[tIndex++] = p6;
+        // bottom middle corner tri
+        triData[tIndex++] = p2;
+        triData[tIndex++] = p6;
+        triData[tIndex++] = p3;
+        // bottom right edge quad
+        triData[tIndex++] = p3;
+        triData[tIndex++] = p7;
+        triData[tIndex++] = p4;
+        triData[tIndex++] = p3;
+        triData[tIndex++] = p6;
+        triData[tIndex++] = p7;
+        // bottom right corner tri
+        triData[tIndex++] = p4;
+        triData[tIndex++] = p7;
+        triData[tIndex++] = p8;
+    }
+
 
 //     // test log vert array
 //     unsigned int vecsPerLine = vertsPerCell;
@@ -922,9 +1001,8 @@ static void updateHexmapVisibleChunks(kd_GraphicsState *graphics, kd_WorldState 
 }
 
 static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
-    const unsigned int width = world->chunkWidth;
-    const unsigned int height = world->chunkHeight;
-    const unsigned int cellCount = width * height;
+    const u32 width = world->chunkWidth;
+    const u32 height = world->chunkHeight;
     kd_MapChunk *chunk = &world->chunks[chunkIndex];
 
     size_t subBufferHostOffset = subBufferIndex * terrain->terrainChunkHostSize;
@@ -934,22 +1012,52 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
 
     *bufferIndex = chunkIndex;
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
+    // get primary chunk data
+    for (u32 y = 0; y < height; y++) {
+        for (u32 x = 0; x < width; x++) {
             u32 c = x + (y * width);
-            s32 rawElevation = htw_geo_getMapValue(chunk->heightMap, x, y);
-            s32 rawTemperature = htw_geo_getMapValue(chunk->temperatureMap, x, y);
-            s32 rawRainfall = htw_geo_getMapValue(chunk->rainfallMap, x, y);
-            TerrainBufferData cellData = {
-                .elevation = rawElevation,
-                .paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
-                .paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
-            };
-            bufferData[c] = cellData;
+            setHexmapBufferFromCell(chunk, x, y, &bufferData[c]);
         }
     }
 
+    u32 edgeDataIndex = width * height;
+    // get chunk data from chunk at x + 1
+    u32 rightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 1, 0);
+    chunk = &world->chunks[rightChunk];
+    for (u32 y = 0; y < height; y++) {
+        u32 c = edgeDataIndex + y; // right edge of this row
+        setHexmapBufferFromCell(chunk, 0, y, &bufferData[c]);
+    }
+    edgeDataIndex += height;
+
+    // get chunk data from chunk at y + 1
+    u32 topChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 0, 1);
+    chunk = &world->chunks[topChunk];
+    for (u32 x = 0; x < width; x++) {
+        u32 c = edgeDataIndex + x;
+        setHexmapBufferFromCell(chunk, x, 0, &bufferData[c]);
+    }
+    edgeDataIndex += width;
+
+    // get chunk data from chunk at x+1, y+1 (only one cell)
+    u32 topRightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 1, 1);
+    chunk = &world->chunks[topRightChunk];
+    setHexmapBufferFromCell(chunk, 0, 0, &bufferData[edgeDataIndex]); // set last position in buffer
+
     htw_updateSubBuffer(graphics->vkContext, terrain->terrainDataBuffer, subBufferHostOffset, subBufferDeviceOffset, terrain->terrainChunkDeviceSize);
+}
+
+static void setHexmapBufferFromCell(kd_MapChunk *chunk, u32 cellX, u32 cellY, TerrainBufferData *target) {
+    s32 rawElevation = htw_geo_getMapValue(chunk->heightMap, cellX, cellY);
+    s32 rawTemperature = htw_geo_getMapValue(chunk->temperatureMap, cellX, cellY);
+    s32 rawRainfall = htw_geo_getMapValue(chunk->rainfallMap, cellX, cellY);
+    TerrainBufferData cellData = {
+        .elevation = rawElevation,
+        .paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
+        .paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
+    };
+    *target = cellData;
+
 }
 
 // static vec3 getRandomColor() {

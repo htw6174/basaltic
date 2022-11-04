@@ -76,7 +76,7 @@ void main()
 		FeedbackBuffer.hoveredCell = in_cellIndex;
 	}
 	vec3 litColor = in_color * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
-	//litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
+	litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
 	out_color = vec4(litColor, 1.0);
 	//out_color = vec4(in_color, 1.0);
 	//out_color = vec4(normal, 1.0);

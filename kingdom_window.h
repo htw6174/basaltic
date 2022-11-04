@@ -86,6 +86,7 @@ typedef struct {
 
 typedef struct {
     vec3 position;
+    u32 cellIndex;
 } kd_HexmapVertexData;
 
 typedef struct {
