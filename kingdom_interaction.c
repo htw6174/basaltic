@@ -4,8 +4,10 @@
 #include "htw_core.h"
 #include "kingdom_interaction.h"
 
-void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement);
-void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
+static void translateCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement);
+static void snapCameraToCharacter(kd_UiState *ui);
+static void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
+static void moveCharacter(kd_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex);
 
 int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE *volatile appState) {
     SDL_Event e;
@@ -33,7 +35,8 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
         }
         else if (e.type == SDL_MOUSEBUTTONDOWN) {
             if (e.button.button == SDL_BUTTON_LEFT) {
-                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                //editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                moveCharacter(logicInput, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
             } else if (e.button.button == SDL_BUTTON_RIGHT) {
                 editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
             }
@@ -57,8 +60,9 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
     if (k[SDL_SCANCODE_G]) ui->cameraElevation -= ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_Z]) ui->cameraDistance += ui->cameraMovementSpeed;
     if (k[SDL_SCANCODE_X]) ui->cameraDistance -= ui->cameraMovementSpeed;
+    if (k[SDL_SCANCODE_C]) snapCameraToCharacter(ui);;
 
-    moveCamera(ui, xMovement, yMovement);
+    translateCamera(ui, xMovement, yMovement);
 
     // get mouse state
     Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
@@ -74,7 +78,7 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
     return 0;
 }
 
-void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
+static void translateCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
     float yaw = ui->cameraYaw * DEG_TO_RAD;
     float sinYaw = sin(yaw);
     float cosYaw = cos(yaw);
@@ -85,7 +89,14 @@ void moveCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement) {
     ui->cameraY += yGlobalMovement;
 }
 
-void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
+// TODO: oof this will require a few more imports, will at least need to know character grid position and hex grid position conversion
+static void snapCameraToCharacter(kd_UiState *ui) {
+    ui->cameraX = 0;
+    ui->cameraY = 0;
+    ui->cameraDistance = 5;
+}
+
+static void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
             kd_MapEditAction newAction = {
                 .editType = KD_MAP_EDIT_ADD,
                 .chunkIndex = chunkIndex,
@@ -94,4 +105,14 @@ void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 
             };
             logicInput->currentEdit = newAction;
             logicInput->isEditPending = 1;
+}
+
+static void moveCharacter(kd_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex) {
+    kd_CharacterMoveAction newMoveAction = {
+        .characterId = characterId,
+        .chunkIndex = chunkIndex,
+        .cellIndex = cellIndex,
+    };
+    logicInput->currentMove = newMoveAction;
+    logicInput->isMovePending = 1;
 }

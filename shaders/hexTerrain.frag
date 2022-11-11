@@ -32,7 +32,7 @@ layout(std430, set = 0, binding = 1) buffer feedbackBuffer {
 	uint hoveredCell;
 } FeedbackBuffer;
 
-layout(location = 0) in vec3 in_color;
+layout(location = 0) in vec4 in_color;
 layout(location = 1) in vec3 in_pos;
 layout(location = 2) in flat uint in_chunkIndex;
 layout(location = 3) in flat uint in_cellIndex;
@@ -75,9 +75,9 @@ void main()
 		FeedbackBuffer.hoveredChunk = in_chunkIndex;
 		FeedbackBuffer.hoveredCell = in_cellIndex;
 	}
-	vec3 litColor = in_color * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
-	litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
-	out_color = vec4(litColor, 1.0);
+	vec3 litColor = in_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	//litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
+	out_color = vec4(litColor, in_color.a); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
 	//out_color = vec4(in_color, 1.0);
 	//out_color = vec4(normal, 1.0);
 }

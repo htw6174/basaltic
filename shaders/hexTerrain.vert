@@ -16,6 +16,8 @@ precision mediump float;
 //     vec3(0.5, 0.6, 1.8)
 // );
 
+#include "uniforms.h"
+
 #define WORLD_RADIUS 81.48733f
 #define WORLD_CIRCUMFERENCE 512.0f
 #define TAU 6.28319f
@@ -25,24 +27,11 @@ layout(push_constant) uniform mvp {
     mat4 m;
 } MVP;
 
+// TODO: move terrain data buffer structs to a header file for other shaders?
 struct terrainData {
     int packed1;
-    int packed2;
+    uint packed2;
 };
-
-layout(set = 0, binding = 0) uniform windowInfo {
-	vec2 windowSize;
-	vec2 mousePosition;
-	vec3 cameraPosition;
-	vec3 cameraFocalPoint;
-} WindowInfo;
-
-// also available in the fragment stage
-layout(std140, set = 0, binding = 2) uniform worldInfo {
-    float totalWidth;
-    int timeOfDay;
-    // season info, weather, etc.
-} WorldInfo;
 
 layout(std430, set = 3, binding = 0) readonly buffer terrainBuffer { // requires version 430 or ARB_shader_storage_buffer_object
     uint chunkIndex;
@@ -52,7 +41,7 @@ layout(std430, set = 3, binding = 0) readonly buffer terrainBuffer { // requires
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in uint cellIndex;
 
-layout(location = 0) out vec3 out_color;
+layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec3 out_pos;
 layout(location = 2) out flat uint out_chunkIndex;
 layout(location = 3) out flat uint out_cellIndex;
@@ -94,6 +83,7 @@ vec4 sphereWarp(vec4 worldPosition) {
 
 void main()
 {
+    // unpack terrain data
     terrainData cellData = TerrainBuffer.data[cellIndex];
     // extract a 16 bit int and uint from one 32 bit int
     int elevation = bitfieldExtract(cellData.packed1, 0, 16);
@@ -102,7 +92,10 @@ void main()
     //uint paletteIndex = bitfieldExtract(uPacked1, 16, 16);
     uint paletteX = bitfieldExtract(uPacked1, 16, 8);
     uint paletteY = bitfieldExtract(uPacked1, 24, 8);
-    vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * 0.2), 1.0);
+    uint geometryVisibility = bitfieldExtract(cellData.packed2, 0, 1); // TODO: figure out a visual effect to switch on this
+    uint colorVisibility = bitfieldExtract(cellData.packed2, 1, 1);
+
+    vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
     vec4 worldPosition = MVP.m * localPosition;
     out_pos = worldPosition.xyz;
     // warp position for a false horizon
@@ -111,7 +104,10 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
-    out_color = vec3(paletteX / 255.0, paletteY / 255.0, 0.0);
+    vec3 cellColor;
+    if (colorVisibility == 1) cellColor = vec3(paletteX / 255.0, paletteY / 255.0, 0.0);
+    else cellColor = vec3(0.5, 0.5, 0.5);
+    out_color = vec4(cellColor, 1.0 * geometryVisibility);
     out_chunkIndex = TerrainBuffer.chunkIndex;
     out_cellIndex = cellIndex;
 }

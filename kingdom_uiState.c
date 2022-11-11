@@ -17,6 +17,8 @@ kd_UiState kd_createUiState() {
         .mouse = {0},
         .hoveredCellIndex = 0,
         .selectedCellIndex = 0,
+        // character control
+        .activeCharacter = 0,
         // menus
     };
     return newUi;

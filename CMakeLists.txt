@@ -4,7 +4,7 @@ project(kingdom LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-add_executable(kingdom main.c kingdom_logic.c kingdom_logicInputState.c kingdom_uiState.c kingdom_window.c kingdom_interaction.c)
+add_executable(kingdom main.c kingdom_logic.c kingdom_logicInputState.c kingdom_uiState.c kingdom_window.c kingdom_interaction.c kingdom_characters.c)
 
 # Command for simultanious development of supporting library
 # Copy .c and .h files, and the CMakeLists files from the library directory into project directory

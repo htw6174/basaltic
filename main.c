@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 {
     //loadTileDefinitions ("resources/cell_types");
 
-    // Must incidate where used that the value of this is volatile, as it may get updated by another thread
+    // Must indicate where used that the value of this is volatile, as it may get updated by another thread
     KD_APPSTATE appState = KD_APPSTATE_RUNNING;
 
     printf("Initizlizing SDL...\n");

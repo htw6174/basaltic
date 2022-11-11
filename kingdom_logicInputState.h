@@ -1,7 +1,6 @@
 #ifndef KINGDOM_INPUTSTATE_H_INCLUDED
 #define KINGDOM_INPUTSTATE_H_INCLUDED
 
-#include <SDL_stdinc.h>
 #include "htw_core.h"
 
 typedef enum kd_MapEditType {
@@ -17,6 +16,12 @@ typedef struct {
 } kd_MapEditAction;
 
 typedef struct {
+    u32 characterId;
+    u32 chunkIndex;
+    u32 cellIndex;
+} kd_CharacterMoveAction;
+
+typedef struct {
     u32 maxPendingEdits;
     u32 head;
     u32 tail;
@@ -27,6 +32,8 @@ typedef struct {
     u32 ticks;
     kd_MapEditAction currentEdit;
     _Bool isEditPending;
+    kd_CharacterMoveAction currentMove;
+    _Bool isMovePending;
 } kd_LogicInputState;
 
 kd_LogicInputState *createLogicInputState();

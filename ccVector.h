@@ -15,6 +15,7 @@
 // software, either in source code form or as a compiled binary, for any purpose,   //
 //               commercial or non - commercial, and by any means.                  //
 //__________________________________________________________________________________//
+// Modified by Hardy Whitney - add orthographic projection matrix method
 
 #ifndef CC_VECTOR
 #define CC_VECTOR

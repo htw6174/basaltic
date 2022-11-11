@@ -41,6 +41,8 @@ typedef struct kd_UiState {
     u32 hoveredChunkIndex;
     u32 hoveredCellIndex;
     u32 selectedCellIndex;
+    // character control
+    u32 activeCharacter;
     // menus
 } kd_UiState;
 

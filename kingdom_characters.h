@@ -1,3 +1,5 @@
+#ifndef KINGDOM_CHARACTERS_H_INCLUDED
+#define KINGDOM_CHARACTERS_H_INCLUDED
 
 #include <stdint.h>
 #include "htw_core.h"
@@ -21,51 +23,51 @@ typedef enum kd_CharacterSize {
     KD_CHARACTER_SIZE_ENORMOUS = 7, //elephant and larger
 } kd_CharacterSize;
 
-typedef uint32_t kd_CharacterId;
+typedef u32 kd_CharacterId;
 
 typedef struct kd_CharacterPrimaryStats {
     // mind
-    uint16_t instinct;
-    uint16_t reason;
+    u16 instinct;
+    u16 reason;
     // body
-    uint16_t endurance;
-    uint16_t strength;
+    u16 endurance;
+    u16 strength;
     // spirit
-    uint16_t independence;
-    uint16_t cooperation;
+    u16 independence;
+    u16 cooperation;
 } kd_CharacterPrimaryStats;
 
 // NOTE: these stats should be treated as bonuses, and will normally be 0 regardless of primary stats
 typedef struct kd_CharacterSecondaryStats {
     // mind
     // instinct
-    int16_t evasion;
-    int16_t stealth;
-    int16_t attunement;
+    s16 evasion;
+    s16 stealth;
+    s16 attunement;
     // reason
-    int16_t accuracy;
-    int16_t artifice;
-    int16_t logic;
+    s16 accuracy;
+    s16 artifice;
+    s16 logic;
 
     // body
     // endurance
-    int16_t fortitude;
-    int16_t stamina;
-    int16_t recovery;
+    s16 fortitude;
+    s16 stamina;
+    s16 recovery;
     // strength
-    int16_t might;
-    int16_t speed;
-    int16_t acrobatics;
+    s16 might;
+    s16 speed;
+    s16 acrobatics;
 
     // spirit
     // independence
-    int16_t willpower;
-    int16_t ingenuity;
-    int16_t reflection;
+    s16 willpower;
+    s16 ingenuity;
+    s16 reflection;
     // cooperation
-    int16_t teamwork;
-    int16_t negotiation;
-    int16_t scholarship;
+    s16 teamwork;
+    s16 negotiation;
+    s16 scholarship;
 } kd_CharacterSecondaryStats;
 
 typedef struct kd_CharacterAttributes {
@@ -74,12 +76,16 @@ typedef struct kd_CharacterAttributes {
 } kd_CharacterAttributes;
 
 typedef struct kd_CharacterSkills {
-
+    // TODO: maybe have a limit on number of learned skills; use small uint for skill id + level
+    u16 skill1;
+    u16 skill2;
 } kd_CharacterSkills;
 
 typedef struct kd_CharacterState {
-    int32_t currentHitPoints;
-    int32_t currentStamina;
+    u32 worldGridX;
+    u32 worldGridY;
+    s32 currentHitPoints;
+    s32 currentStamina;
 } kd_CharacterState;
 
 typedef struct kd_Character {
@@ -90,3 +96,8 @@ typedef struct kd_Character {
     kd_CharacterAttributes attributes;
     kd_CharacterSkills skills;
 } kd_Character;
+
+kd_Character kd_createRandomCharacter();
+u32 kd_moveCharacter(kd_Character *subject, u32 newX, u32 newY);
+
+#endif // KINGDOM_CHARACTERS_H_INCLUDED
