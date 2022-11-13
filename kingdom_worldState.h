@@ -22,28 +22,30 @@ typedef struct {
     kd_Character *characters;
 } kd_WorldState;
 
-static u32 kd_getChunkIndexByChunkCoordinates(kd_WorldState *world, s32 chunkX, s32 chunkY);
-static u32 kd_getChunkIndexByGridCoordinates(kd_WorldState *world, s32 gridX, s32 gridY);
+static u32 kd_getChunkIndexByChunkCoordinates(kd_WorldState *world, htw_geo_GridCoord chunkCoord);
+static u32 kd_getChunkIndexByWorldCoordinates(kd_WorldState *world, htw_geo_GridCoord worldCoord);
 static u32 kd_getChunkIndexByWorldPosition(kd_WorldState *world, float worldX, float worldY);
-static u32 kd_getChunkIndexAtOffset(kd_WorldState *world, u32 startingChunk, s32 offsetX, s32 offsetY);
-static void kd_gridCoordinatesToChunkAndCell(kd_WorldState *world, s32 gridX, s32 gridY, u32 *chunkIndex, u32 *cellIndex);
-static void kd_chunkAndCellToGridCoordinates(kd_WorldState *world, u32 chunkIndex, u32 cellIndex, u32 *gridX, u32 *gridY);
+static u32 kd_getChunkIndexAtOffset(kd_WorldState *world, u32 startingChunk, htw_geo_GridCoord chunkOffset);
+static void kd_gridCoordinatesToChunkAndCell(kd_WorldState *world, htw_geo_GridCoord worldCoord, u32 *chunkIndex, u32 *cellIndex);
+static htw_geo_GridCoord kd_chunkAndCellToWorldCoordinates(kd_WorldState *world, u32 chunkIndex, u32 cellIndex);
 static void kd_getChunkRootPosition(kd_WorldState *world, u32 chunkIndex, float *worldX, float *worldY);
 
-static u32 kd_getChunkIndexByChunkCoordinates(kd_WorldState *world, s32 chunkX, s32 chunkY) {
+static u32 kd_getChunkIndexByChunkCoordinates(kd_WorldState *world, htw_geo_GridCoord chunkCoord) {
     // horizontal wrap
-    chunkX = world->chunkCountX + chunkX; // to account for negative chunkX
-    chunkX = chunkX % world->chunkCountX;
+    chunkCoord.x = world->chunkCountX + chunkCoord.x; // to account for negative chunkX
+    chunkCoord.x = chunkCoord.x % world->chunkCountX;
     // vertical clamp
-    chunkY = max_int(0, min_int(world->chunkCountY - 1, chunkY));
-    u32 chunkIndex = (chunkY * world->chunkCountX) + chunkX;
+    chunkCoord.y = max_int(0, min_int(world->chunkCountY - 1, chunkCoord.y));
+    u32 chunkIndex = (chunkCoord.y * world->chunkCountX) + chunkCoord.x;
     return chunkIndex;
 }
 
-static u32 kd_getChunkIndexByGridCoordinates(kd_WorldState *world, s32 gridX, s32 gridY) {
-    s32 chunkX = gridX / world->chunkWidth;
-    s32 chunkY = gridY / world->chunkHeight;
-    return kd_getChunkIndexByChunkCoordinates(world, chunkX, chunkY);
+static u32 kd_getChunkIndexByWorldCoordinates(kd_WorldState *world, htw_geo_GridCoord worldCoord) {
+    htw_geo_GridCoord chunkCoord = {
+        .x = worldCoord.x / world->chunkWidth,
+        .y = worldCoord.y / world->chunkHeight
+    };
+    return kd_getChunkIndexByChunkCoordinates(world, chunkCoord);
 }
 
 static u32 kd_getChunkIndexByWorldPosition(kd_WorldState *world, float worldX, float worldY) {
@@ -51,35 +53,45 @@ static u32 kd_getChunkIndexByWorldPosition(kd_WorldState *world, float worldX, f
     float deskewedY = (1.0 / sqrt(0.75)) * worldY;
     float deskewedX = worldX - (deskewedY * 0.5);
     // convert to chunk grid coordinates
-    s32 chunkX = floorf(deskewedX / world->chunkWidth);
-    s32 chunkY = floorf(deskewedY / world->chunkHeight);
-    return kd_getChunkIndexByChunkCoordinates(world, chunkX, chunkY);
+    htw_geo_GridCoord chunkCoord = {
+        .x = floorf(deskewedX / world->chunkWidth),
+        .y = floorf(deskewedY / world->chunkHeight)
+    };
+    return kd_getChunkIndexByChunkCoordinates(world, chunkCoord);
 }
 
-static u32 kd_getChunkIndexAtOffset(kd_WorldState *world, u32 startingChunk, s32 offsetX, s32 offsetY) {
-    s32 chunkX = startingChunk % world->chunkCountX;
-    s32 chunkY = startingChunk / world->chunkCountX;
-    chunkX += offsetX;
-    chunkY += offsetY;
-    return kd_getChunkIndexByChunkCoordinates(world, chunkX, chunkY);
+static u32 kd_getChunkIndexAtOffset(kd_WorldState *world, u32 startingChunk, htw_geo_GridCoord chunkOffset) {
+    htw_geo_GridCoord chunkCoord = {
+        .x = startingChunk % world->chunkCountX,
+        .y = startingChunk / world->chunkCountX
+    };
+    chunkCoord = htw_geo_addGridCoords(chunkCoord, chunkOffset);
+    return kd_getChunkIndexByChunkCoordinates(world, chunkCoord);
 }
 
-static void kd_gridCoordinatesToChunkAndCell(kd_WorldState *world, s32 gridX, s32 gridY, u32 *chunkIndex, u32 *cellIndex) {
-    *chunkIndex = kd_getChunkIndexByGridCoordinates(world, gridX, gridY);
-    u32 chunkX = *chunkIndex % world->chunkCountX;
-    u32 chunkY = *chunkIndex / world->chunkCountX;
-    u32 cellX = gridX - (chunkX * world->chunkWidth);
-    u32 cellY = gridY - (chunkY * world->chunkHeight);
-    *cellIndex = cellX + (cellY * world->chunkWidth);
+static void kd_gridCoordinatesToChunkAndCell(kd_WorldState *world, htw_geo_GridCoord worldCoord, u32 *chunkIndex, u32 *cellIndex) {
+    *chunkIndex = kd_getChunkIndexByWorldCoordinates(world, worldCoord);
+    htw_geo_GridCoord chunkCoord = {
+        .x = *chunkIndex % world->chunkCountX,
+        .y = *chunkIndex / world->chunkCountX
+    };
+    htw_geo_GridCoord cellCoord = {
+        .x = worldCoord.x - (chunkCoord.x * world->chunkWidth),
+        .y = worldCoord.y - (chunkCoord.y * world->chunkHeight)
+    };
+    *cellIndex = cellCoord.x + (cellCoord.y * world->chunkWidth);
 }
 
-static void kd_chunkAndCellToGridCoordinates(kd_WorldState *world, u32 chunkIndex, u32 cellIndex, u32 *gridX, u32 *gridY) {
+static htw_geo_GridCoord kd_chunkAndCellToWorldCoordinates(kd_WorldState *world, u32 chunkIndex, u32 cellIndex) {
     u32 chunkX = chunkIndex % world->chunkCountX;
     u32 chunkY = chunkIndex / world->chunkCountX;
     u32 cellX = cellIndex % world->chunkWidth;
     u32 cellY = cellIndex / world->chunkWidth;
-    *gridX = (chunkX * world->chunkWidth) + cellX;
-    *gridY = (chunkY * world->chunkHeight) + cellY;
+    htw_geo_GridCoord worldCoord = {
+        .x = (chunkX * world->chunkWidth) + cellX,
+        .y = (chunkY * world->chunkHeight) + cellY
+    };
+    return worldCoord;
 }
 
 static void kd_getChunkRootPosition(kd_WorldState *world, u32 chunkIndex, float *worldX, float *worldY) {

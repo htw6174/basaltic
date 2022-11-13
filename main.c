@@ -102,8 +102,8 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
         graphics.frame++;
     }
 
-    // TODO: move this and all htw_vulkan code to kd_window
-    htw_destroyVkContext(graphics.vkContext);
+    kd_DestroyGraphics(&graphics);
+
     return 0;
 }
 

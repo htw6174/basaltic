@@ -10,6 +10,7 @@
 #include "htw_vulkan.h"
 #include "kingdom_uiState.h"
 #include "kingdom_worldState.h"
+#include "kingdom_editor.h"
 
 #define MAX_TEXT_LENGTH 256
 #define TEXT_POOL_CAPACITY 8
@@ -40,7 +41,8 @@ typedef struct {
 typedef struct {
     vec3 gridToWorld;
     float totalWidth;
-    int timeOfDay;
+    s32 timeOfDay;
+    u32 visibilityOverrideBits;
 } _kd_WorldInfo;
 
 typedef struct {
@@ -175,11 +177,13 @@ typedef struct {
     kd_HexmapTerrain surfaceTerrain;
     kd_HexmapTerrain caveTerrain;
     kd_DebugSwarm characterDebug;
+    kd_EditorContext editorContext;
     kd_Camera camera;
 } kd_GraphicsState;
 
 void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height);
 void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *world);
+void kd_DestroyGraphics(kd_GraphicsState *graphics);
 
 #endif // KINGDOM_MAIN_H_INCLUDED

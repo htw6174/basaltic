@@ -8,6 +8,7 @@
 #include "kingdom_window.h"
 #include "kingdom_logicInputState.h"
 #include "kingdom_worldState.h"
+#include "kingdom_editor.h"
 
 // TEST
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -45,6 +46,7 @@ static void updateTextBuffer(kd_GraphicsState *graphics, kd_TextPoolItemHandle p
 static void setTextTransform(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem, mat4x4 modelMatrix);
 static void freeTextPoolItem(kd_TextRenderContext *tc, kd_TextPoolItemHandle poolItem); // TODO: consider returning something to indicate result (success, item doesn't exist, item already free)
 static void drawText(kd_GraphicsState *graphics);
+static void drawDebugText(kd_GraphicsState *graphics, kd_UiState *ui);
 
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world);
 static void createHexmapMesh(kd_GraphicsState *graphics, kd_WorldState *world, kd_HexmapTerrain *terrain);
@@ -77,6 +79,13 @@ void kd_InitGraphics(kd_GraphicsState *graphics, u32 width, u32 height) {
     graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_kd_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
     graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_kd_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
     graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_kd_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
+
+    graphics->editorContext = kd_initEditor(graphics->vkContext);
+}
+
+void kd_DestroyGraphics(kd_GraphicsState *graphics) {
+    kd_destroyEditor(&graphics->editorContext);
+    htw_destroyVkContext(graphics->vkContext);
 }
 
 htw_VkContext *createWindow(u32 width, u32 height) {
@@ -115,6 +124,7 @@ void kd_initWorldGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
         .gridToWorld = (vec3){{1.0, 1.0, 0.2}},
         .timeOfDay = 0,
         .totalWidth = world->worldWidth,
+        .visibilityOverrideBits = 0,
     };
     // TODO: update parts of this per simulation tick
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
@@ -364,6 +374,30 @@ static void drawText(kd_GraphicsState *graphics) {
     htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->textModel.model, HTW_DRAW_TYPE_INDEXED);
 }
 
+static void drawDebugText(kd_GraphicsState *graphics, kd_UiState *ui) {
+    kd_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
+    char statusText[256];
+    sprintf(statusText,
+            "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
+            ui->mouse.x, ui->mouse.y, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+    updateTextBuffer(graphics, textItem, statusText);
+    mat4x4 textTransform;
+    // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
+    // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
+    mat4x4SetScale(textTransform, 1.0); // TODO: figure out how to resolve bleed from neighboring glyphs when scaling text mesh
+    mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
+    setTextTransform(&graphics->textRenderContext, textItem, textTransform);
+    drawText(graphics);
+
+//     drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
+//     char allChars[128];
+//     for (int i = 0; i < 128; i++) {
+//         allChars[i] = (char)i;
+//     }
+//     allChars[0] = '0';
+//     drawText(graphics, allChars, (vec3){{-1280.f, 0.f, 0.f}});
+}
+
 static void initTerrainGraphics(kd_GraphicsState *graphics, kd_WorldState *world) {
     graphics->surfaceTerrain.closestChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
     graphics->surfaceTerrain.loadedChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
@@ -427,13 +461,12 @@ static void updateDebugGraphics(kd_GraphicsState *graphics, kd_WorldState *world
     DebugInstanceData *instanceData = characterDebugModel->instanceData;
     for (int i = 0; i < characterDebugModel->model.instanceCount; i++) {
         kd_Character *character = &world->characters[i];
-        u32 gridX = character->currentState.worldGridX;
-        u32 gridY = character->currentState.worldGridY;
+        htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
         u32 chunkIndex, cellIndex;
-        kd_gridCoordinatesToChunkAndCell(world, gridX, gridY, &chunkIndex, &cellIndex);
+        kd_gridCoordinatesToChunkAndCell(world, characterCoord, &chunkIndex, &cellIndex);
         s32 elevation = htw_geo_getMapValueByIndex(world->chunks[chunkIndex].heightMap, cellIndex);
         float posX, posY;
-        htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){gridX, gridY}, &posX, &posY);
+        htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
         DebugInstanceData characterData = {
             .position = (vec3){{posX, posY, elevation}},
             .size = 1
@@ -513,10 +546,8 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
 
     // update ui with feedback info from shaders
     htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_kd_FeedbackInfo));
-    u32 hoveredChunk = graphics->feedbackInfo.chunkIndex;
-    u32 hoveredCell = graphics->feedbackInfo.cellIndex;
-    ui->hoveredChunkIndex = hoveredChunk;
-    ui->hoveredCellIndex = hoveredCell;
+    ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
+    ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
 
     // draw character debug shapes
     mat4x4SetTranslation(mvp.m, (vec3){{0.0, 0.0, 0.0}});
@@ -526,35 +557,10 @@ int kd_renderFrame(kd_GraphicsState *graphics, kd_UiState *ui, kd_WorldState *wo
     htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.model, HTW_DRAW_TYPE_INSTANCED);
 
     // draw text overlays
-    kd_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
-    char statusText[256];
-    sprintf(statusText,
-            "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
-            ui->mouse.x, ui->mouse.y, hoveredChunk, hoveredCell);
-    updateTextBuffer(graphics, textItem, statusText);
-    mat4x4 textTransform;
-    // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
-    // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
-    mat4x4SetScale(textTransform, 1.0); // TODO: figure out how to resolve bleed from neighboring glyphs when scaling text mesh
-    mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
-    setTextTransform(&graphics->textRenderContext, textItem, textTransform);
-    drawText(graphics);
+    //drawDebugText(graphics, ui);
 
-//     drawText(graphics, "1234567890_abcdefghijklmnopqrstuvwxyz", (vec3){{-600.f, -40.f, 0.f}});
-//     char allChars[128];
-//     for (int i = 0; i < 128; i++) {
-//         allChars[i] = (char)i;
-//     }
-//     allChars[0] = '0';
-//     drawText(graphics, allChars, (vec3){{-1280.f, 0.f, 0.f}});
+    kd_drawEditor(&graphics->editorContext, ui, world);
 
-    // draw instanced hexagons
-    if (ui->activeLayer == KD_WORLD_LAYER_SURFACE) {
-        //htw_drawPipeline(graphics->vkContext, graphics->instanceTerrain.pipeline, graphics->instanceTerrain.modelData, HTW_DRAW_TYPE_INSTANCED);
-    }
-//     else if (ui->activeLayer == KD_WORLD_LAYER_CAVE) {
-//         htw_drawPipeline(graphics->vkContext, graphics->pipeline, graphics->caveInstanceBuffer, 54, instanceCount);
-//     }
     htw_endFrame(graphics->vkContext);
 
     return 0;
@@ -994,7 +1000,7 @@ static void updateHexmapVisibleChunks(kd_GraphicsState *graphics, kd_WorldState 
     s32 *loadedChunks = graphics->surfaceTerrain.loadedChunks;
     for (int c = 0, y = 1 - MAX_VISIBLE_CHUNK_DISTANCE; y < MAX_VISIBLE_CHUNK_DISTANCE; y++) {
         for (int x = 1 - MAX_VISIBLE_CHUNK_DISTANCE; x < MAX_VISIBLE_CHUNK_DISTANCE; x++, c++) {
-            closestChunks[c] = kd_getChunkIndexAtOffset(world, centerChunk, x, y);
+            closestChunks[c] = kd_getChunkIndexAtOffset(world, centerChunk, (htw_geo_GridCoord){x, y});
         }
     }
 
@@ -1092,7 +1098,7 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
 
     u32 edgeDataIndex = width * height;
     // get chunk data from chunk at x + 1
-    u32 rightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 1, 0);
+    u32 rightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 0});
     chunk = &world->chunks[rightChunk];
     for (s32 y = 0; y < height; y++) {
         u32 c = edgeDataIndex + y; // right edge of this row
@@ -1101,7 +1107,7 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     edgeDataIndex += height;
 
     // get chunk data from chunk at y + 1
-    u32 topChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 0, 1);
+    u32 topChunk = kd_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){0, 1});
     chunk = &world->chunks[topChunk];
     for (s32 x = 0; x < width; x++) {
         u32 c = edgeDataIndex + x;
@@ -1110,7 +1116,7 @@ static void updateHexmapDataBuffer (kd_GraphicsState *graphics, kd_WorldState *w
     edgeDataIndex += width;
 
     // get chunk data from chunk at x+1, y+1 (only one cell)
-    u32 topRightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, 1, 1);
+    u32 topRightChunk = kd_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 1});
     chunk = &world->chunks[topRightChunk];
     setHexmapBufferFromCell(chunk, 0, 0, &cellData[edgeDataIndex]); // set last position in buffer
 

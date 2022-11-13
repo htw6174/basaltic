@@ -3,8 +3,7 @@
 
 kd_Character kd_createRandomCharacter() {
     kd_CharacterState state = {
-        .worldGridX = 0,
-        .worldGridY = 0,
+        .worldCoord = {0, 0},
         .currentHitPoints = 10,
         .currentStamina = 10
     };
@@ -31,11 +30,10 @@ kd_Character kd_createRandomCharacter() {
     return newCharacter;
 }
 
-u32 kd_moveCharacter(kd_Character *subject, u32 newX, u32 newY) {
+u32 kd_moveCharacter(kd_Character *subject, htw_geo_GridCoord newCoord) {
     // TODO: movement range checking
     // TODO: stamina use vs current stamina checking
-    subject->currentState.worldGridX = newX;
-    subject->currentState.worldGridY = newY;
+    subject->currentState.worldCoord = newCoord;
     // TODO: return something indicating result of movement (distance successfully moved or 0 for failure, new position?)
     return 0;
 }

@@ -56,8 +56,7 @@ int kd_initializeWorldState(kd_WorldState *world) {
         // generate random character TODO
         kd_Character *newCharacter = &world->characters[i];
         *newCharacter = kd_createRandomCharacter();
-        newCharacter->currentState.worldGridX = htw_randRange(world->worldWidth);
-        newCharacter->currentState.worldGridY = htw_randRange(world->worldHeight);
+        newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->worldWidth), htw_randRange(world->worldHeight)};
     }
 
     return 0;
@@ -78,9 +77,8 @@ int kd_simulateWorld(kd_LogicInputState *input, kd_WorldState *world) {
     if (input->isMovePending) {
         kd_CharacterMoveAction action = input->currentMove;
         kd_Character *subject = &world->characters[action.characterId];
-        u32 x, y;
-        kd_chunkAndCellToGridCoordinates(world, action.chunkIndex, action.cellIndex, &x, &y);
-        kd_moveCharacter(subject, x, y);
+        htw_geo_GridCoord destCoord = kd_chunkAndCellToWorldCoordinates(world, action.chunkIndex, action.cellIndex);
+        kd_moveCharacter(subject, destCoord);
         revealMap(world, subject);
         input->isMovePending = 0;
     }
@@ -88,13 +86,14 @@ int kd_simulateWorld(kd_LogicInputState *input, kd_WorldState *world) {
     return 0;
 }
 
+// FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?
 // Reveal an area of map around the target character's position according to their sight radius
 static void revealMap(kd_WorldState *world, kd_Character* character) {
     // TODO: factor in terrain height, character size, and attributes e.g. isFlying
     // get character's current cell information
-    htw_geo_GridCoord characterCoord = (htw_geo_GridCoord){character->currentState.worldGridX, character->currentState.worldGridY};
+    htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
     u32 charChunkIndex, charCellIndex;
-    kd_gridCoordinatesToChunkAndCell(world, characterCoord.x, characterCoord.y, &charChunkIndex, &charCellIndex);
+    kd_gridCoordinatesToChunkAndCell(world, characterCoord, &charChunkIndex, &charCellIndex);
     u32 characterElevation = htw_geo_getMapValueByIndex(world->chunks[charChunkIndex].heightMap, charCellIndex);
 
     htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(characterCoord);
@@ -109,7 +108,7 @@ static void revealMap(kd_WorldState *world, kd_Character* character) {
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         u32 chunkIndex, cellIndex;
-        kd_gridCoordinatesToChunkAndCell(world, worldCoord.x, worldCoord.y, &chunkIndex, &cellIndex);
+        kd_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex); // FIXME: need to do bounds checking at some point in the chain here
         htw_ValueMap *visibilityMap = world->chunks[chunkIndex].visibilityMap;
 
         kd_TerrainVisibilityBitFlags cellVisibility = 0;

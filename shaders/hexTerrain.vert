@@ -92,8 +92,8 @@ void main()
     //uint paletteIndex = bitfieldExtract(uPacked1, 16, 16);
     uint paletteX = bitfieldExtract(uPacked1, 16, 8);
     uint paletteY = bitfieldExtract(uPacked1, 24, 8);
-    uint geometryVisibility = bitfieldExtract(cellData.packed2, 0, 1); // TODO: figure out a visual effect to switch on this
-    uint colorVisibility = bitfieldExtract(cellData.packed2, 1, 1);
+    uint visibilityBits = bitfieldExtract(cellData.packed2, 0, 8);
+    visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
     vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
     vec4 worldPosition = MVP.m * localPosition;
@@ -104,10 +104,9 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
-    vec3 cellColor;
-    if (colorVisibility == 1) cellColor = vec3(paletteX / 255.0, paletteY / 255.0, 0.0);
-    else cellColor = vec3(0.5, 0.5, 0.5);
-    out_color = vec4(cellColor, 1.0 * geometryVisibility);
+    vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? vec3(paletteX / 255.0, paletteY / 255.0, 0.0) : vec3(0.5, 0.5, 0.5);
+    float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.25;
+    out_color = vec4(cellColor, a);
     out_chunkIndex = TerrainBuffer.chunkIndex;
     out_cellIndex = cellIndex;
 }

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "htw_core.h"
+#include "htw_geomap.h" // NOTE: only needed for GridCoord def; should be in seperate smaller header?
 //#include "kingdom_logic.h"
 
 typedef enum kd_GenderBitflags {
@@ -82,8 +83,7 @@ typedef struct kd_CharacterSkills {
 } kd_CharacterSkills;
 
 typedef struct kd_CharacterState {
-    u32 worldGridX;
-    u32 worldGridY;
+    htw_geo_GridCoord worldCoord;
     s32 currentHitPoints;
     s32 currentStamina;
 } kd_CharacterState;
@@ -98,6 +98,6 @@ typedef struct kd_Character {
 } kd_Character;
 
 kd_Character kd_createRandomCharacter();
-u32 kd_moveCharacter(kd_Character *subject, u32 newX, u32 newY);
+u32 kd_moveCharacter(kd_Character *subject, htw_geo_GridCoord newCoord);
 
 #endif // KINGDOM_CHARACTERS_H_INCLUDED

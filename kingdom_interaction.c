@@ -4,6 +4,11 @@
 #include "htw_core.h"
 #include "kingdom_interaction.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#define CIMGUI_USE_SDL
+#include "cimgui/cimgui.h"
+#include "cimgui/cimgui_impl.h"
+
 static void translateCamera(kd_UiState *ui, float xLocalMovement, float yLocalMovement);
 static void snapCameraToCharacter(kd_UiState *ui);
 static void editMap(kd_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
@@ -12,6 +17,7 @@ static void moveCharacter(kd_LogicInputState *logicInput, u32 characterId, u32 c
 int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE *volatile appState) {
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
+        ImGui_ImplSDL2_ProcessEvent(&e);
         if (e.type == SDL_QUIT) {
             *appState = KD_APPSTATE_STOPPED;
             return 0;
@@ -33,12 +39,15 @@ int kd_handleInputs(kd_UiState *ui, kd_LogicInputState *logicInput, KD_APPSTATE 
                     break;
             }
         }
-        else if (e.type == SDL_MOUSEBUTTONDOWN) {
-            if (e.button.button == SDL_BUTTON_LEFT) {
-                //editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
-                moveCharacter(logicInput, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
-            } else if (e.button.button == SDL_BUTTON_RIGHT) {
-                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+
+        if (!igIsWindowHovered(ImGuiHoveredFlags_AnyWindow)) { // don't handle mouse events if mouse over an imgui window
+            if (e.type == SDL_MOUSEBUTTONDOWN) {
+                if (e.button.button == SDL_BUTTON_LEFT) {
+                    //editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                    moveCharacter(logicInput, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+                } else if (e.button.button == SDL_BUTTON_RIGHT) {
+                    editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+                }
             }
         }
     }

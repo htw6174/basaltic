@@ -13,4 +13,15 @@ layout(std140, set = 0, binding = 2) uniform worldInfo {
     float totalWidth;
     int timeOfDay;
     // season info, weather, etc.
+	// debug options
+	uint visibilityOverrideBits;
 } WorldInfo;
+
+const uint visibilityBitGeometry = 		0x00000001;
+const uint visibilityBitColor = 		0x00000002;
+const uint visibilityBitMegaliths = 	0x00000004;
+const uint visibilityBitVegetation = 	0x00000008;
+const uint visibilityBitStructures = 	0x00000010;
+const uint visibilityBitMegafauna = 	0x00000020;
+const uint visibilityBitCharacters = 	0x00000040;
+const uint visibilityBitSecrets = 		0x00000080;
