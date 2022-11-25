@@ -76,6 +76,7 @@ void main()
 		FeedbackBuffer.hoveredCell = in_cellIndex;
 	}
 	vec3 litColor = in_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	litColor = gl_FrontFacing ? litColor : vec3(0.0, 0.0, 0.0);
 	//litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
 	out_color = vec4(litColor, in_color.a); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
 	//out_color = vec4(in_color, 1.0);

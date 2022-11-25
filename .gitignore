@@ -1,4 +1,4 @@
 build/
-release/
+output/
 *.kdev4
 *.spv

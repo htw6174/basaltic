@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <time.h>
 #include <SDL2/SDL.h>
-#include "kingdom_defs.h"
-#include "kingdom_logic.h"
-#include "kingdom_window.h"
-#include "kingdom_interaction.h"
+#include "basaltic_defs.h"
+#include "basaltic_logic.h"
+#include "basaltic_window.h"
+#include "basaltic_interaction.h"
+#include "basaltic_editor.h"
 #include "htw_core.h"
 #include "htw_vulkan.h"
 
@@ -41,8 +43,8 @@ Uint32 *valueMapToBitmap(ValueMap *map, Uint32 *bmp, Uint32 format) {
 */
 
 typedef struct {
-    kd_LogicInputState *input;
-    kd_WorldState *world;
+    bt_LogicInputState *input;
+    bt_WorldState *world;
     Uint32 interval;
     KD_APPSTATE *volatile appState;
 } LogicLoopInput;
@@ -51,15 +53,15 @@ typedef struct {
 int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, change to LogicLoopInput*
     // Extract input data
     LogicLoopInput *loopInput = (LogicLoopInput*)ptr;
-    kd_LogicInputState *input = loopInput->input;
-    kd_WorldState *world = loopInput->world;
+    bt_LogicInputState *input = loopInput->input;
+    bt_WorldState *world = loopInput->world;
     Uint32 interval = loopInput->interval;
     KD_APPSTATE *appState = loopInput->appState;
 
     while (*appState == KD_APPSTATE_RUNNING) {
         Uint64 startTime = SDL_GetTicks64();
 
-        kd_simulateWorld(input, world);
+        bt_simulateWorld(input, world);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -72,7 +74,7 @@ int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, ch
 }
 
 // must run on the main thread
-int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_WorldState *world, Uint32 interval, KD_APPSTATE *volatile appState) {
+int interactiveWindowLoop (bt_UiState *ui, bt_LogicInputState *logicInput, bt_WorldState *world, Uint32 interval, KD_APPSTATE *volatile appState) {
     /* for testing SDL direct draw
     Uint32 terrainFormat = SDL_PIXELFORMAT_RGBA32;
     Uint32 *bmp = valueMapToBitmap(world->heightMap, NULL, terrainFormat);
@@ -82,16 +84,31 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
     terrain = SDL_CreateRGBSurfaceWithFormatFrom(bmp, width, height, sizeof(Uint32) / 8, width * sizeof(Uint32), terrainFormat);
     */
 
-    kd_GraphicsState graphics;
-    kd_InitGraphics(&graphics, 1280, 720);
-    kd_initWorldGraphics(&graphics, world);
+    // TODO: should allocate heap space for these large structures instead of leaving them on the stack. Also: should I init by passing pointer to an existing struct, or returning the whole thing?
+    bt_GraphicsState graphics;
+    bt_initGraphics(&graphics, 1280, 720);
+    bt_initWorldGraphics(&graphics, world);
+    bt_EditorContext editorContext = bt_initEditor(graphics.vkContext);
 
     while (*appState == KD_APPSTATE_RUNNING) {
         Uint64 startTime = graphics.milliSeconds = SDL_GetTicks64();
 
-        kd_handleInputs(ui, logicInput, appState);
+        bool passthroughMouse = !bt_editorWantCaptureMouse(&editorContext);
+        bool passthroughKeyboard = !bt_editorWantCaptureMouse(&editorContext);
+        SDL_Event e;
+        while (SDL_PollEvent(&e) != 0) {
+            if (e.type == SDL_QUIT) {
+                *appState = KD_APPSTATE_STOPPED;
+            }
+            bt_handleEditorInputEvents(&editorContext, &e);
+            bt_processInputEvent(ui, logicInput, &e, passthroughMouse, passthroughKeyboard);
+        }
 
-        kd_renderFrame(&graphics, ui, world);
+        bt_processInputState(ui, logicInput, passthroughMouse, passthroughKeyboard);
+
+        bt_drawFrame(&graphics, ui, world);
+        bt_drawEditor(&editorContext, &graphics, ui, world);
+        bt_endFrame(&graphics);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -102,7 +119,8 @@ int interactiveWindowLoop (kd_UiState *ui, kd_LogicInputState *logicInput, kd_Wo
         graphics.frame++;
     }
 
-    kd_DestroyGraphics(&graphics);
+    bt_destroyEditor(&editorContext);
+    bt_destroyGraphics(&graphics);
 
     return 0;
 }
@@ -117,10 +135,10 @@ int main(int argc, char *argv[])
     printf("Initizlizing SDL...\n");
     SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
 
-    kd_UiState ui = kd_createUiState();
-    kd_WorldState *world = kd_createWorldState(8, 8, 64, 64);
-    kd_initializeWorldState(world);
-    kd_LogicInputState *logicInput = createLogicInputState();
+    bt_UiState ui = bt_createUiState();
+    bt_WorldState *world = bt_createWorldState(8, 8, 64, 64);
+    bt_initializeWorldState(world);
+    bt_LogicInputState *logicInput = createLogicInputState();
 
     Uint32 logicInterval = 1000 / LOGIC_TPS;
     Uint32 frameInterval = 1000 / RENDER_TPS;

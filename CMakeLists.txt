@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.2)
 
-project(kingdom LANGUAGES C)
+project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-add_executable(kingdom main.c kingdom_logic.c kingdom_logicInputState.c kingdom_uiState.c kingdom_window.c kingdom_interaction.c kingdom_characters.c kingdom_editor.c)
+add_executable(basaltic main.c basaltic_logic.c basaltic_logicInputState.c basaltic_uiState.c basaltic_window.c basaltic_interaction.c basaltic_characters.c basaltic_editor.c)
 
 # Command for simultanious development of supporting library
 # Copy .c and .h files, and the CMakeLists files from the library directory into project directory
 # NB: this command only runs if the main project is rebuilt. To force this, simply touch a source file before running cmake
-#add_custom_command(TARGET kingdom PRE_BUILD COMMAND
+#add_custom_command(TARGET basaltic PRE_BUILD COMMAND
 #    rsync -vrt --include "htw_libs" --include "*.[ch]" --include "CMakeLists.txt" --exclude "*" /home/htw/projects/c/htw_libs ${PROJECT_SOURCE_DIR}
 #    VERBATIM)
 
@@ -17,7 +17,7 @@ add_executable(kingdom main.c kingdom_logic.c kingdom_logicInputState.c kingdom_
 # FIXME: no shaders get compiled, but no error from glslc
 # NOTE: i think it's treating 'shaders' as a folder name (not creating a glob variable) and copying the whole folder, this only partially worked by accident because I chose the same name for both
 file(GLOB shaders "${PROJECT_SOURCE_DIR}/shaders/*.vert" "${PROJECT_SOURCE_DIR}/shaders/*.frag")
-add_custom_command(TARGET kingdom PRE_BUILD COMMENT "Compiling shaders..." COMMAND
+add_custom_command(TARGET basaltic PRE_BUILD COMMENT "Compiling shaders..." COMMAND
     glslc -c ${shaders}
     VERBATIM )
 # copy to build directory FIXME: why no copy cmake???? only works when makefile is regenerated?
@@ -35,8 +35,8 @@ include_directories(${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${FREETYPE_INCLU
 #add_subdirectory(htw_libs)
 include_directories(../htw_libs)
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(kingdom PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} ${FREETYPE_LIBRARIES} "${PROJECT_SOURCE_DIR}/cimgui/cimgui.so" "${PROJECT_SOURCE_DIR}/cimgui/libcimgui_sdl.so")
+target_link_libraries(basaltic PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} ${FREETYPE_LIBRARIES} "${PROJECT_SOURCE_DIR}/cimgui/cimgui.so" "${PROJECT_SOURCE_DIR}/cimgui/libcimgui_sdl.so")
 
-#target_include_directories(kingdom PUBLIC "${PROJECT_SOURCE_DIR}/htw_libs")
+#target_include_directories(basaltic PUBLIC "${PROJECT_SOURCE_DIR}/htw_libs")
 
-install(TARGETS kingdom RUNTIME DESTINATION bin)
+install(TARGETS basaltic RUNTIME DESTINATION bin)

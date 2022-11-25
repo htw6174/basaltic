@@ -105,7 +105,7 @@ void main()
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
     vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? vec3(paletteX / 255.0, paletteY / 255.0, 0.0) : vec3(0.5, 0.5, 0.5);
-    float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.25;
+    float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;
     out_color = vec4(cellColor, a);
     out_chunkIndex = TerrainBuffer.chunkIndex;
     out_cellIndex = cellIndex;
