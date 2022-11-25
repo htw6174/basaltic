@@ -1,4 +1,6 @@
 build/
 output/
+.kdev4/
+.cache/
 *.kdev4
 *.spv
