@@ -13,18 +13,19 @@ add_executable(basaltic main.c basaltic_logic.c basaltic_logicInputState.c basal
 #    rsync -vrt --include "htw_libs" --include "*.[ch]" --include "CMakeLists.txt" --exclude "*" /home/htw/projects/c/htw_libs ${PROJECT_SOURCE_DIR}
 #    VERBATIM)
 
+# NOTE: leaving this here for reference. The copy is no longer needed, the built binary should now read resources from the base project folder
 # copy to build directory
 # TODO: this will only run when cmake generates the makefile. Figure out how to create a custom target that includes all the files that would be copied here, and move them to the build directory with a CMAKE_COMMAND instruction
-file(COPY resources licenses credits.txt README.md DESTINATION .)
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")
+#file(COPY resources licenses credits.txt README.md DESTINATION .)
 
 # precompile shaders to SPIR-V
 # TODO: not needed right now, but should eventually find a way to only compile shader source if .spv is outdated
 # TODO: may fix the above issue by depending this command on a custom target instead of the main target
-file(GLOB SHADERS_SOURCE "${PROJECT_SOURCE_DIR}/shaders/*.vert" "${PROJECT_SOURCE_DIR}/shaders/*.frag")
+file(MAKE_DIRECTORY "${PROJECT_SOURCE_DIR}/shaders_bin")
+file(GLOB SHADERS_SOURCE "${PROJECT_SOURCE_DIR}/shaders_source/*.vert" "${PROJECT_SOURCE_DIR}/shaders_source/*.frag")
 add_custom_command(TARGET basaltic PRE_BUILD COMMENT "Compiling shaders..." COMMAND
     glslc -c ${SHADERS_SOURCE}
-    VERBATIM WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")
+    VERBATIM WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/shaders_bin")
 
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
 # .cmake files under /usr/lib/cmake can be located this way to load variables

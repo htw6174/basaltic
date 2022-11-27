@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdbool.h>
 #include <time.h>
 #include <SDL2/SDL.h>
@@ -127,6 +128,8 @@ int interactiveWindowLoop (bt_UiState *ui, bt_LogicInputState *logicInput, bt_Wo
 
 int main(int argc, char *argv[])
 {
+    // TODO: allow changing working directory from args, use this as a default
+    chdir("..");
     //loadTileDefinitions ("resources/cell_types");
 
     // Must indicate where used that the value of this is volatile, as it may get updated by another thread

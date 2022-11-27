@@ -17,6 +17,7 @@ void characterInspector(u32 characterId);
 
 bt_EditorContext bt_initEditor(htw_VkContext *vkContext) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
+    // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
     ImGui_ImplSDL2_InitForVulkan(vkContext->window);
     ImGui_ImplVulkan_InitInfo init_info = {

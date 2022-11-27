@@ -8,3 +8,4 @@ assets/
 .cache/
 *.kdev4
 *.spv
+imgui.ini

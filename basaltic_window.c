@@ -258,8 +258,8 @@ static void initTextGraphics(bt_GraphicsState *graphics) {
         .inputType = HTW_VERTEX_TYPE_FLOAT
     };
     htw_ShaderSet shaderInfo = {
-        .vertexShader = htw_loadShader(graphics->vkContext, "shaders/text.vert.spv"),
-        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/text.frag.spv"),
+        .vertexShader = htw_loadShader(graphics->vkContext, "shaders_bin/text.vert.spv"),
+        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders_bin/text.frag.spv"),
         .vertexInputStride = sizeof(TextBufferData),
         .vertexInputCount = 1,
         .vertexInputInfos = &vertInfo,
@@ -428,8 +428,8 @@ static void initDebugGraphics(bt_GraphicsState *graphics) {
     };
     htw_ShaderInputInfo instanceInfos[] = {positionInfo, sizeInfo};
     htw_ShaderSet shaderSet = {
-        .vertexShader = htw_loadShader(graphics->vkContext, "shaders/debug.vert.spv"),
-        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/debug.frag.spv"),
+        .vertexShader = htw_loadShader(graphics->vkContext, "shaders_bin/debug.vert.spv"),
+        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders_bin/debug.frag.spv"),
         .vertexInputCount = 0,
         .instanceInputStride = sizeof(DebugInstanceData),
         .instanceInputCount = 2,
@@ -589,8 +589,8 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
     };
     htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
     htw_ShaderSet shaderInfo = {
-        .vertexShader = htw_loadShader(graphics->vkContext, "shaders/hexTerrain.vert.spv"),
-        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders/hexTerrain.frag.spv"),
+        .vertexShader = htw_loadShader(graphics->vkContext, "shaders_bin/hexTerrain.vert.spv"),
+        .fragmentShader = htw_loadShader(graphics->vkContext, "shaders_bin/hexTerrain.frag.spv"),
         .vertexInputStride = sizeof(bt_HexmapVertexData),
         .vertexInputCount = 2,
         .vertexInputInfos = vertexInputInfos,
