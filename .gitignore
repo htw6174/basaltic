@@ -1,5 +1,9 @@
 build/
+bin/
+bin_debug/
+shaders_bin/
 output/
+assets/
 .kdev4/
 .cache/
 *.kdev4

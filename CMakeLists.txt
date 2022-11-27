@@ -13,16 +13,18 @@ add_executable(basaltic main.c basaltic_logic.c basaltic_logicInputState.c basal
 #    rsync -vrt --include "htw_libs" --include "*.[ch]" --include "CMakeLists.txt" --exclude "*" /home/htw/projects/c/htw_libs ${PROJECT_SOURCE_DIR}
 #    VERBATIM)
 
+# copy to build directory
+# TODO: this will only run when cmake generates the makefile. Figure out how to create a custom target that includes all the files that would be copied here, and move them to the build directory with a CMAKE_COMMAND instruction
+file(COPY resources licenses credits.txt README.md DESTINATION .)
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")
+
 # precompile shaders to SPIR-V
-# FIXME: no shaders get compiled, but no error from glslc
-# NOTE: i think it's treating 'shaders' as a folder name (not creating a glob variable) and copying the whole folder, this only partially worked by accident because I chose the same name for both
-file(GLOB shaders "${PROJECT_SOURCE_DIR}/shaders/*.vert" "${PROJECT_SOURCE_DIR}/shaders/*.frag")
+# TODO: not needed right now, but should eventually find a way to only compile shader source if .spv is outdated
+# TODO: may fix the above issue by depending this command on a custom target instead of the main target
+file(GLOB SHADERS_SOURCE "${PROJECT_SOURCE_DIR}/shaders/*.vert" "${PROJECT_SOURCE_DIR}/shaders/*.frag")
 add_custom_command(TARGET basaltic PRE_BUILD COMMENT "Compiling shaders..." COMMAND
-    glslc -c ${shaders}
-    VERBATIM )
-# copy to build directory FIXME: why no copy cmake???? only works when makefile is regenerated?
-file(COPY shaders DESTINATION .)
-file(COPY resources DESTINATION .)
+    glslc -c ${SHADERS_SOURCE}
+    VERBATIM WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")
 
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
 # .cmake files under /usr/lib/cmake can be located this way to load variables
@@ -39,4 +41,5 @@ target_link_libraries(basaltic PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONF
 
 #target_include_directories(basaltic PUBLIC "${PROJECT_SOURCE_DIR}/htw_libs")
 
+# TODO: add install commands to handle data files
 install(TARGETS basaltic RUNTIME DESTINATION bin)

@@ -15,7 +15,7 @@ typedef enum bt_GenderBitflags {
 
 typedef enum bt_CharacterSize {
     KD_CHARACTER_SIZE_NONE = 0, // incorporial things
-    KD_CHARACTER_SIZE_MINISCULE = 1, // rats insects, characters this size are usually treated as swarms
+    KD_CHARACTER_SIZE_MINISCULE = 1, // rats, insects, characters this size are usually treated as swarms
     KD_CHARACTER_SIZE_TINY = 2, // human baby, snake, rabbit
     KD_CHARACTER_SIZE_SMALL = 3, // human child, medium dog
     KD_CHARACTER_SIZE_AVERAGE = 4, // human adult, wolf
