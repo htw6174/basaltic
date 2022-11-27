@@ -2,14 +2,17 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 #include "htw_core.h"
+#include "htw_geomap.h"
 #include "basaltic_interaction.h"
+#include "basaltic_logicInputState.h"
+#include "basaltic_characters.h"
 
-static void translateCamera(bt_UiState *ui, float xLocalMovement, float yLocalMovement);
-static void snapCameraToCharacter(bt_UiState *ui);
-static void editMap(bt_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
-static void moveCharacter(bt_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex);
+static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
+static void snapCameraToCharacter(bc_UiState *ui);
+static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
+static void moveCharacter(bc_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex);
 
-void bt_processInputEvent(bt_UiState *ui, bt_LogicInputState *logicInput, SDL_Event *e, bool useMouse, bool useKeyboard) {
+void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             //editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
@@ -39,7 +42,7 @@ void bt_processInputEvent(bt_UiState *ui, bt_LogicInputState *logicInput, SDL_Ev
     }
 }
 
-void bt_processInputState(bt_UiState *ui, bt_LogicInputState *logicInput, bool useMouse, bool useKeyboard) {
+void bc_processInputState(bc_UiState *ui, bc_LogicInputState *logicInput, bool useMouse, bool useKeyboard) {
     if (useMouse) {
         // get mouse state
         Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
@@ -70,7 +73,7 @@ void bt_processInputState(bt_UiState *ui, bt_LogicInputState *logicInput, bool u
     translateCamera(ui, xMovement, yMovement);
 }
 
-static void translateCamera(bt_UiState *ui, float xLocalMovement, float yLocalMovement) {
+static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement) {
     float yaw = ui->cameraYaw * DEG_TO_RAD;
     float sinYaw = sin(yaw);
     float cosYaw = cos(yaw);
@@ -82,15 +85,15 @@ static void translateCamera(bt_UiState *ui, float xLocalMovement, float yLocalMo
 }
 
 // TODO: oof this will require a few more imports, will at least need to know character grid position and hex grid position conversion
-static void snapCameraToCharacter(bt_UiState *ui) {
+static void snapCameraToCharacter(bc_UiState *ui) {
     ui->cameraX = 0;
     ui->cameraY = 0;
     ui->cameraDistance = 5;
 }
 
-static void editMap(bt_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
-            bt_MapEditAction newAction = {
-                .editType = KD_MAP_EDIT_ADD,
+static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
+            bc_MapEditAction newAction = {
+                .editType = BC_MAP_EDIT_ADD,
                 .chunkIndex = chunkIndex,
                 .cellIndex = cellIndex,
                 .value = value
@@ -99,8 +102,8 @@ static void editMap(bt_LogicInputState *logicInput, u32 chunkIndex, u32 cellInde
             logicInput->isEditPending = 1;
 }
 
-static void moveCharacter(bt_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex) {
-    bt_CharacterMoveAction newMoveAction = {
+static void moveCharacter(bc_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex) {
+    bc_CharacterMoveAction newMoveAction = {
         .characterId = characterId,
         .chunkIndex = chunkIndex,
         .cellIndex = cellIndex,

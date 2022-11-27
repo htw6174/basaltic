@@ -44,25 +44,25 @@ Uint32 *valueMapToBitmap(ValueMap *map, Uint32 *bmp, Uint32 format) {
 */
 
 typedef struct {
-    bt_LogicInputState *input;
-    bt_WorldState *world;
+    bc_LogicInputState *input;
+    bc_WorldState *world;
     Uint32 interval;
-    KD_APPSTATE *volatile appState;
+    BC_APPSTATE *volatile appState;
 } LogicLoopInput;
 
 // started as a seperate thread by SDL
 int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, change to LogicLoopInput*
     // Extract input data
     LogicLoopInput *loopInput = (LogicLoopInput*)ptr;
-    bt_LogicInputState *input = loopInput->input;
-    bt_WorldState *world = loopInput->world;
+    bc_LogicInputState *input = loopInput->input;
+    bc_WorldState *world = loopInput->world;
     Uint32 interval = loopInput->interval;
-    KD_APPSTATE *appState = loopInput->appState;
+    BC_APPSTATE *appState = loopInput->appState;
 
-    while (*appState == KD_APPSTATE_RUNNING) {
+    while (*appState == BC_APPSTATE_RUNNING) {
         Uint64 startTime = SDL_GetTicks64();
 
-        bt_simulateWorld(input, world);
+        bc_simulateWorld(input, world);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -75,7 +75,7 @@ int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, ch
 }
 
 // must run on the main thread
-int interactiveWindowLoop (bt_UiState *ui, bt_LogicInputState *logicInput, bt_WorldState *world, Uint32 interval, KD_APPSTATE *volatile appState) {
+int interactiveWindowLoop (bc_UiState *ui, bc_LogicInputState *logicInput, bc_WorldState *world, Uint32 interval, BC_APPSTATE *volatile appState) {
     /* for testing SDL direct draw
     Uint32 terrainFormat = SDL_PIXELFORMAT_RGBA32;
     Uint32 *bmp = valueMapToBitmap(world->heightMap, NULL, terrainFormat);
@@ -86,30 +86,30 @@ int interactiveWindowLoop (bt_UiState *ui, bt_LogicInputState *logicInput, bt_Wo
     */
 
     // TODO: should allocate heap space for these large structures instead of leaving them on the stack. Also: should I init by passing pointer to an existing struct, or returning the whole thing?
-    bt_GraphicsState graphics;
-    bt_initGraphics(&graphics, 1280, 720);
-    bt_initWorldGraphics(&graphics, world);
-    bt_EditorContext editorContext = bt_initEditor(graphics.vkContext);
+    bc_GraphicsState graphics;
+    bc_initGraphics(&graphics, 1280, 720);
+    bc_initWorldGraphics(&graphics, world);
+    bc_EditorContext editorContext = bc_initEditor(graphics.vkContext);
 
-    while (*appState == KD_APPSTATE_RUNNING) {
+    while (*appState == BC_APPSTATE_RUNNING) {
         Uint64 startTime = graphics.milliSeconds = SDL_GetTicks64();
 
-        bool passthroughMouse = !bt_editorWantCaptureMouse(&editorContext);
-        bool passthroughKeyboard = !bt_editorWantCaptureMouse(&editorContext);
+        bool passthroughMouse = !bc_editorWantCaptureMouse(&editorContext);
+        bool passthroughKeyboard = !bc_editorWantCaptureMouse(&editorContext);
         SDL_Event e;
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
-                *appState = KD_APPSTATE_STOPPED;
+                *appState = BC_APPSTATE_STOPPED;
             }
-            bt_handleEditorInputEvents(&editorContext, &e);
-            bt_processInputEvent(ui, logicInput, &e, passthroughMouse, passthroughKeyboard);
+            bc_handleEditorInputEvents(&editorContext, &e);
+            bc_processInputEvent(ui, logicInput, &e, passthroughMouse, passthroughKeyboard);
         }
 
-        bt_processInputState(ui, logicInput, passthroughMouse, passthroughKeyboard);
+        bc_processInputState(ui, logicInput, passthroughMouse, passthroughKeyboard);
 
-        bt_drawFrame(&graphics, ui, world);
-        bt_drawEditor(&editorContext, &graphics, ui, world);
-        bt_endFrame(&graphics);
+        bc_drawFrame(&graphics, ui, world);
+        bc_drawEditor(&editorContext, &graphics, ui, world);
+        bc_endFrame(&graphics);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
@@ -120,8 +120,8 @@ int interactiveWindowLoop (bt_UiState *ui, bt_LogicInputState *logicInput, bt_Wo
         graphics.frame++;
     }
 
-    bt_destroyEditor(&editorContext);
-    bt_destroyGraphics(&graphics);
+    bc_destroyEditor(&editorContext);
+    bc_destroyGraphics(&graphics);
 
     return 0;
 }
@@ -133,15 +133,15 @@ int main(int argc, char *argv[])
     //loadTileDefinitions ("resources/cell_types");
 
     // Must indicate where used that the value of this is volatile, as it may get updated by another thread
-    KD_APPSTATE appState = KD_APPSTATE_RUNNING;
+    BC_APPSTATE appState = BC_APPSTATE_RUNNING;
 
     printf("Initizlizing SDL...\n");
     SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
 
-    bt_UiState ui = bt_createUiState();
-    bt_WorldState *world = bt_createWorldState(8, 8, 64, 64);
-    bt_initializeWorldState(world);
-    bt_LogicInputState *logicInput = createLogicInputState();
+    bc_UiState ui = bc_createUiState();
+    bc_WorldState *world = bc_createWorldState(8, 8, 64, 64);
+    bc_initializeWorldState(world);
+    bc_LogicInputState *logicInput = createLogicInputState();
 
     Uint32 logicInterval = 1000 / LOGIC_TPS;
     Uint32 frameInterval = 1000 / RENDER_TPS;

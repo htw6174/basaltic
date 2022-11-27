@@ -20,7 +20,7 @@ add_executable(basaltic main.c basaltic_logic.c basaltic_logicInputState.c basal
 
 # precompile shaders to SPIR-V
 # TODO: not needed right now, but should eventually find a way to only compile shader source if .spv is outdated
-# TODO: may fix the above issue by depending this command on a custom target instead of the main target
+# TODO: may fix the above issue by depending this command on a custom target with all shader source files, instead of the main target
 file(MAKE_DIRECTORY "${PROJECT_SOURCE_DIR}/shaders_bin")
 file(GLOB SHADERS_SOURCE "${PROJECT_SOURCE_DIR}/shaders_source/*.vert" "${PROJECT_SOURCE_DIR}/shaders_source/*.frag")
 add_custom_command(TARGET basaltic PRE_BUILD COMMENT "Compiling shaders..." COMMAND

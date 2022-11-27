@@ -1,5 +1,5 @@
-#ifndef KINGDOM_MAIN_H_INCLUDED
-#define KINGDOM_MAIN_H_INCLUDED
+#ifndef BASALTIC_MAIN_H_INCLUDED
+#define BASALTIC_MAIN_H_INCLUDED
 
 #include <stdbool.h>
 #include <SDL2/SDL.h>
@@ -23,7 +23,7 @@
 typedef struct {
     mat4x4 projection;
     mat4x4 view;
-} bt_Camera;
+} bc_Camera;
 
 typedef struct {
     vec2 windowSize;
@@ -31,19 +31,19 @@ typedef struct {
     // only xyz used, but needs to be vec4 for shader uniform buffer alignment
     vec4 cameraPosition;
     vec4 cameraFocalPoint;
-} _bt_WindowInfo;
+} _bc_WindowInfo;
 
 typedef struct {
     u32 chunkIndex;
     u32 cellIndex;
-} _bt_FeedbackInfo;
+} _bc_FeedbackInfo;
 
 typedef struct {
     vec3 gridToWorld;
     float totalWidth;
     s32 timeOfDay;
     u32 visibilityOverrideBits;
-} _bt_WorldInfo;
+} _bc_WorldInfo;
 
 typedef struct {
     htw_ModelData model;
@@ -53,13 +53,13 @@ typedef struct {
     size_t vertexDataSize;
     size_t indexDataSize;
     size_t instanceDataSize;
-} bt_Model;
+} bc_Model;
 
 typedef struct {
     mat4x4 modelMatrix;
-} bt_TextPoolItem;
+} bc_TextPoolItem;
 
-typedef uint32_t bt_TextPoolItemHandle;
+typedef uint32_t bc_TextPoolItemHandle;
 
 typedef struct {
     // texel position - pixel distance
@@ -78,7 +78,7 @@ typedef struct {
     float v1;
     float u2;
     float v2;
-} bt_GlyphMetrics;
+} bc_GlyphMetrics;
 
 /**
  * @brief state data needed to render text with a single font face.
@@ -93,12 +93,12 @@ typedef struct {
     FT_Library freetypeLibrary;
     FT_Face face;
     u32 pixelSize; // pixels per EM square; rough font size
-    bt_GlyphMetrics *glyphMetrics;
+    bc_GlyphMetrics *glyphMetrics;
     float unitsToPixels; // conversion factor from font units to pixels
     float lineDistance; // distance between baselines when adding a new line, in pixels
     float ascent; // when positioning by the top of a line, this is the distance to the baseline, in pixels
-    bt_Model textModel;
-    bt_TextPoolItem *textPool;
+    bc_Model textModel;
+    bc_TextPoolItem *textPool;
     // TODO: need to think about best way to pass window information and text instance data to shader (for 1: can use existing windowInfo buffer)
     htw_Buffer uniformBuffer;
     u8 *bitmap;
@@ -108,12 +108,12 @@ typedef struct {
     htw_DescriptorSetLayout textPipelineLayout;
     htw_DescriptorSet textPipelineDescriptorSet;
     htw_PipelineHandle textPipeline;
-} bt_TextRenderContext;
+} bc_TextRenderContext;
 
 typedef struct {
     vec3 position;
     u32 cellIndex;
-} bt_HexmapVertexData;
+} bc_HexmapVertexData;
 
 typedef struct {
     s16 elevation;
@@ -123,13 +123,13 @@ typedef struct {
     u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
     u16 unused2; // weather / temporary effect bitmask?
     //int64_t aligner;
-} _bt_TerrainCellData; // TODO: move this to a world logic source file? keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
+} _bc_TerrainCellData; // TODO: move this to a world logic source file? keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
 
-// NOTE: this struct isn't meant to be used directly - it exists to find the offset of an array of _bt_TerrainCellData packed into a buffer after the other fields in this struct
+// NOTE: this struct isn't meant to be used directly - it exists to find the offset of an array of _bc_TerrainCellData packed into a buffer after the other fields in this struct
 typedef struct {
     u32 chunkIndex;
-    _bt_TerrainCellData chunkData;
-} _bt_TerrainBufferData;
+    _bc_TerrainCellData chunkData;
+} _bc_TerrainBufferData;
 
 typedef struct {
     // TODO: everything other than terrain buffer data can be used for multiple different terrains (surface and cave layers). Split this struct to reflect that, only keep one copy of the base terrain model
@@ -137,22 +137,22 @@ typedef struct {
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout chunkObjectLayout;
     htw_DescriptorSet *chunkObjectDescriptorSets;
-    bt_Model chunkModel;
+    bc_Model chunkModel;
     // length MAX_VISIBLE_CHUNKS arrays that are compared to determine what chunks to reload each frame, and where to place them
     s32 *closestChunks;
     s32 *loadedChunks;
     size_t terrainChunkSize;
-    _bt_TerrainBufferData *terrainBufferData;
+    _bc_TerrainBufferData *terrainBufferData;
     htw_SplitBuffer terrainBuffer; // split into multiple logical buffers used to describe each terrain chunk
-} bt_HexmapTerrain;
+} bc_HexmapTerrain;
 
 typedef struct {
     u32 maxInstanceCount;
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout debugLayout;
     htw_DescriptorSet debugDescriptorSet;
-    bt_Model instancedModel;
-} bt_DebugSwarm;
+    bc_Model instancedModel;
+} bc_DebugSwarm;
 
 typedef struct {
     u32 width, height;
@@ -162,9 +162,9 @@ typedef struct {
     htw_VkContext *vkContext;
     htw_BufferPool bufferPool;
 
-    _bt_WindowInfo windowInfo;
-    _bt_FeedbackInfo feedbackInfo;
-    _bt_WorldInfo worldInfo;
+    _bc_WindowInfo windowInfo;
+    _bc_FeedbackInfo feedbackInfo;
+    _bc_WorldInfo worldInfo;
     htw_Buffer windowInfoBuffer;
     htw_Buffer feedbackInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
     htw_Buffer worldInfoBuffer;
@@ -173,18 +173,18 @@ typedef struct {
     htw_DescriptorSet perFrameDescriptorSet;
     htw_DescriptorSetLayout perPassLayout;
     htw_DescriptorSet perPassDescriptorSet;
-    bt_TextRenderContext textRenderContext;
-    bt_HexmapTerrain surfaceTerrain;
-    bt_HexmapTerrain caveTerrain;
+    bc_TextRenderContext textRenderContext;
+    bc_HexmapTerrain surfaceTerrain;
+    bc_HexmapTerrain caveTerrain;
     bool showCharacterDebug;
-    bt_DebugSwarm characterDebug;
-    bt_Camera camera;
-} bt_GraphicsState;
+    bc_DebugSwarm characterDebug;
+    bc_Camera camera;
+} bc_GraphicsState;
 
-void bt_initGraphics(bt_GraphicsState *graphics, u32 width, u32 height);
-void bt_initWorldGraphics(bt_GraphicsState *graphics, bt_WorldState *world);
-int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *world);
-void bt_endFrame(bt_GraphicsState *graphics);
-void bt_destroyGraphics(bt_GraphicsState *graphics);
+void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height);
+void bc_initWorldGraphics(bc_GraphicsState *graphics, bc_WorldState *world);
+int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world);
+void bc_endFrame(bc_GraphicsState *graphics);
+void bc_destroyGraphics(bc_GraphicsState *graphics);
 
-#endif // KINGDOM_MAIN_H_INCLUDED
+#endif // BASALTIC_MAIN_H_INCLUDED

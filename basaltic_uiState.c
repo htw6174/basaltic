@@ -1,9 +1,9 @@
 #include "basaltic_uiState.h"
 
-bt_UiState bt_createUiState() {
-    bt_UiState newUi = {
+bc_UiState bc_createUiState() {
+    bc_UiState newUi = {
         // camera
-        .cameraMode = KD_CAMERA_MODE_PERSPECTIVE,
+        .cameraMode = BC_CAMERA_MODE_PERSPECTIVE,
         .cameraDistance = 10,
         .cameraElevation = 0,
         .cameraPitch = 45,
@@ -13,7 +13,7 @@ bt_UiState bt_createUiState() {
         .cameraMovementSpeed = 0.15,
         .cameraRotationSpeed = 1.5,
         // world
-        .activeLayer = KD_WORLD_LAYER_SURFACE,
+        .activeLayer = BC_WORLD_LAYER_SURFACE,
         .mouse = {0},
         .hoveredCellIndex = 0,
         .selectedCellIndex = 0,

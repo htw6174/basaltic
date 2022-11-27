@@ -36,35 +36,35 @@ typedef struct {
 
 static htw_VkContext *createWindow(u32 width, u32 height);
 
-static void updateWindowInfoBuffer(bt_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
-static void updateWorldInfoBuffer(bt_GraphicsState *graphics, bt_WorldState *world);
+static void updateWindowInfoBuffer(bc_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
+static void updateWorldInfoBuffer(bc_GraphicsState *graphics, bc_WorldState *world);
 
-static void initTextGraphics(bt_GraphicsState *graphics);
-static void writeTextBuffers(bt_GraphicsState *graphics);
-static void updateTextDescriptors(bt_GraphicsState *graphics);
-static bt_TextPoolItemHandle aquireTextPoolItem(bt_TextRenderContext *tc);
-static void updateTextBuffer(bt_GraphicsState *graphics, bt_TextPoolItemHandle poolItem, char *text);
-static void setTextTransform(bt_TextRenderContext *tc, bt_TextPoolItemHandle poolItem, mat4x4 modelMatrix);
-static void freeTextPoolItem(bt_TextRenderContext *tc, bt_TextPoolItemHandle poolItem); // TODO: consider returning something to indicate result (success, item doesn't exist, item already free)
-static void drawText(bt_GraphicsState *graphics);
-static void drawDebugText(bt_GraphicsState *graphics, bt_UiState *ui);
+static void initTextGraphics(bc_GraphicsState *graphics);
+static void writeTextBuffers(bc_GraphicsState *graphics);
+static void updateTextDescriptors(bc_GraphicsState *graphics);
+static bc_TextPoolItemHandle aquireTextPoolItem(bc_TextRenderContext *tc);
+static void updateTextBuffer(bc_GraphicsState *graphics, bc_TextPoolItemHandle poolItem, char *text);
+static void setTextTransform(bc_TextRenderContext *tc, bc_TextPoolItemHandle poolItem, mat4x4 modelMatrix);
+static void freeTextPoolItem(bc_TextRenderContext *tc, bc_TextPoolItemHandle poolItem); // TODO: consider returning something to indicate result (success, item doesn't exist, item already free)
+static void drawText(bc_GraphicsState *graphics);
+static void drawDebugText(bc_GraphicsState *graphics, bc_UiState *ui);
 
-static void initTerrainGraphics(bt_GraphicsState *graphics, bt_WorldState *world);
-static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain);
-static void writeTerrainBuffers(bt_GraphicsState *graphics);
-//static void createHexmapTerrain(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain);
-static void updateHexmapDescriptors(bt_GraphicsState *graphics, bt_HexmapTerrain *terrain);
-static void updateHexmapVisibleChunks(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, u32 centerChunk);
-static void drawHexmapChunks(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, PushConstantData *mvp);
-static void updateHexmapDataBuffer (bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
-static void setHexmapBufferFromCell(bt_MapChunk *chunk, s32 cellX, s32 cellY, _bt_TerrainCellData *target);
+static void initTerrainGraphics(bc_GraphicsState *graphics, bc_WorldState *world);
+static void createHexmapMesh(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain);
+static void writeTerrainBuffers(bc_GraphicsState *graphics);
+//static void createHexmapTerrain(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain);
+static void updateHexmapDescriptors(bc_GraphicsState *graphics, bc_HexmapTerrain *terrain);
+static void updateHexmapVisibleChunks(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk);
+static void drawHexmapChunks(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, PushConstantData *mvp);
+static void updateHexmapDataBuffer (bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
+static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, _bc_TerrainCellData *target);
 
-static void initDebugGraphics(bt_GraphicsState *graphics);
-static void updateDebugGraphics(bt_GraphicsState *graphics, bt_WorldState *world);
+static void initDebugGraphics(bc_GraphicsState *graphics);
+static void updateDebugGraphics(bc_GraphicsState *graphics, bc_WorldState *world);
 
 static vec3 getRandomColor();
 
-void bt_initGraphics(bt_GraphicsState *graphics, u32 width, u32 height) {
+void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height) {
     graphics->width = width;
     graphics->height = height;
     graphics->vkContext = createWindow(width, height);
@@ -78,12 +78,12 @@ void bt_initGraphics(bt_GraphicsState *graphics, u32 width, u32 height) {
     graphics->perPassDescriptorSet = htw_allocateDescriptor(graphics->vkContext, graphics->perPassLayout);
 
     // create per frame descriptor buffers
-    graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bt_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
-    graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bt_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
-    graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bt_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
+    graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
+    graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
+    graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
 }
 
-void bt_destroyGraphics(bt_GraphicsState *graphics) {
+void bc_destroyGraphics(bc_GraphicsState *graphics) {
     htw_destroyVkContext(graphics->vkContext);
 }
 
@@ -93,7 +93,7 @@ htw_VkContext *createWindow(u32 width, u32 height) {
     return context;
 }
 
-void bt_initWorldGraphics(bt_GraphicsState *graphics, bt_WorldState *world) {
+void bc_initWorldGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
     initTextGraphics(graphics);
     initTerrainGraphics(graphics, world);
@@ -113,13 +113,13 @@ void bt_initWorldGraphics(bt_GraphicsState *graphics, bt_WorldState *world) {
     updateHexmapDescriptors(graphics, &graphics->surfaceTerrain);
 
     // initialize highlighted cell
-    graphics->feedbackInfo = (_bt_FeedbackInfo){
+    graphics->feedbackInfo = (_bc_FeedbackInfo){
         .cellIndex = 0,
         .chunkIndex = 0,
     };
 
     // initialize world info
-    graphics->worldInfo = (_bt_WorldInfo) {
+    graphics->worldInfo = (_bc_WorldInfo) {
         .gridToWorld = (vec3){{1.0, 1.0, 0.2}},
         .timeOfDay = 0,
         .totalWidth = world->worldWidth,
@@ -129,27 +129,27 @@ void bt_initWorldGraphics(bt_GraphicsState *graphics, bt_WorldState *world) {
     updateWorldInfoBuffer(graphics, world);
 }
 
-static void updateWindowInfoBuffer(bt_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
-    graphics->windowInfo = (_bt_WindowInfo){
+static void updateWindowInfoBuffer(bc_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
+    graphics->windowInfo = (_bc_WindowInfo){
         .windowSize = (vec2){{graphics->width, graphics->height}},
         .mousePosition = (vec2){{mouseX, mouseY}},
         .cameraPosition = cameraPosition,
         .cameraFocalPoint = cameraFocalPoint
     };
-    htw_writeBuffer(graphics->vkContext, graphics->windowInfoBuffer, &graphics->windowInfo, sizeof(_bt_WindowInfo));
+    htw_writeBuffer(graphics->vkContext, graphics->windowInfoBuffer, &graphics->windowInfo, sizeof(_bc_WindowInfo));
 }
 
-static void updateWorldInfoBuffer(bt_GraphicsState *graphics, bt_WorldState *world) {
+static void updateWorldInfoBuffer(bc_GraphicsState *graphics, bc_WorldState *world) {
     // TODO: update parts of this per simulation tick
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
-    htw_writeBuffer(graphics->vkContext, graphics->worldInfoBuffer, &graphics->worldInfo, sizeof(_bt_WorldInfo));
+    htw_writeBuffer(graphics->vkContext, graphics->worldInfoBuffer, &graphics->worldInfo, sizeof(_bc_WorldInfo));
 }
 
-static void initTextGraphics(bt_GraphicsState *graphics) {
+static void initTextGraphics(bc_GraphicsState *graphics) {
     static const u64 glyphCount = 256;
-    bt_TextRenderContext *tc = &graphics->textRenderContext;
+    bc_TextRenderContext *tc = &graphics->textRenderContext;
     // initialize pool
-    tc->textPool = malloc(sizeof(bt_TextPoolItem) * TEXT_POOL_CAPACITY);
+    tc->textPool = malloc(sizeof(bc_TextPoolItem) * TEXT_POOL_CAPACITY);
     for (int i = 0; i < TEXT_POOL_CAPACITY; i++) {
         mat4x4Zero(tc->textPool[i].modelMatrix);
     }
@@ -161,7 +161,7 @@ static void initTextGraphics(bt_GraphicsState *graphics) {
     tc->unitsToPixels = (float)tc->pixelSize / tc->face->units_per_EM;
 
     // load required glyphs
-    tc->glyphMetrics = malloc(sizeof(bt_GlyphMetrics) * glyphCount);
+    tc->glyphMetrics = malloc(sizeof(bc_GlyphMetrics) * glyphCount);
     // get bitmap size info for assembling full bitmap later
     u32 totalWidth = 0;
     u32 maxHeight = 0;
@@ -190,7 +190,7 @@ static void initTextGraphics(bt_GraphicsState *graphics) {
         FT_CHECK(FT_Load_Char(tc->face, i, FT_LOAD_RENDER));
         // save glyph metrics
         FT_GlyphSlot glyph = tc->face->glyph;
-        bt_GlyphMetrics gm = {
+        bc_GlyphMetrics gm = {
             .offsetX = bitmapX,
             .offsetY = 0, // change if using a 2d glyph layout
             .width = glyph->bitmap.width,
@@ -273,8 +273,8 @@ static void initTextGraphics(bt_GraphicsState *graphics) {
     tc->textPipeline = htw_createPipeline(graphics->vkContext, textPipelineLayouts, shaderInfo);
 }
 
-static void writeTextBuffers(bt_GraphicsState *graphics) {
-    bt_TextRenderContext *tc = &graphics->textRenderContext;
+static void writeTextBuffers(bc_GraphicsState *graphics) {
+    bc_TextRenderContext *tc = &graphics->textRenderContext;
 
     htw_writeBuffer(graphics->vkContext, tc->bitmapBuffer, tc->bitmap, tc->bitmapSize);
     htw_updateTexture(graphics->vkContext, tc->bitmapBuffer, tc->glyphBitmap);
@@ -282,19 +282,19 @@ static void writeTextBuffers(bt_GraphicsState *graphics) {
     htw_writeBuffer(graphics->vkContext, tc->textModel.model.indexBuffer, tc->textModel.indexData, tc->textModel.indexDataSize);
 }
 
-static void updateTextDescriptors(bt_GraphicsState *graphics) {
-    bt_TextRenderContext *tc = &graphics->textRenderContext;
+static void updateTextDescriptors(bc_GraphicsState *graphics) {
+    bc_TextRenderContext *tc = &graphics->textRenderContext;
 
     htw_updateTextDescriptor(graphics->vkContext, tc->textPipelineDescriptorSet, tc->uniformBuffer, tc->glyphBitmap);
 }
 
-static bt_TextPoolItemHandle aquireTextPoolItem(bt_TextRenderContext *tc) {
+static bc_TextPoolItemHandle aquireTextPoolItem(bc_TextRenderContext *tc) {
     // TODO: determine next free pool item
     return 0;
 }
 
-static void updateTextBuffer(bt_GraphicsState *graphics, bt_TextPoolItemHandle poolItem, char *text) {
-    bt_TextRenderContext *tc = &graphics->textRenderContext;
+static void updateTextBuffer(bc_GraphicsState *graphics, bc_TextPoolItemHandle poolItem, char *text) {
+    bc_TextRenderContext *tc = &graphics->textRenderContext;
 
     // fill buffer
     size_t bufferOffset = poolItem * MAX_TEXT_LENGTH;
@@ -310,7 +310,7 @@ static void updateTextBuffer(bt_GraphicsState *graphics, bt_TextPoolItemHandle p
             xOrigin = 0.0;
             yOrigin += tc->lineDistance;
         } else {
-            bt_GlyphMetrics gm = tc->glyphMetrics[c];
+            bc_GlyphMetrics gm = tc->glyphMetrics[c];
             float top = yOrigin - gm.bearingY;
             float bottom = top + gm.height;
             float left = gm.bearingX + xOrigin;
@@ -358,17 +358,17 @@ static void updateTextBuffer(bt_GraphicsState *graphics, bt_TextPoolItemHandle p
     htw_writeBuffer(graphics->vkContext, tc->textModel.model.vertexBuffer, tc->textModel.vertexData, tc->textModel.vertexDataSize); // TODO: update only the subset of the buffer that changed
 }
 
-static void setTextTransform(bt_TextRenderContext *tc, bt_TextPoolItemHandle poolItem, mat4x4 modelMatrix) {
+static void setTextTransform(bc_TextRenderContext *tc, bc_TextPoolItemHandle poolItem, mat4x4 modelMatrix) {
     // TODO
     memcpy(tc->textPool[poolItem].modelMatrix, modelMatrix, sizeof(mat4x4));
 }
 
-static void freeTextPoolItem(bt_TextRenderContext *tc, bt_TextPoolItemHandle poolItem) {
+static void freeTextPoolItem(bc_TextRenderContext *tc, bc_TextPoolItemHandle poolItem) {
     // TODO
 }
 
-static void drawText(bt_GraphicsState *graphics) {
-    bt_TextRenderContext *tc = &graphics->textRenderContext;
+static void drawText(bc_GraphicsState *graphics) {
+    bc_TextRenderContext *tc = &graphics->textRenderContext;
 
     // TEST
     htw_writeBuffer(graphics->vkContext, tc->uniformBuffer, tc->textPool[0].modelMatrix, sizeof(mat4x4));
@@ -378,8 +378,8 @@ static void drawText(bt_GraphicsState *graphics) {
     htw_drawPipeline(graphics->vkContext, tc->textPipeline, &tc->textModel.model, HTW_DRAW_TYPE_INDEXED);
 }
 
-static void drawDebugText(bt_GraphicsState *graphics, bt_UiState *ui) {
-    bt_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
+static void drawDebugText(bc_GraphicsState *graphics, bc_UiState *ui) {
+    bc_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
     char statusText[256];
     sprintf(statusText,
             "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
@@ -402,7 +402,7 @@ static void drawDebugText(bt_GraphicsState *graphics, bt_UiState *ui) {
 //     drawText(graphics, allChars, (vec3){{-1280.f, 0.f, 0.f}});
 }
 
-static void initTerrainGraphics(bt_GraphicsState *graphics, bt_WorldState *world) {
+static void initTerrainGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
     graphics->surfaceTerrain.closestChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
     graphics->surfaceTerrain.loadedChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
     for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
@@ -412,7 +412,7 @@ static void initTerrainGraphics(bt_GraphicsState *graphics, bt_WorldState *world
     //createHexmapInstanceBuffers(graphics, world);
 }
 
-static void initDebugGraphics(bt_GraphicsState *graphics) {
+static void initDebugGraphics(bc_GraphicsState *graphics) {
     graphics->showCharacterDebug = true;
 
     u32 maxInstanceCount = 1024; // TODO: needs to be set by world's total character count?
@@ -447,13 +447,13 @@ static void initDebugGraphics(bt_GraphicsState *graphics) {
         .instanceBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, instanceDataSize, HTW_BUFFER_USAGE_VERTEX)
     };
 
-    bt_Model instancedModel = {
+    bc_Model instancedModel = {
         .model = model,
         .instanceData = malloc(instanceDataSize),
         .instanceDataSize = instanceDataSize
     };
 
-    graphics->characterDebug = (bt_DebugSwarm){
+    graphics->characterDebug = (bc_DebugSwarm){
         .maxInstanceCount = maxInstanceCount,
         .pipeline = pipeline,
         .debugLayout = debugObjectLayout,
@@ -462,14 +462,14 @@ static void initDebugGraphics(bt_GraphicsState *graphics) {
     };
 }
 
-static void updateDebugGraphics(bt_GraphicsState *graphics, bt_WorldState *world) {
-    bt_Model *characterDebugModel = &graphics->characterDebug.instancedModel;
+static void updateDebugGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
+    bc_Model *characterDebugModel = &graphics->characterDebug.instancedModel;
     DebugInstanceData *instanceData = characterDebugModel->instanceData;
     for (int i = 0; i < characterDebugModel->model.instanceCount; i++) {
-        bt_Character *character = &world->characters[i];
+        bc_Character *character = &world->characters[i];
         htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
         u32 chunkIndex, cellIndex;
-        bt_gridCoordinatesToChunkAndCell(world, characterCoord, &chunkIndex, &cellIndex);
+        bc_gridCoordinatesToChunkAndCell(world, characterCoord, &chunkIndex, &cellIndex);
         s32 elevation = htw_geo_getMapValueByIndex(world->chunks[chunkIndex].heightMap, cellIndex);
         float posX, posY;
         htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
@@ -482,11 +482,11 @@ static void updateDebugGraphics(bt_GraphicsState *graphics, bt_WorldState *world
     htw_writeBuffer(graphics->vkContext, characterDebugModel->model.instanceBuffer, characterDebugModel->instanceData, characterDebugModel->instanceDataSize);
 }
 
-int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *world) {
+int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world) {
     updateWorldInfoBuffer(graphics, world);
 
     // determine the indicies of chunks closest to the camera
-    u32 centerChunk = bt_getChunkIndexByWorldPosition(world, ui->cameraX, ui->cameraY);
+    u32 centerChunk = bc_getChunkIndexByWorldPosition(world, ui->cameraX, ui->cameraY);
     updateHexmapVisibleChunks(graphics, world, &graphics->surfaceTerrain, centerChunk);
 
     updateDebugGraphics(graphics, world);
@@ -500,7 +500,7 @@ int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *worl
         float correctedDistance = powf(ui->cameraDistance, 2.0);
         float radius = cos(pitch) * correctedDistance;
         float height = sin(pitch) * correctedDistance;
-        float floor = ui->cameraElevation; //ui->activeLayer == KD_WORLD_LAYER_SURFACE ? 0 : -8;
+        float floor = ui->cameraElevation; //ui->activeLayer == BC_WORLD_LAYER_SURFACE ? 0 : -8;
         cameraPosition = (vec4){
             .x = ui->cameraX + radius * sin(yaw),
             .y = ui->cameraY + radius * -cos(yaw),
@@ -513,7 +513,7 @@ int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *worl
         };
         updateWindowInfoBuffer(graphics, ui->mouse.x, ui->mouse.y, cameraPosition, cameraFocalPoint);
 
-        if (ui->cameraMode == KD_CAMERA_MODE_ORTHOGRAPHIC) {
+        if (ui->cameraMode == BC_CAMERA_MODE_ORTHOGRAPHIC) {
             mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * correctedDistance, correctedDistance, 0.1f, 1000.f);
         } else {
             mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 1000.f);
@@ -535,7 +535,7 @@ int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *worl
     drawHexmapChunks(graphics, world, &graphics->surfaceTerrain, &mvp);
 
     // update ui with feedback info from shaders
-    htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bt_FeedbackInfo));
+    htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
     ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
     ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
 
@@ -554,7 +554,7 @@ int bt_drawFrame(bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *worl
     return 0;
 }
 
-void bt_endFrame(bt_GraphicsState *graphics) {
+void bc_endFrame(bc_GraphicsState *graphics) {
     htw_endFrame(graphics->vkContext);
 }
 
@@ -563,7 +563,7 @@ void bt_endFrame(bt_GraphicsState *graphics) {
  *
  * @param terrain
  */
-static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain) {
+static void createHexmapMesh(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -578,20 +578,20 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
 
     // create rendering pipeline
     htw_ShaderInputInfo positionInputInfo = {
-        .size = sizeof(((bt_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
-        .offset = offsetof(bt_HexmapVertexData, position),
+        .size = sizeof(((bc_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
+        .offset = offsetof(bc_HexmapVertexData, position),
         .inputType = HTW_VERTEX_TYPE_FLOAT
     };
     htw_ShaderInputInfo cellInputInfo = {
-        .size = sizeof(((bt_HexmapVertexData*)0)->cellIndex),
-        .offset = offsetof(bt_HexmapVertexData, cellIndex),
+        .size = sizeof(((bc_HexmapVertexData*)0)->cellIndex),
+        .offset = offsetof(bc_HexmapVertexData, cellIndex),
         .inputType = HTW_VERTEX_TYPE_UINT
     };
     htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
     htw_ShaderSet shaderInfo = {
         .vertexShader = htw_loadShader(graphics->vkContext, "shaders_bin/hexTerrain.vert.spv"),
         .fragmentShader = htw_loadShader(graphics->vkContext, "shaders_bin/hexTerrain.frag.spv"),
-        .vertexInputStride = sizeof(bt_HexmapVertexData),
+        .vertexInputStride = sizeof(bc_HexmapVertexData),
         .vertexInputCount = 2,
         .vertexInputInfos = vertexInputInfos,
         .instanceInputCount = 0,
@@ -615,7 +615,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
     const u32 topSideVerts = width * 3;
     const u32 topRightCornerVerts = 1;
     const u32 vertexCount = (vertsPerCell * cellCount) + rightSideVerts + topSideVerts + topRightCornerVerts;
-    const u32 vertexSize = sizeof(bt_HexmapVertexData);
+    const u32 vertexSize = sizeof(bc_HexmapVertexData);
     // NOTE: tri variables contain the number of indicies for each area, not number of triangles
     const u32 trisPerHex = 3 * 6;
     const u32 trisPerQuad = 3 * 2;
@@ -635,7 +635,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
         .indexCount = triangleCount,
         .instanceCount = 0
     };
-    bt_Model chunkModel = {
+    bc_Model chunkModel = {
         .model = modelData,
         .vertexData = malloc(vertexDataSize),
         .vertexDataSize = vertexDataSize,
@@ -672,14 +672,14 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
     // include strips of adjacent chunk data in buffer size
     u32 bufferCellCount = cellCount + width + height + 1;
     // Chunk data includes the chunk index out front
-    size_t terrainChunkSize = offsetof(_bt_TerrainBufferData, chunkData) + (sizeof(_bt_TerrainCellData) * bufferCellCount);
+    size_t terrainChunkSize = offsetof(_bc_TerrainBufferData, chunkData) + (sizeof(_bc_TerrainCellData) * bufferCellCount);
     terrain->terrainChunkSize = terrainChunkSize;
     terrain->terrainBufferData = malloc(terrainChunkSize * MAX_VISIBLE_CHUNKS);
     terrain->terrainBuffer = htw_createSplitBuffer(graphics->vkContext, graphics->bufferPool, terrainChunkSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE);
 
     // create and write model data for each cell
     // vert and tri array layout: | main chunk data (left to right, bottom to top) | right chunk edge strip (bottom to top) | top chunk edge strip (left to right) | top-right corner infill |
-    bt_HexmapVertexData *vertexData = terrain->chunkModel.vertexData;
+    bc_HexmapVertexData *vertexData = terrain->chunkModel.vertexData;
     u32 *triData = terrain->chunkModel.indexData;
     u32 vIndex = 0;
     u32 tIndex = 0;
@@ -692,7 +692,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
-                bt_HexmapVertexData newVertex = {
+                bc_HexmapVertexData newVertex = {
                     .position = pos,
                     .cellIndex = c
                 };
@@ -838,7 +838,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = leftEdgeConnectionVerts[v];
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
-            bt_HexmapVertexData newVertex = {
+            bc_HexmapVertexData newVertex = {
                 .position = pos,
                 .cellIndex = c3
             };
@@ -896,7 +896,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = topEdgeConnectionVerts[v];
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
-            bt_HexmapVertexData newVertex = {
+            bc_HexmapVertexData newVertex = {
                 .position = pos,
                 .cellIndex = c3
             };
@@ -918,7 +918,7 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             vec3 pos = vec3Add(hexagonPositions[5], (vec3){{posX, posY, 0.0}});
-            bt_HexmapVertexData newVertex = {
+            bc_HexmapVertexData newVertex = {
                 .position = pos,
                 .cellIndex = baseCell + width
             };
@@ -964,17 +964,17 @@ static void createHexmapMesh(bt_GraphicsState *graphics, bt_WorldState *world, b
 //     htw_printArray(stdout, triData, sizeof(triData[0]), triangleCount, trisPerCell, "%u, ");
 }
 
-static void writeTerrainBuffers(bt_GraphicsState *graphics) {
-    bt_Model chunkModel = graphics->surfaceTerrain.chunkModel;
+static void writeTerrainBuffers(bc_GraphicsState *graphics) {
+    bc_Model chunkModel = graphics->surfaceTerrain.chunkModel;
     htw_writeBuffer(graphics->vkContext, chunkModel.model.vertexBuffer, chunkModel.vertexData, chunkModel.vertexDataSize);
     htw_writeBuffer(graphics->vkContext, chunkModel.model.indexBuffer, chunkModel.indexData, chunkModel.indexDataSize);
 }
 
-static void updateHexmapDescriptors(bt_GraphicsState *graphics, bt_HexmapTerrain *terrain){
+static void updateHexmapDescriptors(bc_GraphicsState *graphics, bc_HexmapTerrain *terrain){
     htw_updateTerrainObjectDescriptors(graphics->vkContext, terrain->chunkObjectDescriptorSets, terrain->terrainBuffer);
 }
 
-static void updateHexmapVisibleChunks(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, u32 centerChunk) {
+static void updateHexmapVisibleChunks(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -992,7 +992,7 @@ static void updateHexmapVisibleChunks(bt_GraphicsState *graphics, bt_WorldState 
     s32 *loadedChunks = graphics->surfaceTerrain.loadedChunks;
     for (int c = 0, y = 1 - MAX_VISIBLE_CHUNK_DISTANCE; y < MAX_VISIBLE_CHUNK_DISTANCE; y++) {
         for (int x = 1 - MAX_VISIBLE_CHUNK_DISTANCE; x < MAX_VISIBLE_CHUNK_DISTANCE; x++, c++) {
-            closestChunks[c] = bt_getChunkIndexAtOffset(world, centerChunk, (htw_geo_GridCoord){x, y});
+            closestChunks[c] = bc_getChunkIndexAtOffset(world, centerChunk, (htw_geo_GridCoord){x, y});
         }
     }
 
@@ -1070,13 +1070,13 @@ static void updateHexmapVisibleChunks(bt_GraphicsState *graphics, bt_WorldState 
     }
 }
 
-static void drawHexmapChunks(bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, PushConstantData *mvp) {
+static void drawHexmapChunks(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, PushConstantData *mvp) {
     htw_bindPipeline(graphics->vkContext, terrain->pipeline);
     // draw full terrain mesh
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         u32 chunkIndex = graphics->surfaceTerrain.loadedChunks[c];
         static float chunkX, chunkY;
-        bt_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
+        bc_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
 
         // FIXME: quick hack to get world wrapping; need to wrap camera position too, shader position derivatives get weird far from the origin
         // TODO: need global position wrapping solution that can automatically handle e.g. debug shapes too
@@ -1091,15 +1091,15 @@ static void drawHexmapChunks(bt_GraphicsState *graphics, bt_WorldState *world, b
     }
 }
 
-static void updateHexmapDataBuffer (bt_GraphicsState *graphics, bt_WorldState *world, bt_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
+static void updateHexmapDataBuffer (bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
     const u32 width = world->chunkWidth;
     const u32 height = world->chunkHeight;
-    bt_MapChunk *chunk = &world->chunks[chunkIndex];
+    bc_MapChunk *chunk = &world->chunks[chunkIndex];
 
     size_t subBufferOffset = subBufferIndex * terrain->terrainBuffer.subBufferHostSize;
-    _bt_TerrainBufferData *subBuffer = ((void*)terrain->terrainBufferData) + subBufferOffset; // cast to void* so that offset is applied correctly
+    _bc_TerrainBufferData *subBuffer = ((void*)terrain->terrainBufferData) + subBufferOffset; // cast to void* so that offset is applied correctly
     subBuffer->chunkIndex = chunkIndex;
-    _bt_TerrainCellData *cellData = &subBuffer->chunkData; // address of cell data array
+    _bc_TerrainCellData *cellData = &subBuffer->chunkData; // address of cell data array
 
     // get primary chunk data
     for (s32 y = 0; y < height; y++) {
@@ -1111,7 +1111,7 @@ static void updateHexmapDataBuffer (bt_GraphicsState *graphics, bt_WorldState *w
 
     u32 edgeDataIndex = width * height;
     // get chunk data from chunk at x + 1
-    u32 rightChunk = bt_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 0});
+    u32 rightChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 0});
     chunk = &world->chunks[rightChunk];
     for (s32 y = 0; y < height; y++) {
         u32 c = edgeDataIndex + y; // right edge of this row
@@ -1120,7 +1120,7 @@ static void updateHexmapDataBuffer (bt_GraphicsState *graphics, bt_WorldState *w
     edgeDataIndex += height;
 
     // get chunk data from chunk at y + 1
-    u32 topChunk = bt_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){0, 1});
+    u32 topChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){0, 1});
     chunk = &world->chunks[topChunk];
     for (s32 x = 0; x < width; x++) {
         u32 c = edgeDataIndex + x;
@@ -1129,20 +1129,20 @@ static void updateHexmapDataBuffer (bt_GraphicsState *graphics, bt_WorldState *w
     edgeDataIndex += width;
 
     // get chunk data from chunk at x+1, y+1 (only one cell)
-    u32 topRightChunk = bt_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 1});
+    u32 topRightChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 1});
     chunk = &world->chunks[topRightChunk];
     setHexmapBufferFromCell(chunk, 0, 0, &cellData[edgeDataIndex]); // set last position in buffer
 
     htw_writeSubBuffer(graphics->vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainChunkSize);
 }
 
-static void setHexmapBufferFromCell(bt_MapChunk *chunk, s32 cellX, s32 cellY, _bt_TerrainCellData *target) {
+static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, _bc_TerrainCellData *target) {
     htw_geo_GridCoord cellCoord = {cellX, cellY};
     s32 rawElevation = htw_geo_getMapValue(chunk->heightMap, cellCoord);
     s32 rawTemperature = htw_geo_getMapValue(chunk->temperatureMap, cellCoord);
     s32 rawRainfall = htw_geo_getMapValue(chunk->rainfallMap, cellCoord);
     u32 visibilityBits = htw_geo_getMapValue(chunk->visibilityMap, cellCoord);
-    _bt_TerrainCellData cellData = {
+    _bc_TerrainCellData cellData = {
         .elevation = rawElevation,
         .paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
         .paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),

@@ -15,7 +15,7 @@
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void characterInspector(u32 characterId);
 
-bt_EditorContext bt_initEditor(htw_VkContext *vkContext) {
+bc_EditorContext bc_initEditor(htw_VkContext *vkContext) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
     // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
@@ -42,7 +42,7 @@ bt_EditorContext bt_initEditor(htw_VkContext *vkContext) {
     htw_endOneTimeCommands(vkContext);
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-    bt_EditorContext newEditor = {
+    bc_EditorContext newEditor = {
         .isActive = true,
         .vkContext = vkContext,
         .showDemoWindow = false,
@@ -51,26 +51,26 @@ bt_EditorContext bt_initEditor(htw_VkContext *vkContext) {
     return newEditor;
 }
 
-void bt_destroyEditor(bt_EditorContext *editorContext) {
+void bc_destroyEditor(bc_EditorContext *editorContext) {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     igDestroyContext(NULL);
 }
 
-void bt_resizeEditor(bt_EditorContext *editorContext) {
+void bc_resizeEditor(bc_EditorContext *editorContext) {
     // TODO: is this actually needed? Maybe also set global imgui scale?
     ImGui_ImplVulkan_SetMinImageCount(editorContext->vkContext->swapchainImageCount);
 }
 
-bool bt_editorWantCaptureMouse(bt_EditorContext *editorContext) {
+bool bc_editorWantCaptureMouse(bc_EditorContext *editorContext) {
     return editorContext->isActive & igGetIO()->WantCaptureMouse;
 }
 
-bool bt_editorWantCaptureKeyboard(bt_EditorContext *editorContext) {
+bool bc_editorWantCaptureKeyboard(bc_EditorContext *editorContext) {
     return editorContext->isActive & igGetIO()->WantCaptureMouse;
 }
 
-void bt_handleEditorInputEvents(bt_EditorContext *editorContext, SDL_Event *e) {
+void bc_handleEditorInputEvents(bc_EditorContext *editorContext, SDL_Event *e) {
     // handle editor toggle
     if (e->type == SDL_KEYDOWN) {
         if (e->key.keysym.sym == SDLK_BACKQUOTE) {
@@ -82,7 +82,7 @@ void bt_handleEditorInputEvents(bt_EditorContext *editorContext, SDL_Event *e) {
     }
 }
 
-void bt_drawEditor(bt_EditorContext *editorContext, bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *world) {
+void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world) {
     if (editorContext->isActive) {
         // imgui
         ImGui_ImplVulkan_NewFrame();
@@ -109,13 +109,13 @@ void bt_drawEditor(bt_EditorContext *editorContext, bt_GraphicsState *graphics, 
 
         if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
             if (igButton("Enable All", (ImVec2){0, 0})) {
-                graphics->worldInfo.visibilityOverrideBits = KD_TERRAIN_VISIBILITY_ALL;
+                graphics->worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
             }
             if (igButton("Disable All", (ImVec2){0, 0})) {
                 graphics->worldInfo.visibilityOverrideBits = 0;
             }
-            bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, KD_TERRAIN_VISIBILITY_GEOMETRY);
-            bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, KD_TERRAIN_VISIBILITY_COLOR);
+            bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
+            bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
         }
 
         igEnd();

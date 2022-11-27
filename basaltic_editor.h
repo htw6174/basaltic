@@ -1,5 +1,5 @@
-#ifndef KINGDOM_EDITOR_H_INCLUDED
-#define KINGDOM_EDITOR_H_INCLUDED
+#ifndef BASALTIC_EDITOR_H_INCLUDED
+#define BASALTIC_EDITOR_H_INCLUDED
 
 #include <stdbool.h>
 #include "htw_core.h"
@@ -12,16 +12,16 @@ typedef struct {
     bool isActive;
     htw_VkContext *vkContext;
     bool showDemoWindow;
-} bt_EditorContext;
+} bc_EditorContext;
 
-bt_EditorContext bt_initEditor();
-void bt_destroyEditor(bt_EditorContext *editorContext);
-void bt_resizeEditor(bt_EditorContext *editorContext);
+bc_EditorContext bc_initEditor();
+void bc_destroyEditor(bc_EditorContext *editorContext);
+void bc_resizeEditor(bc_EditorContext *editorContext);
 
-bool bt_editorWantCaptureMouse(bt_EditorContext *editorContext);
-bool bt_editorWantCaptureKeyboard(bt_EditorContext *editorContext);
+bool bc_editorWantCaptureMouse(bc_EditorContext *editorContext);
+bool bc_editorWantCaptureKeyboard(bc_EditorContext *editorContext);
 
-void bt_handleEditorInputEvents(bt_EditorContext *editorContext, SDL_Event *e);
-void bt_drawEditor(bt_EditorContext *editorContext, bt_GraphicsState *graphics, bt_UiState *ui, bt_WorldState *world);
+void bc_handleEditorInputEvents(bc_EditorContext *editorContext, SDL_Event *e);
+void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world);
 
-#endif // KINGDOM_EDITOR_H_INCLUDED
+#endif // BASALTIC_EDITOR_H_INCLUDED

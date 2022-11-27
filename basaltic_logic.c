@@ -7,10 +7,10 @@
 #include "basaltic_logicInputState.h"
 #include "basaltic_worldState.h"
 
-static void revealMap(bt_WorldState *world, bt_Character* character);
+static void revealMap(bc_WorldState *world, bc_Character* character);
 
-bt_WorldState *bt_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWidth, u32 chunkHeight) {
-    bt_WorldState *newWorld = malloc(sizeof(bt_WorldState));
+bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWidth, u32 chunkHeight) {
+    bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
     newWorld->chunkCountX = chunkCountX;
     newWorld->chunkCountY = chunkCountY;
     newWorld->chunkWidth = chunkWidth;
@@ -22,17 +22,17 @@ bt_WorldState *bt_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWi
     return newWorld;
 }
 
-int bt_initializeWorldState(bt_WorldState *world) {
+int bc_initializeWorldState(bc_WorldState *world) {
     // World generation
     u32 width = world->chunkWidth;
     u32 height = world->chunkHeight;
     u32 chunkCount = world->chunkCountX * world->chunkCountY;
     // TODO: single malloc for all world data, get offset of each array
-    world->chunks = malloc(sizeof(bt_MapChunk) * chunkCount);
+    world->chunks = malloc(sizeof(bc_MapChunk) * chunkCount);
     for (int c = 0, y = 0; y < world->chunkCountY; y++) {
         for (int x = 0; x < world->chunkCountX; x++, c++) {
             // generate chunk data
-            bt_MapChunk *chunk = &world->chunks[c];
+            bc_MapChunk *chunk = &world->chunks[c];
             s32 cellPosX = x * width;
             s32 cellPosY = y * height;
             chunk->heightMap = htw_geo_createValueMap(width, height, 64);
@@ -51,22 +51,22 @@ int bt_initializeWorldState(bt_WorldState *world) {
     }
 
     // Populate world
-    world->characters = malloc(sizeof(bt_Character) * world->characterPoolSize);
+    world->characters = malloc(sizeof(bc_Character) * world->characterPoolSize);
     for (int i = 0; i < world->characterPoolSize; i++) {
         // generate random character TODO
-        bt_Character *newCharacter = &world->characters[i];
-        *newCharacter = bt_createRandomCharacter();
+        bc_Character *newCharacter = &world->characters[i];
+        *newCharacter = bc_createRandomCharacter();
         newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->worldWidth), htw_randRange(world->worldHeight)};
     }
 
     return 0;
 }
 
-int bt_simulateWorld(bt_LogicInputState *input, bt_WorldState *world) {
+int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
     u64 ticks = input->ticks;
 
     if (input->isEditPending) {
-        bt_MapEditAction action = input->currentEdit;
+        bc_MapEditAction action = input->currentEdit;
         htw_geo_GridCoord gridCoord = htw_geo_indexToGridCoord(action.cellIndex, world->chunkWidth);
         u32 chunkIndex = action.chunkIndex;
         s32 currentValue = htw_geo_getMapValue(world->chunks[chunkIndex].heightMap, gridCoord);
@@ -75,10 +75,10 @@ int bt_simulateWorld(bt_LogicInputState *input, bt_WorldState *world) {
     }
 
     if (input->isMovePending) {
-        bt_CharacterMoveAction action = input->currentMove;
-        bt_Character *subject = &world->characters[action.characterId];
-        htw_geo_GridCoord destCoord = bt_chunkAndCellToWorldCoordinates(world, action.chunkIndex, action.cellIndex);
-        bt_moveCharacter(subject, destCoord);
+        bc_CharacterMoveAction action = input->currentMove;
+        bc_Character *subject = &world->characters[action.characterId];
+        htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, action.chunkIndex, action.cellIndex);
+        bc_moveCharacter(subject, destCoord);
         revealMap(world, subject);
         input->isMovePending = 0;
     }
@@ -88,12 +88,12 @@ int bt_simulateWorld(bt_LogicInputState *input, bt_WorldState *world) {
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?
 // Reveal an area of map around the target character's position according to their sight radius
-static void revealMap(bt_WorldState *world, bt_Character* character) {
+static void revealMap(bc_WorldState *world, bc_Character* character) {
     // TODO: factor in terrain height, character size, and attributes e.g. isFlying
     // get character's current cell information
     htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
     u32 charChunkIndex, charCellIndex;
-    bt_gridCoordinatesToChunkAndCell(world, characterCoord, &charChunkIndex, &charCellIndex);
+    bc_gridCoordinatesToChunkAndCell(world, characterCoord, &charChunkIndex, &charCellIndex);
     u32 characterElevation = htw_geo_getMapValueByIndex(world->chunks[charChunkIndex].heightMap, charCellIndex);
 
     htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(characterCoord);
@@ -108,21 +108,21 @@ static void revealMap(bt_WorldState *world, bt_Character* character) {
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         u32 chunkIndex, cellIndex;
-        bt_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex); // FIXME: need to do bounds checking at some point in the chain here
+        bc_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex); // FIXME: need to do bounds checking at some point in the chain here
         htw_ValueMap *visibilityMap = world->chunks[chunkIndex].visibilityMap;
 
-        bt_TerrainVisibilityBitFlags cellVisibility = 0;
+        bc_TerrainVisibilityBitFlags cellVisibility = 0;
         // restrict sight by distance
         // NOTE: this only works because of the outward spiral iteration pattern. Should use cube coordinate distance instead for better reliability
         if (c < cellsInDetailRange) {
-            cellVisibility = KD_TERRAIN_VISIBILITY_GEOMETRY | KD_TERRAIN_VISIBILITY_COLOR;
+            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY | BC_TERRAIN_VISIBILITY_COLOR;
         } else {
-            cellVisibility = KD_TERRAIN_VISIBILITY_GEOMETRY;
+            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
         }
         // restrict sight by relative elevation
         u32 elevation = htw_geo_getMapValueByIndex(world->chunks[chunkIndex].heightMap, cellIndex);
         if (elevation > characterElevation + 1) { // TODO: instead of constant +1, derive from character attributes
-            cellVisibility = KD_TERRAIN_VISIBILITY_GEOMETRY;
+            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
         }
 
         u32 currentVisibility = htw_geo_getMapValueByIndex(visibilityMap, cellIndex);
