@@ -38,7 +38,7 @@ include_directories(${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${FREETYPE_INCLU
 #add_subdirectory(htw_libs)
 include_directories(../htw_libs)
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(basaltic PUBLIC -lm /home/htw/projects/c/htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} ${FREETYPE_LIBRARIES} "${PROJECT_SOURCE_DIR}/cimgui/cimgui.so" "${PROJECT_SOURCE_DIR}/cimgui/libcimgui_sdl.so")
+target_link_libraries(basaltic PUBLIC -lm ${PROJECT_SOURCE_DIR}/../htw_libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} ${FREETYPE_LIBRARIES} "${PROJECT_SOURCE_DIR}/cimgui/cimgui.so" "${PROJECT_SOURCE_DIR}/cimgui/libcimgui_sdl.so")
 
 #target_include_directories(basaltic PUBLIC "${PROJECT_SOURCE_DIR}/htw_libs")
 
