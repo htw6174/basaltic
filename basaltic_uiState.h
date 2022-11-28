@@ -2,6 +2,7 @@
 #define BASALTIC_UISTATE_H_INCLUDED
 
 #include "htw_core.h"
+#include "basaltic_characters.h"
 
 typedef enum bc_CameraMode {
     BC_CAMERA_MODE_ORTHOGRAPHIC = 0,
@@ -42,7 +43,7 @@ typedef struct bc_UiState {
     u32 hoveredCellIndex;
     u32 selectedCellIndex;
     // character control
-    u32 activeCharacter;
+    bc_Character *activeCharacter;
     // menus
 } bc_UiState;
 

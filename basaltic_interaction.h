@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 #include <SDL2/SDL.h>
-#include "basaltic_defs.h"
 #include "basaltic_uiState.h"
 #include "basaltic_logicInputState.h"
 

@@ -18,7 +18,7 @@ bc_UiState bc_createUiState() {
         .hoveredCellIndex = 0,
         .selectedCellIndex = 0,
         // character control
-        .activeCharacter = 0,
+        .activeCharacter = NULL,
         // menus
     };
     return newUi;

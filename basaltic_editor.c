@@ -1,10 +1,12 @@
 #include <stdbool.h>
 #include "htw_core.h"
+#include "htw_random.h"
 #include "htw_vulkan.h"
 #include "basaltic_defs.h"
 #include "basaltic_editor.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
+#include "basaltic_characters.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_USE_VULKAN
@@ -13,7 +15,7 @@
 #include"cimgui/cimgui_impl.h"
 
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
-void characterInspector(u32 characterId);
+void characterInspector(bc_Character *character);
 
 bc_EditorContext bc_initEditor(htw_VkContext *vkContext) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
@@ -103,8 +105,16 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
         igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
 
         if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
-            igInputInt("Active character", &ui->activeCharacter, 1, 1, 0);
-            characterInspector(ui->activeCharacter);
+            if (igButton("Take control of random character", (ImVec2){0, 0})) {
+                u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
+                ui->activeCharacter = &world->characters[randCharacterIndex];
+            }
+
+            if (ui->activeCharacter != NULL) {
+                characterInspector(ui->activeCharacter);
+            } else {
+                igText("No active character");
+            }
         }
 
         if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
@@ -137,6 +147,7 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit) {
     }
 }
 
-void characterInspector(u32 characterId) {
+void characterInspector(bc_Character *character) {
     // TODO
+    igValue_Uint("Character ID", character->id);
 }

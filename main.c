@@ -43,6 +43,20 @@ Uint32 *valueMapToBitmap(ValueMap *map, Uint32 *bmp, Uint32 format) {
 }
 */
 
+typedef enum StartupMode {
+    STARTUP_MODE_MAINMENU,
+    STARTUP_MODE_NEWGAME,
+    STARTUP_MODE_LOADGAME,
+    STARTUP_MODE_CONTINUEGAME
+} StartupMode;
+
+typedef struct {
+    StartupMode startupMode;
+    char *dataDirectory;
+    char *loadGamePath;
+    char *newGameSeed;
+} ArgSettings;
+
 typedef struct {
     bc_LogicInputState *input;
     bc_WorldState *world;
@@ -50,7 +64,58 @@ typedef struct {
     BC_APPSTATE *volatile appState;
 } LogicLoopInput;
 
+ArgSettings parseArgs(int argc, char *argv[]);
 // started as a seperate thread by SDL
+int logicLoop(void *ptr);
+int interactiveWindowLoop (bc_UiState *ui, bc_LogicInputState *logicInput, bc_WorldState *world, Uint32 interval, BC_APPSTATE *volatile appState);
+
+ArgSettings parseArgs(int argc, char *argv[]) {
+    // default settings
+    ArgSettings settings = {
+        .startupMode = STARTUP_MODE_MAINMENU,
+        .dataDirectory = "..",
+        .loadGamePath = "",
+        .newGameSeed = "6174",
+    };
+
+    for (int i = 1; i < argc; i++) {
+        char *arg = argv[i];
+        if (arg[0] == '-') {
+            switch (arg[1]) {
+                case 'n':
+                    settings.startupMode = STARTUP_MODE_NEWGAME;
+                    settings.newGameSeed = argv[i + 1];
+                    i++;
+                    printf("Starting new game with seed '%s'\n", settings.newGameSeed);
+                    break;
+                case 'l':
+                    settings.startupMode = STARTUP_MODE_LOADGAME;
+                    settings.loadGamePath = argv[i + 1];
+                    i++;
+                    printf("Loading save '%s'\n", settings.loadGamePath);
+                    break;
+                case 'c':
+                    settings.startupMode = STARTUP_MODE_CONTINUEGAME;
+                    settings.loadGamePath = ""; // TODO: determine path of most recent save game here or somewhere else?
+                    printf("Loading most recent save\n");
+                    break;
+                case 'd':
+                    settings.dataDirectory = argv[i + 1];
+                    i++;
+                    break;
+                default:
+                    fprintf(stderr, "ERROR: unrecognized option '%s'\n", arg);
+                    exit(1);
+            }
+        } else {
+            fprintf(stderr, "ERROR: no option specified for arg '%s'\n", arg);
+            exit(1);
+        }
+    }
+
+    return settings;
+}
+
 int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, change to LogicLoopInput*
     // Extract input data
     LogicLoopInput *loopInput = (LogicLoopInput*)ptr;
@@ -128,8 +193,8 @@ int interactiveWindowLoop (bc_UiState *ui, bc_LogicInputState *logicInput, bc_Wo
 
 int main(int argc, char *argv[])
 {
-    // TODO: allow changing working directory from args, use this as a default
-    chdir("..");
+    ArgSettings settings = parseArgs(argc, argv);
+    chdir(settings.dataDirectory);
     //loadTileDefinitions ("resources/cell_types");
 
     // Must indicate where used that the value of this is volatile, as it may get updated by another thread

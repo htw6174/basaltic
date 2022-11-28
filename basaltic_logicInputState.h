@@ -1,7 +1,9 @@
 #ifndef BASALTIC_INPUTSTATE_H_INCLUDED
 #define BASALTIC_INPUTSTATE_H_INCLUDED
 
+#include <stdbool.h>
 #include "htw_core.h"
+#include "basaltic_characters.h"
 
 typedef enum bc_MapEditType {
     BC_MAP_EDIT_SET,
@@ -16,7 +18,7 @@ typedef struct {
 } bc_MapEditAction;
 
 typedef struct {
-    u32 characterId;
+    bc_Character *character;
     u32 chunkIndex;
     u32 cellIndex;
 } bc_CharacterMoveAction;
@@ -31,9 +33,9 @@ typedef struct {
 typedef struct {
     u32 ticks;
     bc_MapEditAction currentEdit;
-    _Bool isEditPending;
+    bool isEditPending;
     bc_CharacterMoveAction currentMove;
-    _Bool isMovePending;
+    bool isMovePending;
 } bc_LogicInputState;
 
 bc_LogicInputState *createLogicInputState();

@@ -76,7 +76,7 @@ int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
 
     if (input->isMovePending) {
         bc_CharacterMoveAction action = input->currentMove;
-        bc_Character *subject = &world->characters[action.characterId];
+        bc_Character *subject = action.character;
         htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, action.chunkIndex, action.cellIndex);
         bc_moveCharacter(subject, destCoord);
         revealMap(world, subject);
@@ -100,8 +100,10 @@ static void revealMap(bc_WorldState *world, bc_Character* character) {
     htw_geo_CubeCoord relativeCoord = {0, 0, 0};
 
     // get number of cells to check based on character's attributes
-    u32 cellsInSightRange = htw_geo_getHexArea(4);
-    u32 cellsInDetailRange = htw_geo_getHexArea(3);
+    u32 sightRange = 4;
+    u32 detailRange = sightRange - 1;
+    u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
+    u32 cellsInDetailRange = htw_geo_getHexArea(detailRange);
 
     // TODO: because of the outward spiral cell iteration used here, it may be possible to keep track of cell attributes that affect visibility and apply them additively to more distant cells (would probably only make sense to do this in the same direction; would have to come up with a way to determine if a cell is 'behind' another), such as forests or high elevations blocking lower areas
     for (int c = 0; c < cellsInSightRange; c++) {

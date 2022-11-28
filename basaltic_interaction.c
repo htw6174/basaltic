@@ -10,7 +10,7 @@
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
 static void snapCameraToCharacter(bc_UiState *ui);
 static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
-static void moveCharacter(bc_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex);
+static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex);
 
 void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
@@ -84,10 +84,9 @@ static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMo
     ui->cameraY += yGlobalMovement;
 }
 
-// TODO: oof this will require a few more imports, will at least need to know character grid position and hex grid position conversion
 static void snapCameraToCharacter(bc_UiState *ui) {
-    ui->cameraX = 0;
-    ui->cameraY = 0;
+    htw_geo_GridCoord characterCoord = ui->activeCharacter->currentState.worldCoord;
+    htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
     ui->cameraDistance = 5;
 }
 
@@ -99,15 +98,15 @@ static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellInde
                 .value = value
             };
             logicInput->currentEdit = newAction;
-            logicInput->isEditPending = 1;
+            logicInput->isEditPending = true;
 }
 
-static void moveCharacter(bc_LogicInputState *logicInput, u32 characterId, u32 chunkIndex, u32 cellIndex) {
+static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
     bc_CharacterMoveAction newMoveAction = {
-        .characterId = characterId,
+        .character = character,
         .chunkIndex = chunkIndex,
         .cellIndex = cellIndex,
     };
     logicInput->currentMove = newMoveAction;
-    logicInput->isMovePending = 1;
+    logicInput->isMovePending = true;
 }
