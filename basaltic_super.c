@@ -37,7 +37,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     bc_UiState ui = bc_createUiState();
     bc_GraphicsState graphics;
     bc_initGraphics(&graphics, 1280, 720);
-    bc_EditorContext editorContext = bc_initEditor(graphics.vkContext);
+    bc_EditorContext editorContext = bc_initEditor(startSettings.enableEditor, graphics.vkContext);
 
     bc_LogicInputState *logicInput = NULL;
     bc_WorldState *world = NULL;

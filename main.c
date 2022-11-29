@@ -15,6 +15,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
     // default settings
     bc_StartupSettings settings = {
         .startupMode = BC_STARTUP_MODE_MAINMENU,
+        .enableEditor = false,
         .dataDirectory = "..",
         .loadGamePath = "",
         .newGameSeed = "6174",
@@ -44,6 +45,9 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
                 case 'd':
                     settings.dataDirectory = argv[i + 1];
                     i++;
+                    break;
+                case 'e':
+                    settings.enableEditor = true;
                     break;
                 default:
                     fprintf(stderr, "ERROR: unrecognized option '%s'\n", arg);

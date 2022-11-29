@@ -12,6 +12,7 @@ static void snapCameraToCharacter(bc_UiState *ui);
 static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
 static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex);
 
+// TODO: add seperate input handling for each interfaceMode setting, allow logicInput to be NULL if interfaceMode doesn't require world interaction
 void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {

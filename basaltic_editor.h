@@ -14,7 +14,7 @@ typedef struct {
     bool showDemoWindow;
 } bc_EditorContext;
 
-bc_EditorContext bc_initEditor();
+bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext);
 void bc_destroyEditor(bc_EditorContext *editorContext);
 void bc_resizeEditor(bc_EditorContext *editorContext);
 

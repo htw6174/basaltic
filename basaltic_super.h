@@ -1,6 +1,7 @@
 #ifndef BASALTIC_SUPER_H_INCLUDED
 #define BASALTIC_SUPER_H_INCLUDED
 
+#include <stdbool.h>
 #include "htw_core.h"
 #include "basaltic_defs.h"
 #include "basaltic_logic.h"
@@ -10,6 +11,7 @@
 
 typedef struct {
     bc_StartupMode startupMode;
+    bool enableEditor;
     char *dataDirectory;
     char *loadGamePath;
     char *newGameSeed;

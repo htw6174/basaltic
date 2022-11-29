@@ -379,15 +379,17 @@ static void drawText(bc_GraphicsState *graphics) {
 static void drawDebugText(bc_GraphicsState *graphics, bc_UiState *ui) {
     bc_TextPoolItemHandle textItem = aquireTextPoolItem(&graphics->textRenderContext);
     char statusText[256];
-    sprintf(statusText,
-            "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
-            ui->mouse.x, ui->mouse.y, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+    // sprintf(statusText,
+    //         "Mouse Position: %4.4i, %4.4i\nChunk Index: %4.4u\nHighlighted Cell: %4.4u",
+    //         ui->mouse.x, ui->mouse.y, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+    sprintf(statusText, "Press backquote (`/~) to toggle editor, \nthen press 'Start new game'");
     updateTextBuffer(graphics, textItem, statusText);
     mat4x4 textTransform;
     // NOTE: ccVector's matnxnSet* methods start from a new identity matrix and overwrite the *entire* input matrix
     // NOTE: remember that the order of translate/rotate/scale matters (you probably want to scale first)
     mat4x4SetScale(textTransform, 1.0); // TODO: figure out how to resolve bleed from neighboring glyphs when scaling text mesh
-    mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
+    //mat4x4Translate(textTransform, (vec3){{-1.0, -1.0, 0.0}}); // Position in top-left corner
+    mat4x4Translate(textTransform, (vec3){{-0.5, 0.0, 0.0}}); // Position roughly in middle
     setTextTransform(&graphics->textRenderContext, textItem, textTransform);
     drawText(graphics);
 
@@ -551,8 +553,10 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
         htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.model, HTW_DRAW_TYPE_INSTANCED);
     }
 
-    // draw text overlays
-    //drawDebugText(graphics, ui);
+    if (ui->interfaceMode == BC_INTERFACE_MODE_SYSTEM_MENU) {
+        // draw text overlays
+        drawDebugText(graphics, ui);
+    }
 
     return 0;
 }

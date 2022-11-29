@@ -17,7 +17,7 @@
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void characterInspector(bc_Character *character);
 
-bc_EditorContext bc_initEditor(htw_VkContext *vkContext) {
+bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
     // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
@@ -45,7 +45,7 @@ bc_EditorContext bc_initEditor(htw_VkContext *vkContext) {
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
     bc_EditorContext newEditor = {
-        .isActive = true,
+        .isActive = isActiveAtStart,
         .vkContext = vkContext,
         .showDemoWindow = false,
     };

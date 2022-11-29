@@ -12,6 +12,10 @@ Basaltic supports these program parameters:
 
 - Use DIRECTORY as the working directory for game resources/assets/other data files. Default is one directory level up from where Basaltic is run (..)
 
+-e
+
+- Start with the editor (ImGui interface) enabled. By default the editor is disabled, and can be toggled with `/~
+
 By default Basaltic will launch to your game's main menu screen. These options allow changing startup behavior:
 
 -n SEED
