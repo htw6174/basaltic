@@ -4,7 +4,7 @@ project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-add_executable(basaltic main.c basaltic_logic.c basaltic_logicInputState.c basaltic_uiState.c basaltic_window.c basaltic_interaction.c basaltic_characters.c basaltic_editor.c)
+add_executable(basaltic main.c basaltic_super.c basaltic_logic.c basaltic_logicInputState.c basaltic_uiState.c basaltic_window.c basaltic_interaction.c basaltic_characters.c basaltic_editor.c)
 
 # Command for simultanious development of supporting library
 # Copy .c and .h files, and the CMakeLists files from the library directory into project directory

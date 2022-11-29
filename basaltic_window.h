@@ -182,7 +182,14 @@ typedef struct {
 } bc_GraphicsState;
 
 void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height);
-void bc_initWorldGraphics(bc_GraphicsState *graphics, bc_WorldState *world);
+/**
+ * @brief ...
+ *
+ * @param graphics GraphicsState initialized by initGraphics
+ * @param ui valid UiState
+ * @param world valid WorldState or NULL
+ * @return int
+ */
 int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world);
 void bc_endFrame(bc_GraphicsState *graphics);
 void bc_destroyGraphics(bc_GraphicsState *graphics);

@@ -38,6 +38,6 @@ typedef struct {
     bool isMovePending;
 } bc_LogicInputState;
 
-bc_LogicInputState *createLogicInputState();
+bc_LogicInputState *bc_createLogicInputState();
 
 #endif // BASALTIC_INPUTSTATE_H_INCLUDED

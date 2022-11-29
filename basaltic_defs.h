@@ -1,13 +1,29 @@
 #ifndef BASALTIC_DEFS_H_INCLUDED
 #define BASALTIC_DEFS_H_INCLUDED
 
+#include "htw_core.h"
+
+static const u32 bc_chunkSize = 64;
 
 typedef enum {
     BC_APPSTATE_STOPPED,
     BC_APPSTATE_RUNNING,
     BC_APPSTATE_PAUSED,
     BC_APPSTATE_BACKGROUND
-} BC_APPSTATE;
+} bc_AppState;
+
+typedef enum bc_StartupMode {
+    BC_STARTUP_MODE_MAINMENU,
+    BC_STARTUP_MODE_NEWGAME,
+    BC_STARTUP_MODE_LOADGAME,
+    BC_STARTUP_MODE_CONTINUEGAME
+} bc_StartupMode;
+
+typedef enum bc_InterfaceMode {
+    BC_INTERFACE_MODE_SYSTEM_MENU,
+    BC_INTERFACE_MODE_GAMEPLAY,
+    BC_INTERFACE_MODE_EDITOR
+} bc_InterfaceMode;
 
 typedef enum bc_TerrainVisibilityBitFlags {
     BC_TERRAIN_VISIBILITY_GEOMETRY =    0x00000001, // outline of cells and their topography (heightmap value)

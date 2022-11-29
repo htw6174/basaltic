@@ -99,33 +99,39 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
         igText("Press backquote (`/~) to toggle editor");
         igCheckbox("Demo Window", &editorContext->showDemoWindow);
 
-        igValue_Uint("Hovered chunk: ", ui->hoveredChunkIndex);
-        igValue_Uint("Hovered cell: ", ui->hoveredCellIndex);
+        if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
+            igValue_Uint("Hovered chunk: ", ui->hoveredChunkIndex);
+            igValue_Uint("Hovered cell: ", ui->hoveredCellIndex);
 
-        igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
+            igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
 
-        if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
-            if (igButton("Take control of random character", (ImVec2){0, 0})) {
-                u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
-                ui->activeCharacter = &world->characters[randCharacterIndex];
+            if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
+                if (igButton("Take control of random character", (ImVec2){0, 0})) {
+                    u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
+                    ui->activeCharacter = &world->characters[randCharacterIndex];
+                }
+
+                if (ui->activeCharacter != NULL) {
+                    characterInspector(ui->activeCharacter);
+                } else {
+                    igText("No active character");
+                }
             }
 
-            if (ui->activeCharacter != NULL) {
-                characterInspector(ui->activeCharacter);
-            } else {
-                igText("No active character");
+            if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
+                if (igButton("Enable All", (ImVec2){0, 0})) {
+                    graphics->worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
+                }
+                if (igButton("Disable All", (ImVec2){0, 0})) {
+                    graphics->worldInfo.visibilityOverrideBits = 0;
+                }
+                bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
+                bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
             }
-        }
-
-        if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
-            if (igButton("Enable All", (ImVec2){0, 0})) {
-                graphics->worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
+        } else {
+            if (igButton("Start new game", (ImVec2){0, 0})) {
+                ui->interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
             }
-            if (igButton("Disable All", (ImVec2){0, 0})) {
-                graphics->worldInfo.visibilityOverrideBits = 0;
-            }
-            bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
-            bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
         }
 
         igEnd();

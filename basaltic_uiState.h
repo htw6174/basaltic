@@ -2,6 +2,7 @@
 #define BASALTIC_UISTATE_H_INCLUDED
 
 #include "htw_core.h"
+#include "basaltic_defs.h"
 #include "basaltic_characters.h"
 
 typedef enum bc_CameraMode {
@@ -26,6 +27,7 @@ typedef struct bc_Mouse {
 } bc_Mouse;
 
 typedef struct bc_UiState {
+    bc_InterfaceMode interfaceMode;
     // camera
     bc_CameraMode cameraMode;
     float cameraDistance;

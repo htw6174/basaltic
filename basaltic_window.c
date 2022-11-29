@@ -7,6 +7,7 @@
 #include "htw_random.h"
 #include "htw_vulkan.h"
 #include "basaltic_window.h"
+#include "basaltic_defs.h"
 #include "basaltic_logicInputState.h"
 #include "basaltic_worldState.h"
 
@@ -49,8 +50,8 @@ static void freeTextPoolItem(bc_TextRenderContext *tc, bc_TextPoolItemHandle poo
 static void drawText(bc_GraphicsState *graphics);
 static void drawDebugText(bc_GraphicsState *graphics, bc_UiState *ui);
 
-static void initTerrainGraphics(bc_GraphicsState *graphics, bc_WorldState *world);
-static void createHexmapMesh(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain);
+static void initTerrainGraphics(bc_GraphicsState *graphics);
+static void createHexmapMesh(bc_GraphicsState *graphics, bc_HexmapTerrain *terrain);
 static void writeTerrainBuffers(bc_GraphicsState *graphics);
 //static void createHexmapTerrain(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain);
 static void updateHexmapDescriptors(bc_GraphicsState *graphics, bc_HexmapTerrain *terrain);
@@ -81,22 +82,10 @@ void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height) {
     graphics->windowInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
     graphics->feedbackInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
     graphics->worldInfoBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, sizeof(_bc_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
-}
 
-void bc_destroyGraphics(bc_GraphicsState *graphics) {
-    htw_destroyVkContext(graphics->vkContext);
-}
-
-htw_VkContext *createWindow(u32 width, u32 height) {
-    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, HTW_VK_WINDOW_FLAGS);
-    htw_VkContext *context = htw_createVkContext(sdlWindow);
-    return context;
-}
-
-void bc_initWorldGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
     initTextGraphics(graphics);
-    initTerrainGraphics(graphics, world);
+    initTerrainGraphics(graphics);
     initDebugGraphics(graphics);
 
     htw_finalizeBufferPool(graphics->vkContext, graphics->bufferPool);
@@ -119,14 +108,22 @@ void bc_initWorldGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
     };
 
     // initialize world info
-    graphics->worldInfo = (_bc_WorldInfo) {
+    graphics->worldInfo = (_bc_WorldInfo){
         .gridToWorld = (vec3){{1.0, 1.0, 0.2}},
         .timeOfDay = 0,
-        .totalWidth = world->worldWidth,
+        .totalWidth = 0,
         .visibilityOverrideBits = 0,
     };
+}
 
-    updateWorldInfoBuffer(graphics, world);
+void bc_destroyGraphics(bc_GraphicsState *graphics) {
+    htw_destroyVkContext(graphics->vkContext);
+}
+
+htw_VkContext *createWindow(u32 width, u32 height) {
+    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, HTW_VK_WINDOW_FLAGS);
+    htw_VkContext *context = htw_createVkContext(sdlWindow);
+    return context;
 }
 
 static void updateWindowInfoBuffer(bc_GraphicsState *graphics, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
@@ -141,6 +138,7 @@ static void updateWindowInfoBuffer(bc_GraphicsState *graphics, s32 mouseX, s32 m
 
 static void updateWorldInfoBuffer(bc_GraphicsState *graphics, bc_WorldState *world) {
     // TODO: update parts of this per simulation tick
+    graphics->worldInfo.totalWidth = world->worldWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
     htw_writeBuffer(graphics->vkContext, graphics->worldInfoBuffer, &graphics->worldInfo, sizeof(_bc_WorldInfo));
 }
@@ -402,13 +400,13 @@ static void drawDebugText(bc_GraphicsState *graphics, bc_UiState *ui) {
 //     drawText(graphics, allChars, (vec3){{-1280.f, 0.f, 0.f}});
 }
 
-static void initTerrainGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
+static void initTerrainGraphics(bc_GraphicsState *graphics) {
     graphics->surfaceTerrain.closestChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
     graphics->surfaceTerrain.loadedChunks = malloc(sizeof(u32) * MAX_VISIBLE_CHUNKS);
     for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
         graphics->surfaceTerrain.loadedChunks[i] = -1;
     }
-    createHexmapMesh(graphics, world, &graphics->surfaceTerrain);
+    createHexmapMesh(graphics, &graphics->surfaceTerrain);
     //createHexmapInstanceBuffers(graphics, world);
 }
 
@@ -483,13 +481,16 @@ static void updateDebugGraphics(bc_GraphicsState *graphics, bc_WorldState *world
 }
 
 int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world) {
-    updateWorldInfoBuffer(graphics, world);
 
-    // determine the indicies of chunks closest to the camera
-    u32 centerChunk = bc_getChunkIndexByWorldPosition(world, ui->cameraX, ui->cameraY);
-    updateHexmapVisibleChunks(graphics, world, &graphics->surfaceTerrain, centerChunk);
+    if (world != NULL) {
+        updateWorldInfoBuffer(graphics, world);
 
-    updateDebugGraphics(graphics, world);
+        // determine the indicies of chunks closest to the camera
+        u32 centerChunk = bc_getChunkIndexByWorldPosition(world, ui->cameraX, ui->cameraY);
+        updateHexmapVisibleChunks(graphics, world, &graphics->surfaceTerrain, centerChunk);
+
+        updateDebugGraphics(graphics, world);
+    }
 
     // translate camera parameters to uniform buffer info + projection and view matricies TODO: camera position interpolation, from current to target
     vec4 cameraPosition;
@@ -532,12 +533,14 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
-    drawHexmapChunks(graphics, world, &graphics->surfaceTerrain, &mvp);
+    if (world != NULL) {
+        drawHexmapChunks(graphics, world, &graphics->surfaceTerrain, &mvp);
 
-    // update ui with feedback info from shaders
-    htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
-    ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
-    ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
+        // update ui with feedback info from shaders
+        htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
+        ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
+        ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
+    }
 
     if (graphics->showCharacterDebug) {
         // draw character debug shapes
@@ -563,7 +566,7 @@ void bc_endFrame(bc_GraphicsState *graphics) {
  *
  * @param terrain
  */
-static void createHexmapMesh(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain) {
+static void createHexmapMesh(bc_GraphicsState *graphics, bc_HexmapTerrain *terrain) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -606,8 +609,8 @@ static void createHexmapMesh(bc_GraphicsState *graphics, bc_WorldState *world, b
     htw_allocateDescriptors(graphics->vkContext, terrain->chunkObjectLayout, MAX_VISIBLE_CHUNKS, terrain->chunkObjectDescriptorSets);
 
     // determine required size for vertex and triangle buffers
-    const u32 width = world->chunkWidth;
-    const u32 height = world->chunkHeight;
+    const u32 width = bc_chunkSize;
+    const u32 height = bc_chunkSize;
     const u32 cellCount = width * height;
     const u32 vertsPerCell = 7;
     // for connecting to adjacent chunks

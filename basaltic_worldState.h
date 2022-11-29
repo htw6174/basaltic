@@ -1,6 +1,7 @@
 #ifndef BASALTIC_WORLDSTATE_H_INCLUDED
 #define BASALTIC_WORLDSTATE_H_INCLUDED
 
+#include <math.h>
 #include "htw_geomap.h"
 #include "basaltic_characters.h"
 

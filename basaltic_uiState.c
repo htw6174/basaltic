@@ -2,6 +2,7 @@
 
 bc_UiState bc_createUiState() {
     bc_UiState newUi = {
+        .interfaceMode = BC_INTERFACE_MODE_SYSTEM_MENU,
         // camera
         .cameraMode = BC_CAMERA_MODE_PERSPECTIVE,
         .cameraDistance = 10,
