@@ -535,22 +535,24 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
     htw_bindDescriptorSet(graphics->vkContext, graphics->textRenderContext.textPipeline, graphics->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
-    if (world != NULL) {
-        drawHexmapChunks(graphics, world, &graphics->surfaceTerrain, &mvp);
+    if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
+        if (world != NULL) {
+            drawHexmapChunks(graphics, world, &graphics->surfaceTerrain, &mvp);
 
-        // update ui with feedback info from shaders
-        htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
-        ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
-        ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
-    }
+            // update ui with feedback info from shaders
+            htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
+            ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
+            ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
+        }
 
-    if (graphics->showCharacterDebug) {
-        // draw character debug shapes
-        mat4x4SetTranslation(mvp.m, (vec3){{0.0, 0.0, 0.0}});
-        htw_pushConstants(graphics->vkContext, graphics->characterDebug.pipeline, &mvp);
-        htw_bindPipeline(graphics->vkContext, graphics->characterDebug.pipeline);
-        htw_bindDescriptorSet(graphics->vkContext, graphics->characterDebug.pipeline, graphics->characterDebug.debugDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-        htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.model, HTW_DRAW_TYPE_INSTANCED);
+        if (graphics->showCharacterDebug) {
+            // draw character debug shapes
+            mat4x4SetTranslation(mvp.m, (vec3){{0.0, 0.0, 0.0}});
+            htw_pushConstants(graphics->vkContext, graphics->characterDebug.pipeline, &mvp);
+            htw_bindPipeline(graphics->vkContext, graphics->characterDebug.pipeline);
+            htw_bindDescriptorSet(graphics->vkContext, graphics->characterDebug.pipeline, graphics->characterDebug.debugDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
+            htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.model, HTW_DRAW_TYPE_INSTANCED);
+        }
     }
 
     if (ui->interfaceMode == BC_INTERFACE_MODE_SYSTEM_MENU) {

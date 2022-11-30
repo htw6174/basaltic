@@ -8,3 +8,7 @@ bc_LogicInputState *bc_createLogicInputState() {
     newState->isMovePending = false;
     return newState;
 }
+
+void bc_destroyLogicInputState(bc_LogicInputState *logicInput) {
+    free(logicInput);
+}

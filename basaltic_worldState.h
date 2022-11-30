@@ -5,6 +5,8 @@
 #include "htw_geomap.h"
 #include "basaltic_characters.h"
 
+#define BC_MAX_SEED_LENGTH 256
+
 typedef struct {
     htw_ValueMap *heightMap;
     htw_ValueMap *temperatureMap;
@@ -13,6 +15,8 @@ typedef struct {
 } bc_MapChunk;
 
 typedef struct {
+    u32 seed;
+    char *seedString;
     // Geography
     u32 chunkCountX, chunkCountY; // number of chunks along each axis
     u32 chunkWidth, chunkHeight; // dimensions of value maps in each chunk

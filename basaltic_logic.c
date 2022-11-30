@@ -1,3 +1,4 @@
+#include <string.h>
 #include <math.h>
 #include "htw_core.h"
 #include "htw_random.h"
@@ -9,14 +10,17 @@
 
 static void revealMap(bc_WorldState *world, bc_Character* character);
 
-bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWidth, u32 chunkHeight) {
+bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
     bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
+    newWorld->seedString = calloc(BC_MAX_SEED_LENGTH, sizeof(char));
+    strcpy(newWorld->seedString, seedString);
+    newWorld->seed = xxh_hash(0, BC_MAX_SEED_LENGTH, (u8*)newWorld->seedString);
     newWorld->chunkCountX = chunkCountX;
     newWorld->chunkCountY = chunkCountY;
-    newWorld->chunkWidth = chunkWidth;
-    newWorld->chunkHeight = chunkHeight;
-    newWorld->worldWidth = chunkCountX * chunkWidth;
-    newWorld->worldHeight = chunkCountY * chunkHeight;
+    newWorld->chunkWidth = bc_chunkSize; // TODO: remove chunk dimensions from world state
+    newWorld->chunkHeight = bc_chunkSize;
+    newWorld->worldWidth = chunkCountX * bc_chunkSize;
+    newWorld->worldHeight = chunkCountY * bc_chunkSize;
 
     newWorld->characterPoolSize = CHARACTER_POOL_SIZE;
     return newWorld;
@@ -36,13 +40,13 @@ int bc_initializeWorldState(bc_WorldState *world) {
             s32 cellPosX = x * width;
             s32 cellPosY = y * height;
             chunk->heightMap = htw_geo_createValueMap(width, height, 64);
-            htw_geo_fillPerlin(chunk->heightMap, 6174, 6, cellPosX, cellPosY, 0.05);
+            htw_geo_fillPerlin(chunk->heightMap, world->seed, 6, cellPosX, cellPosY, 0.05);
 
             chunk->temperatureMap = htw_geo_createValueMap(width, height, world->chunkCountY * height);
             htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
 
             chunk->rainfallMap = htw_geo_createValueMap(width, height, 255);
-            htw_geo_fillPerlin(chunk->rainfallMap, 8, 2, cellPosX, cellPosY, 0.1);
+            htw_geo_fillPerlin(chunk->rainfallMap, world->seed, 2, cellPosX, cellPosY, 0.1);
 
             chunk->visibilityMap = htw_geo_createValueMap(width, height, UINT32_MAX);
             //htw_geo_fillChecker(chunk->visibilityMap, 0, 1, 4);
@@ -84,6 +88,11 @@ int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
     }
 
     return 0;
+}
+
+void bc_destroyWorldState(bc_WorldState *world) {
+    free(world->seedString);
+    free(world);
 }
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?

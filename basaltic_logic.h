@@ -8,8 +8,9 @@
 // TODO: constant or world creation parameter?
 #define CHARACTER_POOL_SIZE 1024
 
-bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, u32 chunkWidth, u32 chunkHeight);
+bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString);
 int bc_initializeWorldState(bc_WorldState *world);
 int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world);
+void bc_destroyWorldState(bc_WorldState *world);
 
 #endif // BASALTIC_LOGIC_H_INCLUDED

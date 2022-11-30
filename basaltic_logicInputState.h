@@ -39,5 +39,6 @@ typedef struct {
 } bc_LogicInputState;
 
 bc_LogicInputState *bc_createLogicInputState();
+void bc_destroyLogicInputState(bc_LogicInputState *logicInput);
 
 #endif // BASALTIC_INPUTSTATE_H_INCLUDED

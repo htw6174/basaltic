@@ -2,8 +2,9 @@
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_vulkan.h"
-#include "basaltic_defs.h"
 #include "basaltic_editor.h"
+#include "basaltic_defs.h"
+#include "basaltic_super.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
 #include "basaltic_characters.h"
@@ -100,8 +101,14 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
         igCheckbox("Demo Window", &editorContext->showDemoWindow);
 
         if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
+            if (igButton("Exit game without saving", (ImVec2){0, 0})) {
+                bc_requestGameStop();
+            }
+
             igValue_Uint("Hovered chunk: ", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell: ", ui->hoveredCellIndex);
+            igText("Seed string: %s", world->seedString);
+            igValue_Uint("World seed", world->seed);
 
             igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
 
@@ -129,8 +136,12 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
                 bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
             }
         } else {
+            static char newGameSeed[BC_MAX_SEED_LENGTH];
+            igText("World generation seed:");
+            igInputText("##seedInput", newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
             if (igButton("Start new game", (ImVec2){0, 0})) {
                 ui->interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
+                bc_startNewGame(newGameSeed);
             }
         }
 

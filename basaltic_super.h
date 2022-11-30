@@ -27,5 +27,7 @@ int bc_startEngine(bc_StartupSettings startSettings);
 void bc_startNewGame(char *seed);
 void bc_loadGame(char *path);
 void bc_continueGame();
+void bc_requestGameStop();
+void bc_requestProcessStop();
 
 #endif // BASALTIC_SUPER_H_INCLUDED

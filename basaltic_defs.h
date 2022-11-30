@@ -6,11 +6,11 @@
 static const u32 bc_chunkSize = 64;
 
 typedef enum {
-    BC_APPSTATE_STOPPED,
-    BC_APPSTATE_RUNNING,
-    BC_APPSTATE_PAUSED,
-    BC_APPSTATE_BACKGROUND
-} bc_AppState;
+    BC_PROCESS_STATE_STOPPED,
+    BC_PROCESS_STATE_RUNNING,
+    BC_PROCESS_STATE_PAUSED,
+    BC_PROCESS_STATE_BACKGROUND
+} bc_ProcessState;
 
 typedef enum bc_StartupMode {
     BC_STARTUP_MODE_MAINMENU,
