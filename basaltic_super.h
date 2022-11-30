@@ -29,5 +29,6 @@ void bc_loadGame(char *path);
 void bc_continueGame();
 void bc_requestGameStop();
 void bc_requestProcessStop();
+bool bc_isGameRunning();
 
 #endif // BASALTIC_SUPER_H_INCLUDED

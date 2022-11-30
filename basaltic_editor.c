@@ -15,6 +15,8 @@
 #include "cimgui/cimgui.h"
 #include"cimgui/cimgui_impl.h"
 
+static bool gameRestarting = false;
+
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void characterInspector(bc_Character *character);
 
@@ -100,6 +102,15 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
         igText("Press backquote (`/~) to toggle editor");
         igCheckbox("Demo Window", &editorContext->showDemoWindow);
 
+        static char newGameSeed[BC_MAX_SEED_LENGTH];
+        igText("World generation seed:");
+        igInputText("##seedInput", newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+
+        if (igButton("Start new game", (ImVec2){0, 0})) {
+            bc_requestGameStop();
+            gameRestarting = true;
+        }
+
         if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
             if (igButton("Exit game without saving", (ImVec2){0, 0})) {
                 bc_requestGameStop();
@@ -135,13 +146,13 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
                 bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
                 bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
             }
-        } else {
-            static char newGameSeed[BC_MAX_SEED_LENGTH];
-            igText("World generation seed:");
-            igInputText("##seedInput", newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
-            if (igButton("Start new game", (ImVec2){0, 0})) {
+        }
+
+        if (gameRestarting == true) {
+            if (bc_isGameRunning() == false) {
                 ui->interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
                 bc_startNewGame(newGameSeed);
+                gameRestarting = false;
             }
         }
 

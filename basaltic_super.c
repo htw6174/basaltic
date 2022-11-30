@@ -19,7 +19,7 @@ typedef struct {
 static volatile bc_ProcessState appState = BC_PROCESS_STATE_STOPPED;
 static volatile bc_ProcessState logicThreadState = BC_PROCESS_STATE_STOPPED;
 
-static SDL_Thread *gameplayThread = NULL;
+static SDL_Thread *logicThread = NULL;
 
 static bc_EngineSettings *engineConfig = NULL;
 static bc_LogicInputState *logicInput = NULL;
@@ -89,7 +89,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         bc_endFrame(&graphics);
 
         // if game loop has ended, wait for thread to stop and free resources
-        if (gameplayThread != NULL && logicThreadState == BC_PROCESS_STATE_STOPPED) {
+        if (logicThread != NULL && logicThreadState == BC_PROCESS_STATE_STOPPED) {
             // TODO: need a better standard for how interface modes will change as the game starts and stops. Right now is spread between _super and _editor. Should also have more null checking when referencing world or logic input state, as these will frequently be NULL
             ui.interfaceMode = BC_INTERFACE_MODE_SYSTEM_MENU;
             endGame();
@@ -104,9 +104,9 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         graphics.frame++;
     }
 
-    // TODO: repeated here just to be safe
+    // repeated here just to be safe
     // if game loop has ended, wait for thread to stop and free resources
-    if (gameplayThread != NULL) {
+    if (logicThread != NULL) {
         logicThreadState = BC_PROCESS_STATE_STOPPED;
         endGame();
     }
@@ -160,18 +160,18 @@ void startGame() {
         .world = world,
         .interval = tickInterval,
         .threadState = &logicThreadState};
-    gameplayThread = SDL_CreateThread(logicLoop, "logic", logicLoopParams);
+    logicThread = SDL_CreateThread(logicLoop, "logic", logicLoopParams);
 }
 
 void endGame() {
     int gameplayThreadResult;
-    SDL_WaitThread(gameplayThread, &gameplayThreadResult);
+    SDL_WaitThread(logicThread, &gameplayThreadResult);
     // TODO: reset uiState that references world data
     bc_destroyLogicInputState(logicInput);
     logicInput = NULL;
     bc_destroyWorldState(world);
     world = NULL;
-    gameplayThread = NULL;
+    logicThread = NULL;
 }
 
 void bc_startNewGame(char *seed) {
@@ -198,4 +198,8 @@ void bc_requestGameStop() {
 void bc_requestProcessStop() {
     appState = BC_PROCESS_STATE_STOPPED;
     logicThreadState = BC_PROCESS_STATE_STOPPED;
+}
+
+bool bc_isGameRunning() {
+    return (logicThreadState != BC_PROCESS_STATE_STOPPED) || (logicThread != NULL);
 }
