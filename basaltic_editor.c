@@ -111,7 +111,7 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
             gameRestarting = true;
         }
 
-        if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
+        if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY && world != NULL) {
             if (igButton("Exit game without saving", (ImVec2){0, 0})) {
                 bc_requestGameStop();
             }

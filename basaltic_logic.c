@@ -17,8 +17,6 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     newWorld->seed = xxh_hash(0, BC_MAX_SEED_LENGTH, (u8*)newWorld->seedString);
     newWorld->chunkCountX = chunkCountX;
     newWorld->chunkCountY = chunkCountY;
-    newWorld->chunkWidth = bc_chunkSize; // TODO: remove chunk dimensions from world state
-    newWorld->chunkHeight = bc_chunkSize;
     newWorld->worldWidth = chunkCountX * bc_chunkSize;
     newWorld->worldHeight = chunkCountY * bc_chunkSize;
 
@@ -28,8 +26,8 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
 int bc_initializeWorldState(bc_WorldState *world) {
     // World generation
-    u32 width = world->chunkWidth;
-    u32 height = world->chunkHeight;
+    u32 width = bc_chunkSize;
+    u32 height = bc_chunkSize;
     u32 chunkCount = world->chunkCountX * world->chunkCountY;
     // TODO: single malloc for all world data, get offset of each array
     world->chunks = malloc(sizeof(bc_MapChunk) * chunkCount);
@@ -71,7 +69,7 @@ int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
 
     if (input->isEditPending) {
         bc_MapEditAction action = input->currentEdit;
-        htw_geo_GridCoord gridCoord = htw_geo_indexToGridCoord(action.cellIndex, world->chunkWidth);
+        htw_geo_GridCoord gridCoord = htw_geo_indexToGridCoord(action.cellIndex, bc_chunkSize);
         u32 chunkIndex = action.chunkIndex;
         s32 currentValue = htw_geo_getMapValue(world->chunks[chunkIndex].heightMap, gridCoord);
         htw_geo_setMapValue(world->chunks[chunkIndex].heightMap, gridCoord, currentValue + action.value);

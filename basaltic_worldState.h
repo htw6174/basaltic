@@ -19,7 +19,6 @@ typedef struct {
     char *seedString;
     // Geography
     u32 chunkCountX, chunkCountY; // number of chunks along each axis
-    u32 chunkWidth, chunkHeight; // dimensions of value maps in each chunk
     u32 worldWidth, worldHeight; // total world dimensions
     bc_MapChunk *chunks;
     // Characters
@@ -47,8 +46,8 @@ static u32 bc_getChunkIndexByChunkCoordinates(bc_WorldState *world, htw_geo_Grid
 
 static u32 bc_getChunkIndexByWorldCoordinates(bc_WorldState *world, htw_geo_GridCoord worldCoord) {
     htw_geo_GridCoord chunkCoord = {
-        .x = worldCoord.x / world->chunkWidth,
-        .y = worldCoord.y / world->chunkHeight
+        .x = worldCoord.x / bc_chunkSize,
+        .y = worldCoord.y / bc_chunkSize
     };
     return bc_getChunkIndexByChunkCoordinates(world, chunkCoord);
 }
@@ -59,8 +58,8 @@ static u32 bc_getChunkIndexByWorldPosition(bc_WorldState *world, float worldX, f
     float deskewedX = worldX - (deskewedY * 0.5);
     // convert to chunk grid coordinates
     htw_geo_GridCoord chunkCoord = {
-        .x = floorf(deskewedX / world->chunkWidth),
-        .y = floorf(deskewedY / world->chunkHeight)
+        .x = floorf(deskewedX / bc_chunkSize),
+        .y = floorf(deskewedY / bc_chunkSize)
     };
     return bc_getChunkIndexByChunkCoordinates(world, chunkCoord);
 }
@@ -81,20 +80,20 @@ static void bc_gridCoordinatesToChunkAndCell(bc_WorldState *world, htw_geo_GridC
         .y = *chunkIndex / world->chunkCountX
     };
     htw_geo_GridCoord cellCoord = {
-        .x = worldCoord.x - (chunkCoord.x * world->chunkWidth),
-        .y = worldCoord.y - (chunkCoord.y * world->chunkHeight)
+        .x = worldCoord.x - (chunkCoord.x * bc_chunkSize),
+        .y = worldCoord.y - (chunkCoord.y * bc_chunkSize)
     };
-    *cellIndex = cellCoord.x + (cellCoord.y * world->chunkWidth);
+    *cellIndex = cellCoord.x + (cellCoord.y * bc_chunkSize);
 }
 
 static htw_geo_GridCoord bc_chunkAndCellToWorldCoordinates(bc_WorldState *world, u32 chunkIndex, u32 cellIndex) {
     u32 chunkX = chunkIndex % world->chunkCountX;
     u32 chunkY = chunkIndex / world->chunkCountX;
-    u32 cellX = cellIndex % world->chunkWidth;
-    u32 cellY = cellIndex / world->chunkWidth;
+    u32 cellX = cellIndex % bc_chunkSize;
+    u32 cellY = cellIndex / bc_chunkSize;
     htw_geo_GridCoord worldCoord = {
-        .x = (chunkX * world->chunkWidth) + cellX,
-        .y = (chunkY * world->chunkHeight) + cellY
+        .x = (chunkX * bc_chunkSize) + cellX,
+        .y = (chunkY * bc_chunkSize) + cellY
     };
     return worldCoord;
 }
@@ -102,8 +101,8 @@ static htw_geo_GridCoord bc_chunkAndCellToWorldCoordinates(bc_WorldState *world,
 static void bc_getChunkRootPosition(bc_WorldState *world, u32 chunkIndex, float *worldX, float *worldY) {
     u32 chunkX = chunkIndex % world->chunkCountX;
     u32 chunkY = chunkIndex / world->chunkCountY;
-    s32 gridX = chunkX * world->chunkWidth;
-    s32 gridY = chunkY * world->chunkHeight;
+    s32 gridX = chunkX * bc_chunkSize;
+    s32 gridY = chunkY * bc_chunkSize;
     htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){gridX, gridY}, worldX, worldY);
 }
 

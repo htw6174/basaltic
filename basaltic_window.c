@@ -1101,8 +1101,8 @@ static void drawHexmapChunks(bc_GraphicsState *graphics, bc_WorldState *world, b
 }
 
 static void updateHexmapDataBuffer (bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
-    const u32 width = world->chunkWidth;
-    const u32 height = world->chunkHeight;
+    const u32 width = bc_chunkSize;
+    const u32 height = bc_chunkSize;
     bc_MapChunk *chunk = &world->chunks[chunkIndex];
 
     size_t subBufferOffset = subBufferIndex * terrain->terrainBuffer.subBufferHostSize;
