@@ -144,6 +144,9 @@ void bc_destroyWorldState(bc_WorldState *world) {
 }
 
 int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue) {
+    if (bc_commandQueueIsEmpty(inputQueue)) {
+        return 0;
+    }
     if (bc_transferCommandQueue(logic->processingQueue, inputQueue)) {
         bc_WorldInputCommand *commands;
         u32 itemsInQueue = bc_beginQueueProcessing(logic->processingQueue, &commands);
@@ -161,7 +164,8 @@ int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQu
                     logic->autoStep = false;
                     break;
                 case BC_COMMAND_TYPE_CHARACTER_MOVE:
-
+                    // TODO: set character destination
+                    break;
                 default:
                     fprintf(stderr, "ERROR: invalid command type %i", currentCommand.commandType);
                     break;
@@ -175,6 +179,47 @@ int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQu
 
 static void doWorldStep(bc_WorldState *world) {
     // TODO: all the rest
+
+    // Stress TEST: do something with an area around every character, every frame
+    // for 1024 characters with sight range 4, this is 38k updates
+    // for (int i = 0; i < world->characterPoolSize; i++) {
+    //     // runs at 160-190 tps
+    //     revealMap(world, &world->characters[i]);
+    // }
+
+    // Stress TEST: do something with every tile, every frame
+    // on an 8x8 chunk world, this is 262k updates
+    u32 chunkCount = world->chunkCountX * world->chunkCountY;
+    u32 cellsPerChunk = bc_chunkSize * bc_chunkSize;
+    for (int c = 0; c < chunkCount; c++) {
+        htw_ValueMap *heightMap = world->chunks[c].heightMap;
+        for (int i = 0; i < cellsPerChunk; i++) {
+            s32 currentValue = htw_geo_getMapValueByIndex(heightMap, i);
+            // With worldCoord lookup: ~60 tps
+            // Without worldCoord lookup: ~140 tps
+            htw_geo_GridCoord worldCoord = bc_chunkAndCellToWorldCoordinates(world, c, i);
+
+            // running this block drops tps to *6*
+            // Not unexpected considering all the conversions, lookups across chunk boundaries, and everything being unoptimized
+            // Also this jumps from 262k valueMap lookups to 1.8m, more than 10m checked per second
+            htw_geo_CubeCoord cubeHere = htw_geo_gridToCubeCoord(worldCoord);
+            s32 neighborAverage = 0;
+            for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
+                htw_geo_CubeCoord cubeNeighbor = htw_geo_addCubeCoords(cubeHere, htw_geo_cubeDirections[d]);
+                htw_geo_GridCoord gridNeighbor = htw_geo_cubeToGridCoord(cubeNeighbor);
+                u32 chunkHere, cellHere;
+                bc_gridCoordinatesToChunkAndCell(world, gridNeighbor, &chunkHere, &cellHere);
+                neighborAverage += htw_geo_getMapValueByIndex(world->chunks[chunkHere].heightMap, cellHere);
+            }
+            neighborAverage /= HEX_DIRECTION_COUNT;
+            s32 erosion = lerp_int(currentValue, neighborAverage, 0.2);
+            htw_geo_setMapValueByIndex(heightMap, i, erosion);
+
+            //s32 wave = sin(world->step / 20) * 2.0;
+            //htw_geo_setMapValueByIndex(heightMap, i, currentValue + wave);
+        }
+    }
+
     world->step++;
 }
 
@@ -192,7 +237,7 @@ static void revealMap(bc_WorldState *world, bc_Character* character) {
     htw_geo_CubeCoord relativeCoord = {0, 0, 0};
 
     // get number of cells to check based on character's attributes
-    u32 sightRange = 4;
+    u32 sightRange = 6;
     u32 detailRange = sightRange - 1;
     u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
     u32 cellsInDetailRange = htw_geo_getHexArea(detailRange);
@@ -202,7 +247,7 @@ static void revealMap(bc_WorldState *world, bc_Character* character) {
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         u32 chunkIndex, cellIndex;
-        bc_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex); // FIXME: need to do bounds checking at some point in the chain here
+        bc_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex);
         htw_ValueMap *visibilityMap = world->chunks[chunkIndex].visibilityMap;
 
         bc_TerrainVisibilityBitFlags cellVisibility = 0;

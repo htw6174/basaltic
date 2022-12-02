@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdbool.h>
 #include "htw_core.h"
 #include "htw_random.h"
@@ -5,6 +6,7 @@
 #include "basaltic_editor.h"
 #include "basaltic_defs.h"
 #include "basaltic_super.h"
+#include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
 #include "basaltic_commandQueue.h"
@@ -52,6 +54,11 @@ bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
         .isActive = isActiveAtStart,
         .vkContext = vkContext,
         .showDemoWindow = false,
+        .maxFrameDuration = 0,
+        .maxStepsPerSecond = 0,
+        .frameDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
+        .tickDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
+        .worldStepsPerSecond = calloc(bc_frameHistoryLength, sizeof(float)),
     };
 
     return newEditor;
@@ -88,7 +95,7 @@ void bc_handleEditorInputEvents(bc_EditorContext *editorContext, SDL_Event *e) {
     }
 }
 
-void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world, bc_CommandQueue worldInputQueue) {
+void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world, bc_CommandQueue worldInputQueue) {
     if (editorContext->isActive) {
         // imgui
         ImGui_ImplVulkan_NewFrame();
@@ -174,6 +181,24 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
                 gameRestarting = false;
             }
         }
+
+        igEnd();
+
+        igBegin("Performance", NULL, 0);
+
+        u64 frameMod = (graphics->frame - 1) % bc_frameHistoryLength; // Need to get info for previous frame because current frame time hasn't been recorded yet
+        float lastFrameDuration = (float)superInfo->frameDurations[frameMod] / 1000.0;
+        editorContext->maxFrameDuration = fmaxf(editorContext->maxFrameDuration, lastFrameDuration);
+        editorContext->frameDurationHistory[frameMod] = lastFrameDuration;
+        igPlotLines_FloatPtr("Frame time", editorContext->frameDurationHistory, bc_frameHistoryLength, frameMod, "", 0.0, editorContext->maxFrameDuration, (ImVec2){0, 0}, sizeof(float));
+
+        u64 lastWorldStep = superInfo->worldStepHistory[frameMod];
+        u64 previousSecondFrameMod = (graphics->frame - 61) % bc_frameHistoryLength;
+        u64 previousSecondWorldStep = superInfo->worldStepHistory[previousSecondFrameMod];
+        float stepsInLastSecond = (float)(lastWorldStep - previousSecondWorldStep);
+        editorContext->maxStepsPerSecond = fmaxf(editorContext->maxStepsPerSecond, stepsInLastSecond);
+        editorContext->worldStepsPerSecond[frameMod] = stepsInLastSecond;
+        igPlotLines_FloatPtr("Steps per second", editorContext->worldStepsPerSecond, bc_frameHistoryLength, frameMod, "", 0.0, editorContext->maxStepsPerSecond, (ImVec2){0, 0}, sizeof(float));
 
         igEnd();
 

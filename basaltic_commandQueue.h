@@ -33,6 +33,8 @@ typedef struct private_bc_CommandQueue* bc_CommandQueue;
 bc_CommandQueue bc_createCommandQueue(u32 maxQueueSize);
 void bc_destroyCommandQueue(bc_CommandQueue commandQueue);
 
+bool bc_commandQueueIsEmpty(bc_CommandQueue commandQueue);
+
 /**
  * @brief Attempt to add command to the end of commandQueue. Will wait for commandQueue to be unlocked, and lock the queue while adding command
  *

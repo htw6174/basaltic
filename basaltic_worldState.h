@@ -76,6 +76,10 @@ static u32 bc_getChunkIndexAtOffset(bc_WorldState *world, u32 startingChunk, htw
 }
 
 static void bc_gridCoordinatesToChunkAndCell(bc_WorldState *world, htw_geo_GridCoord worldCoord, u32 *chunkIndex, u32 *cellIndex) {
+    worldCoord.x += world->worldWidth;
+    worldCoord.x %= world->worldWidth;
+    worldCoord.y = max_int(0, min_int(worldCoord.y, world->worldWidth));
+
     *chunkIndex = bc_getChunkIndexByWorldCoordinates(world, worldCoord);
     htw_geo_GridCoord chunkCoord = {
         .x = *chunkIndex % world->chunkCountX,

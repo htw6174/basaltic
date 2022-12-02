@@ -4,10 +4,8 @@
 #include <stdbool.h>
 #include "htw_core.h"
 #include "basaltic_defs.h"
-#include "basaltic_logic.h"
-#include "basaltic_window.h"
-#include "basaltic_interaction.h"
-#include "basaltic_editor.h"
+
+static const u32 bc_frameHistoryLength = 300;
 
 typedef struct {
     bc_StartupMode startupMode;
@@ -21,6 +19,13 @@ typedef struct {
     u32 frameRateLimit; // Max rendering fps
     u32 tickRateLimit; // Max number of logic ticks per second (tps)
 } bc_EngineSettings;
+
+typedef struct {
+    // TODO: there is already a frame counter defined in graphicsState; move here, redefine here, or leave as-is?
+    u64 *frameDurations;
+    u64 *tickDurations;
+    u64 *worldStepHistory;
+} bc_SuperInfo;
 
 int bc_startEngine(bc_StartupSettings startSettings);
 

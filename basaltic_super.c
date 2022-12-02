@@ -16,6 +16,8 @@ static volatile bc_ProcessState logicThreadState = BC_PROCESS_STATE_STOPPED;
 static SDL_Thread *logicThread = NULL;
 
 static bc_EngineSettings *engineConfig = NULL;
+static bc_SuperInfo *superInfo = NULL;
+
 static bc_LogicInputState *logicInput = NULL;
 static bc_WorldState *world = NULL;
 static bc_CommandQueue worldInputQueue;
@@ -31,6 +33,11 @@ int bc_startEngine(bc_StartupSettings startSettings) {
 
     // TODO: load config from configurable path
     loadEngineConfig("does nothing right now");
+
+    superInfo = calloc(1, sizeof(bc_SuperInfo));
+    superInfo->frameDurations = calloc(bc_frameHistoryLength, sizeof(superInfo->frameDurations[0]));
+    superInfo->tickDurations = calloc(bc_frameHistoryLength, sizeof(superInfo->tickDurations[0]));
+    superInfo->worldStepHistory = calloc(bc_frameHistoryLength, sizeof(superInfo->worldStepHistory[0]));
 
     u32 frameInterval = 1000 / engineConfig->frameRateLimit;
 
@@ -79,7 +86,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         bc_processInputState(&ui, logicInput, passthroughMouse, passthroughKeyboard);
 
         bc_drawFrame(&graphics, &ui, world);
-        bc_drawEditor(&editorContext, &graphics, &ui, world, worldInputQueue);
+        bc_drawEditor(&editorContext, superInfo, &graphics, &ui, world, worldInputQueue);
         bc_endFrame(&graphics);
 
         // if game loop has ended, wait for thread to stop and free resources
@@ -92,6 +99,11 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
         Uint64 duration = endTime - startTime;
+        u64 frameMod = graphics.frame % bc_frameHistoryLength;
+        superInfo->frameDurations[frameMod] = duration;
+        if (world != NULL) {
+            superInfo->worldStepHistory[frameMod] = world->step;
+        }
         if (duration < frameInterval) {
             SDL_Delay(frameInterval - duration);
         }
@@ -114,8 +126,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
 void loadEngineConfig(char *path) {
     engineConfig = calloc(1, sizeof(bc_EngineSettings));
      *engineConfig = (bc_EngineSettings){
-        .frameRateLimit = 60,
-        .tickRateLimit = 300,
+        .frameRateLimit = 60, // TODO: figure out why changing this doesn't increase framerate above 60
+        .tickRateLimit = 1000000,
     };
 }
 

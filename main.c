@@ -9,7 +9,6 @@
 #include "basaltic_defs.h"
 #include "basaltic_super.h"
 #include "htw_core.h"
-#include "htw_vulkan.h"
 
 bc_StartupSettings parseArgs(int argc, char *argv[]);
 

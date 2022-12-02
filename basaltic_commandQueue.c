@@ -28,6 +28,10 @@ void bc_destroyCommandQueue(bc_CommandQueue commandQueue) {
     SDL_DestroyMutex(holdLock);
 }
 
+bool bc_commandQueueIsEmpty(bc_CommandQueue commandQueue) {
+    return commandQueue->itemsInQueue == 0;
+}
+
 bool bc_pushCommandToQueue(bc_CommandQueue commandQueue, bc_WorldInputCommand command) {
     SDL_LockMutex(commandQueue->lock);
     if (commandQueue->itemsInQueue == commandQueue->maxQueueSize) {
