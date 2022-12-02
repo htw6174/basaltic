@@ -4,6 +4,7 @@
 #include "htw_core.h"
 
 static const u32 bc_chunkSize = 64;
+static const u32 bc_commandQueueMaxSize = 256;
 
 typedef enum {
     BC_PROCESS_STATE_STOPPED,

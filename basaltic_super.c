@@ -1,4 +1,5 @@
 
+#include <SDL2/SDL.h>
 #include "htw_core.h"
 #include "basaltic_defs.h"
 #include "basaltic_super.h"
@@ -6,13 +7,6 @@
 #include "basaltic_window.h"
 #include "basaltic_interaction.h"
 #include "basaltic_editor.h"
-
-typedef struct {
-    bc_LogicInputState *logicInput;
-    bc_WorldState *world;
-    Uint32 interval;
-    volatile bc_ProcessState *threadState;
-} LogicThreadInput;
 
 // Must indicate where used that the value of this is volatile, as it may get updated by another thread
 // NOTE: `volatile int *foo` -> pointer to the volatile int foo, while `int *volatile foo` -> volatile pointer to NON-volatile int foo
@@ -24,14 +18,12 @@ static SDL_Thread *logicThread = NULL;
 static bc_EngineSettings *engineConfig = NULL;
 static bc_LogicInputState *logicInput = NULL;
 static bc_WorldState *world = NULL;
+static bc_CommandQueue worldInputQueue;
 
 void loadEngineConfig(char *path);
 void startGame();
 void endGame();
-// started as a seperate thread by SDL
-int logicLoop(void *ptr);
 
-// TODO: create logic thread inside the main loop
 int bc_startEngine(bc_StartupSettings startSettings) {
 
     appState = BC_PROCESS_STATE_RUNNING;
@@ -47,6 +39,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     bc_GraphicsState graphics;
     bc_initGraphics(&graphics, 1280, 720);
     bc_EditorContext editorContext = bc_initEditor(startSettings.enableEditor, graphics.vkContext);
+
+    worldInputQueue = bc_createCommandQueue(bc_commandQueueMaxSize);
 
     // launch game according to startupMode
     switch (startSettings.startupMode) {
@@ -85,7 +79,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         bc_processInputState(&ui, logicInput, passthroughMouse, passthroughKeyboard);
 
         bc_drawFrame(&graphics, &ui, world);
-        bc_drawEditor(&editorContext, &graphics, &ui, world);
+        bc_drawEditor(&editorContext, &graphics, &ui, world, worldInputQueue);
         bc_endFrame(&graphics);
 
         // if game loop has ended, wait for thread to stop and free resources
@@ -117,29 +111,6 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     return 0;
 }
 
-int logicLoop(void *ptr) { // TODO: can this be a specific input type? If so, change to LogicLoopInput*
-    // Extract input data
-    LogicThreadInput *loopInput = (LogicThreadInput *)ptr;
-    bc_LogicInputState *input = loopInput->logicInput;
-    bc_WorldState *world = loopInput->world;
-    Uint32 interval = loopInput->interval;
-    volatile bc_ProcessState *threadState = loopInput->threadState;
-
-    while (*threadState == BC_PROCESS_STATE_RUNNING) {
-        Uint64 startTime = SDL_GetTicks64();
-
-        bc_simulateWorld(input, world);
-
-        // delay until end of frame
-        Uint64 endTime = SDL_GetTicks64();
-        Uint64 duration = endTime - startTime;
-        if (duration < interval) {
-            SDL_Delay(interval - duration);
-        }
-    }
-    return 0;
-}
-
 void loadEngineConfig(char *path) {
     engineConfig = calloc(1, sizeof(bc_EngineSettings));
      *engineConfig = (bc_EngineSettings){
@@ -154,13 +125,13 @@ void startGame() {
     u32 tickInterval = 1000 / engineConfig->tickRateLimit;
 
     // NOTE: remember to put anything being passed to another thread on the heap
-    LogicThreadInput *logicLoopParams = malloc(sizeof(LogicThreadInput));
-    *logicLoopParams = (LogicThreadInput){
-        .logicInput = logicInput,
+    bc_LogicThreadInput *logicLoopParams = malloc(sizeof(bc_LogicThreadInput));
+    *logicLoopParams = (bc_LogicThreadInput){
         .world = world,
+        .inputQueue = worldInputQueue,
         .interval = tickInterval,
         .threadState = &logicThreadState};
-    logicThread = SDL_CreateThread(logicLoop, "logic", logicLoopParams);
+    logicThread = SDL_CreateThread(bc_runLogicThread, "logic", logicLoopParams);
 }
 
 void endGame() {

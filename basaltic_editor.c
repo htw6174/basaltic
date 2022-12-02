@@ -7,6 +7,7 @@
 #include "basaltic_super.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
+#include "basaltic_commandQueue.h"
 #include "basaltic_characters.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -87,7 +88,7 @@ void bc_handleEditorInputEvents(bc_EditorContext *editorContext, SDL_Event *e) {
     }
 }
 
-void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world) {
+void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world, bc_CommandQueue worldInputQueue) {
     if (editorContext->isActive) {
         // imgui
         ImGui_ImplVulkan_NewFrame();
@@ -120,6 +121,23 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
             igValue_Uint("Hovered cell: ", ui->hoveredCellIndex);
             igText("Seed string: %s", world->seedString);
             igValue_Uint("World seed", world->seed);
+            igValue_Uint("Logic step", world->step);
+            // TODO: convert step to date and time (1 step/hour)
+
+            bc_WorldInputCommand reusedCommand = {0};
+
+            if (igButton("Advance logic step", (ImVec2){0, 0})) {
+                reusedCommand.commandType = BC_COMMAND_TYPE_STEP_ADVANCE;
+                bc_pushCommandToQueue(worldInputQueue, reusedCommand);
+            }
+            if (igButton("Start auto step", (ImVec2){0, 0})) {
+                reusedCommand.commandType = BC_COMMAND_TYPE_STEP_PLAY;
+                bc_pushCommandToQueue(worldInputQueue, reusedCommand);
+            }
+            if (igButton("Stop auto step", (ImVec2){0, 0})) {
+                reusedCommand.commandType = BC_COMMAND_TYPE_STEP_PAUSE;
+                bc_pushCommandToQueue(worldInputQueue, reusedCommand);
+            }
 
             igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
 
@@ -127,6 +145,7 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, 
                 if (igButton("Take control of random character", (ImVec2){0, 0})) {
                     u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
                     ui->activeCharacter = &world->characters[randCharacterIndex];
+                    bc_snapCameraToCharacter(ui, ui->activeCharacter);
                 }
 
                 if (ui->activeCharacter != NULL) {

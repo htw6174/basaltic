@@ -1,5 +1,7 @@
+#include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <SDL2/SDL.h>
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
@@ -7,14 +9,63 @@
 #include "basaltic_logic.h"
 #include "basaltic_logicInputState.h"
 #include "basaltic_worldState.h"
+#include "basaltic_commandQueue.h"
 
+typedef struct {
+    bc_CommandQueue processingQueue;
+    bool advanceSingleStep;
+    bool autoStep;
+} LogicState;
+
+int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue);
+static void doWorldStep(bc_WorldState *world);
 static void revealMap(bc_WorldState *world, bc_Character* character);
+
+int bc_runLogicThread(void *in) {
+    // Extract input data
+    bc_LogicThreadInput *loopInput = (bc_LogicThreadInput*)in;
+    bc_WorldState *world = loopInput->world;
+    bc_CommandQueue inputQueue = loopInput->inputQueue;
+    Uint32 interval = loopInput->interval;
+    volatile bc_ProcessState *threadState = loopInput->threadState;
+
+    LogicState logic = {
+        .processingQueue = bc_createCommandQueue(bc_commandQueueMaxSize),
+        .advanceSingleStep = false,
+        .autoStep = false,
+    };
+
+    while (*threadState == BC_PROCESS_STATE_RUNNING) {
+        Uint64 startTime = SDL_GetTicks64(); // TODO: use something other than SDL for timing, so the dependency can be removed
+
+        doLogicTick(&logic, world, inputQueue);
+
+        if (logic.advanceSingleStep || logic.autoStep) {
+            doWorldStep(world);
+            logic.advanceSingleStep = false;
+        }
+        //bc_simulateWorld(input, world);
+
+        // delay until end of frame
+        Uint64 endTime = SDL_GetTicks64();
+        Uint64 duration = endTime - startTime;
+        if (duration < interval) {
+            SDL_Delay(interval - duration);
+        }
+    }
+
+    bc_destroyCommandQueue(logic.processingQueue);
+
+    return 0;
+}
 
 bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
     bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
     newWorld->seedString = calloc(BC_MAX_SEED_LENGTH, sizeof(char));
     strcpy(newWorld->seedString, seedString);
     newWorld->seed = xxh_hash(0, BC_MAX_SEED_LENGTH, (u8*)newWorld->seedString);
+    newWorld->step = 0;
+
     newWorld->chunkCountX = chunkCountX;
     newWorld->chunkCountY = chunkCountY;
     newWorld->worldWidth = chunkCountX * bc_chunkSize;
@@ -65,7 +116,6 @@ int bc_initializeWorldState(bc_WorldState *world) {
 }
 
 int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
-    u64 ticks = input->ticks;
 
     if (input->isEditPending) {
         bc_MapEditAction action = input->currentEdit;
@@ -91,6 +141,41 @@ int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
 void bc_destroyWorldState(bc_WorldState *world) {
     free(world->seedString);
     free(world);
+}
+
+int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue) {
+    if (bc_transferCommandQueue(logic->processingQueue, inputQueue)) {
+        bc_WorldInputCommand *commands;
+        u32 itemsInQueue = bc_beginQueueProcessing(logic->processingQueue, &commands);
+        for (int i = 0; i < itemsInQueue; i++) {
+            // TODO: process command
+            bc_WorldInputCommand currentCommand = commands[i];
+            switch (currentCommand.commandType) {
+                case BC_COMMAND_TYPE_STEP_ADVANCE:
+                    logic->advanceSingleStep = true;
+                    break;
+                case BC_COMMAND_TYPE_STEP_PLAY:
+                    logic->autoStep = true;
+                    break;
+                case BC_COMMAND_TYPE_STEP_PAUSE:
+                    logic->autoStep = false;
+                    break;
+                case BC_COMMAND_TYPE_CHARACTER_MOVE:
+
+                default:
+                    fprintf(stderr, "ERROR: invalid command type %i", currentCommand.commandType);
+                    break;
+            }
+        }
+        bc_endQueueProcessing(logic->processingQueue);
+    }
+
+    return 0;
+}
+
+static void doWorldStep(bc_WorldState *world) {
+    // TODO: all the rest
+    world->step++;
 }
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?

@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include "htw_geomap.h"
+#include "basaltic_commandQueue.h"
 #include "basaltic_characters.h"
 
 #define BC_MAX_SEED_LENGTH 256
@@ -17,6 +18,7 @@ typedef struct {
 typedef struct {
     u32 seed;
     char *seedString;
+    u64 step;
     // Geography
     u32 chunkCountX, chunkCountY; // number of chunks along each axis
     u32 worldWidth, worldHeight; // total world dimensions

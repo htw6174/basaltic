@@ -7,6 +7,7 @@
 #include "basaltic_window.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
+#include "basaltic_commandQueue.h"
 
 typedef struct {
     bool isActive;
@@ -22,6 +23,6 @@ bool bc_editorWantCaptureMouse(bc_EditorContext *editorContext);
 bool bc_editorWantCaptureKeyboard(bc_EditorContext *editorContext);
 
 void bc_handleEditorInputEvents(bc_EditorContext *editorContext, SDL_Event *e);
-void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world);
+void bc_drawEditor(bc_EditorContext *editorContext, bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world, bc_CommandQueue worldInputQueue);
 
 #endif // BASALTIC_EDITOR_H_INCLUDED

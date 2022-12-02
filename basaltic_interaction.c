@@ -8,7 +8,6 @@
 #include "basaltic_characters.h"
 
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
-static void snapCameraToCharacter(bc_UiState *ui);
 static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
 static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex);
 
@@ -28,7 +27,7 @@ void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Ev
                 ui->cameraMode = ui->cameraMode ^ 1; // invert
                 break;
             case SDLK_c:
-                snapCameraToCharacter(ui);
+                bc_snapCameraToCharacter(ui, ui->activeCharacter);
                 break;
             case SDLK_v:
                 ui->activeLayer = ui->activeLayer ^ 1; // invert
@@ -74,6 +73,13 @@ void bc_processInputState(bc_UiState *ui, bc_LogicInputState *logicInput, bool u
     translateCamera(ui, xMovement, yMovement);
 }
 
+void bc_snapCameraToCharacter(bc_UiState *ui, bc_Character *subject) {
+    htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
+    htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
+    ui->cameraDistance = 5;
+    // TODO: would like to set camera height also, but that requires inspecting world data as well
+}
+
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement) {
     float yaw = ui->cameraYaw * DEG_TO_RAD;
     float sinYaw = sin(yaw);
@@ -85,21 +91,15 @@ static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMo
     ui->cameraY += yGlobalMovement;
 }
 
-static void snapCameraToCharacter(bc_UiState *ui) {
-    htw_geo_GridCoord characterCoord = ui->activeCharacter->currentState.worldCoord;
-    htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
-    ui->cameraDistance = 5;
-}
-
 static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
-            bc_MapEditAction newAction = {
-                .editType = BC_MAP_EDIT_ADD,
-                .chunkIndex = chunkIndex,
-                .cellIndex = cellIndex,
-                .value = value
-            };
-            logicInput->currentEdit = newAction;
-            logicInput->isEditPending = true;
+    bc_MapEditAction newAction = {
+        .editType = BC_MAP_EDIT_ADD,
+        .chunkIndex = chunkIndex,
+        .cellIndex = cellIndex,
+        .value = value
+    };
+    logicInput->currentEdit = newAction;
+    logicInput->isEditPending = true;
 }
 
 static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex) {

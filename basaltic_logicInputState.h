@@ -31,7 +31,7 @@ typedef struct {
 } bc_PendingMapEditQueue;
 
 typedef struct {
-    u32 ticks;
+    bool doAutoStep;
     bc_MapEditAction currentEdit;
     bool isEditPending;
     bc_CharacterMoveAction currentMove;
