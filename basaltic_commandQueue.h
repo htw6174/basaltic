@@ -5,6 +5,7 @@
  * The main thread's 'input' command queue has commands added by the main thread, and is periodically emptied by the logic thread
  * The logic thread's 'processing' command queue is processed from start to finish (index 0..itemsInQueue) every logic tick, and only after the processing queue is cleared the logic thread copies all items from the input queue into the processing queue (clearing the input queue)
  * TODO: is queue a misleading name here? Behavior may be closer to command buffers as used in graphics APIs. Array is still processed in first in/first out order, but without complete push/pop support
+ * TODO: currently using a union to group all command types into one struct. This is wasteful if uncommon command types are much larger than move common types. A jagged array would work for commands because they're always accessed in order. Consider making this change.
  *
  */
 
@@ -14,6 +15,8 @@
 #include <stdbool.h>
 #include <SDL2/SDL_mutex.h>
 #include "htw_core.h"
+#include "htw_geomap.h"
+#include "basaltic_characters.h"
 
 typedef enum bc_CommandType {
     BC_COMMAND_TYPE_CHARACTER_MOVE,
@@ -23,8 +26,31 @@ typedef enum bc_CommandType {
     BC_COMMAND_TYPE_STEP_PAUSE
 } bc_CommandType;
 
+typedef enum bc_MapEditType {
+    BC_MAP_EDIT_SET,
+    BC_MAP_EDIT_ADD,
+} bc_MapEditType;
+
+typedef struct {
+    bc_MapEditType editType;
+    u32 brushSize;
+    s32 value;
+    u32 chunkIndex;
+    u32 cellIndex;
+} bc_TerrainEditCommand;
+
+typedef struct {
+    bc_Character *subject;
+    u32 chunkIndex;
+    u32 cellIndex;
+} bc_CharacterMoveCommand;
+
 typedef struct {
     bc_CommandType commandType;
+    union {
+        bc_TerrainEditCommand terrainEditCommand;
+        bc_CharacterMoveCommand characterMoveCommand;
+    };
 } bc_WorldInputCommand;
 
 // Make commandQueue struct opaque to avoid access outside of lock

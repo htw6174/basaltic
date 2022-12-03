@@ -124,9 +124,18 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
                 bc_requestGameStop();
             }
 
-            igValue_Uint("Hovered chunk: ", ui->hoveredChunkIndex);
-            igValue_Uint("Hovered cell: ", ui->hoveredCellIndex);
             igText("Seed string: %s", world->seedString);
+            igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
+            igValue_Uint("Hovered cell", ui->hoveredCellIndex);
+            igSpacing();
+            bc_MapChunk hoveredChunk = world->chunks[ui->hoveredChunkIndex];
+
+            igText("Cell info:");
+            igValue_Int("Height", htw_geo_getMapValueByIndex(hoveredChunk.heightMap, ui->hoveredCellIndex));
+            igValue_Int("Temperature", htw_geo_getMapValueByIndex(hoveredChunk.temperatureMap, ui->hoveredCellIndex));
+            igValue_Int("Rainfall", htw_geo_getMapValueByIndex(hoveredChunk.rainfallMap, ui->hoveredCellIndex));
+            igSpacing();
+
             igValue_Uint("World seed", world->seed);
             igValue_Uint("Logic step", world->step);
             // TODO: convert step to date and time (1 step/hour)

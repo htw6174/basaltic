@@ -8,7 +8,6 @@
 #include "htw_vulkan.h"
 #include "basaltic_window.h"
 #include "basaltic_defs.h"
-#include "basaltic_logicInputState.h"
 #include "basaltic_worldState.h"
 
 // TEST

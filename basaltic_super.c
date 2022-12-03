@@ -18,7 +18,6 @@ static SDL_Thread *logicThread = NULL;
 static bc_EngineSettings *engineConfig = NULL;
 static bc_SuperInfo *superInfo = NULL;
 
-static bc_LogicInputState *logicInput = NULL;
 static bc_WorldState *world = NULL;
 static bc_CommandQueue worldInputQueue;
 
@@ -80,10 +79,10 @@ int bc_startEngine(bc_StartupSettings startSettings) {
                 bc_requestProcessStop();
             }
             bc_handleEditorInputEvents(&editorContext, &e);
-            bc_processInputEvent(&ui, logicInput, &e, passthroughMouse, passthroughKeyboard);
+            bc_processInputEvent(&ui, worldInputQueue, &e, passthroughMouse, passthroughKeyboard);
         }
 
-        bc_processInputState(&ui, logicInput, passthroughMouse, passthroughKeyboard);
+        bc_processInputState(&ui, worldInputQueue, passthroughMouse, passthroughKeyboard);
 
         bc_drawFrame(&graphics, &ui, world);
         bc_drawEditor(&editorContext, superInfo, &graphics, &ui, world, worldInputQueue);
@@ -132,8 +131,6 @@ void loadEngineConfig(char *path) {
 }
 
 void startGame() {
-    logicInput = bc_createLogicInputState();
-
     u32 tickInterval = 1000 / engineConfig->tickRateLimit;
 
     // NOTE: remember to put anything being passed to another thread on the heap
@@ -150,8 +147,6 @@ void endGame() {
     int gameplayThreadResult;
     SDL_WaitThread(logicThread, &gameplayThreadResult);
     // TODO: reset uiState that references world data
-    bc_destroyLogicInputState(logicInput);
-    logicInput = NULL;
     bc_destroyWorldState(world);
     world = NULL;
     logicThread = NULL;

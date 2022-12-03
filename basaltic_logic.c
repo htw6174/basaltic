@@ -7,7 +7,6 @@
 #include "htw_geomap.h"
 #include "basaltic_defs.h"
 #include "basaltic_logic.h"
-#include "basaltic_logicInputState.h"
 #include "basaltic_worldState.h"
 #include "basaltic_commandQueue.h"
 
@@ -19,6 +18,9 @@ typedef struct {
 
 int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue);
 static void doWorldStep(bc_WorldState *world);
+
+static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit);
+static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove);
 static void revealMap(bc_WorldState *world, bc_Character* character);
 
 int bc_runLogicThread(void *in) {
@@ -115,29 +117,6 @@ int bc_initializeWorldState(bc_WorldState *world) {
     return 0;
 }
 
-int bc_simulateWorld(bc_LogicInputState *input, bc_WorldState *world) {
-
-    if (input->isEditPending) {
-        bc_MapEditAction action = input->currentEdit;
-        htw_geo_GridCoord gridCoord = htw_geo_indexToGridCoord(action.cellIndex, bc_chunkSize);
-        u32 chunkIndex = action.chunkIndex;
-        s32 currentValue = htw_geo_getMapValue(world->chunks[chunkIndex].heightMap, gridCoord);
-        htw_geo_setMapValue(world->chunks[chunkIndex].heightMap, gridCoord, currentValue + action.value);
-        input->isEditPending = 0;
-    }
-
-    if (input->isMovePending) {
-        bc_CharacterMoveAction action = input->currentMove;
-        bc_Character *subject = action.character;
-        htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, action.chunkIndex, action.cellIndex);
-        bc_moveCharacter(subject, destCoord);
-        revealMap(world, subject);
-        input->isMovePending = 0;
-    }
-
-    return 0;
-}
-
 void bc_destroyWorldState(bc_WorldState *world) {
     free(world->seedString);
     free(world);
@@ -164,7 +143,10 @@ int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQu
                     logic->autoStep = false;
                     break;
                 case BC_COMMAND_TYPE_CHARACTER_MOVE:
-                    // TODO: set character destination
+                    moveCharacter(world, &currentCommand.characterMoveCommand);
+                    break;
+                case BC_COMMAND_TYPE_TERRAIN_EDIT:
+                    editMap(world, &currentCommand.terrainEditCommand);
                     break;
                 default:
                     fprintf(stderr, "ERROR: invalid command type %i", currentCommand.commandType);
@@ -221,6 +203,20 @@ static void doWorldStep(bc_WorldState *world) {
     }
 
     world->step++;
+}
+
+static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {
+    // TODO: handle brush modes, sizes
+    htw_ValueMap *heightMap = world->chunks[terrainEdit->chunkIndex].heightMap;
+    s32 currentValue = htw_geo_getMapValueByIndex(heightMap, terrainEdit->cellIndex);
+    htw_geo_setMapValueByIndex(heightMap, terrainEdit->cellIndex, currentValue + terrainEdit->value);
+}
+
+static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove) {
+    // TODO: schedule move for next step instead of executing immediately
+    htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, characterMove->chunkIndex, characterMove->cellIndex);
+    bc_moveCharacter(characterMove->subject, destCoord);
+    revealMap(world, characterMove->subject);
 }
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?

@@ -4,21 +4,21 @@
 #include "htw_core.h"
 #include "htw_geomap.h"
 #include "basaltic_interaction.h"
-#include "basaltic_logicInputState.h"
+#include "basaltic_commandQueue.h"
 #include "basaltic_characters.h"
 
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
-static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value);
-static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex);
+static void editMap(bc_CommandQueue commandQueue, u32 chunkIndex, u32 cellIndex, s32 value);
+static void moveCharacter(bc_CommandQueue commandQueue, bc_Character *character, u32 chunkIndex, u32 cellIndex);
+static void advanceStep(bc_CommandQueue commandQueue);
 
 // TODO: add seperate input handling for each interfaceMode setting, allow logicInput to be NULL if interfaceMode doesn't require world interaction
-void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Event *e, bool useMouse, bool useKeyboard) {
+void bc_processInputEvent(bc_UiState *ui, bc_CommandQueue commandQueue, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            //editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
-            moveCharacter(logicInput, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            moveCharacter(commandQueue, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
-            editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+            editMap(commandQueue, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
         }
     }
     if (useKeyboard && e->type == SDL_KEYDOWN) {
@@ -33,16 +33,19 @@ void bc_processInputEvent(bc_UiState *ui, bc_LogicInputState *logicInput, SDL_Ev
                 ui->activeLayer = ui->activeLayer ^ 1; // invert
                 break;
             case SDLK_UP:
-                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                editMap(commandQueue, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
                 break;
             case SDLK_DOWN:
-                editMap(logicInput, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+                editMap(commandQueue, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+                break;
+            case SDLK_SPACE:
+                advanceStep(commandQueue);
                 break;
         }
     }
 }
 
-void bc_processInputState(bc_UiState *ui, bc_LogicInputState *logicInput, bool useMouse, bool useKeyboard) {
+void bc_processInputState(bc_UiState *ui, bc_CommandQueue commandQueue, bool useMouse, bool useKeyboard) {
     if (useMouse) {
         // get mouse state
         Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
@@ -91,23 +94,37 @@ static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMo
     ui->cameraY += yGlobalMovement;
 }
 
-static void editMap(bc_LogicInputState *logicInput, u32 chunkIndex, u32 cellIndex, s32 value) {
-    bc_MapEditAction newAction = {
+static void editMap(bc_CommandQueue commandQueue, u32 chunkIndex, u32 cellIndex, s32 value) {
+    bc_TerrainEditCommand editCommand = {
         .editType = BC_MAP_EDIT_ADD,
+        .brushSize = 1,
+        .value = value,
         .chunkIndex = chunkIndex,
-        .cellIndex = cellIndex,
-        .value = value
+        .cellIndex = cellIndex
     };
-    logicInput->currentEdit = newAction;
-    logicInput->isEditPending = true;
+    bc_WorldInputCommand inputCommand = {
+        .commandType = BC_COMMAND_TYPE_TERRAIN_EDIT,
+        .terrainEditCommand = editCommand,
+    };
+    bc_pushCommandToQueue(commandQueue, inputCommand);
 }
 
-static void moveCharacter(bc_LogicInputState *logicInput, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
-    bc_CharacterMoveAction newMoveAction = {
-        .character = character,
+static void moveCharacter(bc_CommandQueue commandQueue, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
+    bc_CharacterMoveCommand moveCommand = {
+        .subject = character,
         .chunkIndex = chunkIndex,
-        .cellIndex = cellIndex,
+        .cellIndex = cellIndex
     };
-    logicInput->currentMove = newMoveAction;
-    logicInput->isMovePending = true;
+    bc_WorldInputCommand inputCommand = {
+        .commandType = BC_COMMAND_TYPE_CHARACTER_MOVE,
+        .characterMoveCommand = moveCommand
+    };
+    bc_pushCommandToQueue(commandQueue, inputCommand);
+}
+
+static void advanceStep(bc_CommandQueue commandQueue) {
+    bc_WorldInputCommand stepCommand = {
+        .commandType = BC_COMMAND_TYPE_STEP_ADVANCE,
+    };
+    bc_pushCommandToQueue(commandQueue, stepCommand);
 }
