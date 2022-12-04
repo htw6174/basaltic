@@ -77,6 +77,7 @@ void bc_processInputState(bc_UiState *ui, bc_CommandQueue commandQueue, bool use
 }
 
 void bc_snapCameraToCharacter(bc_UiState *ui, bc_Character *subject) {
+    if (subject == NULL) return;
     htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
     htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
     ui->cameraDistance = 5;
@@ -110,6 +111,7 @@ static void editMap(bc_CommandQueue commandQueue, u32 chunkIndex, u32 cellIndex,
 }
 
 static void moveCharacter(bc_CommandQueue commandQueue, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
+    if (character == NULL) return;
     bc_CharacterMoveCommand moveCommand = {
         .subject = character,
         .chunkIndex = chunkIndex,

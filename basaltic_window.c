@@ -518,7 +518,7 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
         if (ui->cameraMode == BC_CAMERA_MODE_ORTHOGRAPHIC) {
             mat4x4Orthographic(graphics->camera.projection, ((float)graphics->width / graphics->height) * correctedDistance, correctedDistance, 0.1f, 1000.f);
         } else {
-            mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 1000.f);
+            mat4x4Perspective(graphics->camera.projection, PI / 3.f, (float)graphics->width / graphics->height, 0.1f, 10000.f);
         }
         mat4x4LookAt(graphics->camera.view,
                     cameraPosition.xyz,
@@ -1073,18 +1073,33 @@ static void updateHexmapVisibleChunks(bc_GraphicsState *graphics, bc_WorldState 
 
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         // TODO: only update chunk if freshly visible or has pending updates
-        // TODO: also find some way to avoid loading duplicate chunks when near the top or bottom of the world (causes flickering as higher chunks are moved down)
         updateHexmapDataBuffer(graphics, world, &graphics->surfaceTerrain, loadedChunks[c], c);
     }
 }
 
 static void drawHexmapChunks(bc_GraphicsState *graphics, bc_WorldState *world, bc_HexmapTerrain *terrain, PushConstantData *mvp) {
     htw_bindPipeline(graphics->vkContext, terrain->pipeline);
+
+    static vec3 copyPositions[4];
+    float x00, y00;
+    htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){-world->worldWidth, -world->worldHeight}, &x00, &y00);
+    float x10 = htw_geo_getHexPositionX(0, -world->worldHeight);
+    float x01 = htw_geo_getHexPositionX(-world->worldWidth, 0);
+    float x11 = 0.0;
+    float y10 = y00;
+    float y01 = 0.0;
+    float y11 = 0.0;
+    copyPositions[0] = (vec3){{x00, y00, 0.0}};
+    copyPositions[1] = (vec3){{x01, y01, 0.0}};
+    copyPositions[2] = (vec3){{x10, y10, 0.0}};
+    copyPositions[3] = (vec3){{x11, y11, 0.0}};
+
     // draw full terrain mesh
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         u32 chunkIndex = graphics->surfaceTerrain.loadedChunks[c];
         static float chunkX, chunkY;
         bc_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
+        vec3 chunkPos = {{chunkX, chunkY, 0.0}};
 
         // FIXME: quick hack to get world wrapping; need to wrap camera position too, shader position derivatives get weird far from the origin
         // TODO: need global position wrapping solution that can automatically handle e.g. debug shapes too
@@ -1092,10 +1107,14 @@ static void drawHexmapChunks(bc_GraphicsState *graphics, bc_WorldState *world, b
         //worldDistance = roundf(worldDistance);
         //chunkX += worldDistance * world->worldWidth;
 
-        mat4x4SetTranslation(mvp->m, (vec3){{chunkX, chunkY, 0.0}});
-        htw_pushConstants(graphics->vkContext, graphics->surfaceTerrain.pipeline, mvp);
         htw_bindDescriptorSet(graphics->vkContext, graphics->surfaceTerrain.pipeline, graphics->surfaceTerrain.chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-        htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.chunkModel.model, HTW_DRAW_TYPE_INDEXED);
+        for (int i = 0; i < 4; i++) {
+            vec3 copyPos = copyPositions[i];
+            copyPos = vec3Add(chunkPos, copyPos);
+            mat4x4SetTranslation(mvp->m, copyPos);
+            htw_pushConstants(graphics->vkContext, graphics->surfaceTerrain.pipeline, mvp);
+            htw_drawPipeline(graphics->vkContext, graphics->surfaceTerrain.pipeline, &graphics->surfaceTerrain.chunkModel.model, HTW_DRAW_TYPE_INDEXED);
+        }
     }
 }
 

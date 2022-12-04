@@ -97,9 +97,12 @@ void main()
 
     vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
     vec4 worldPosition = MVP.m * localPosition;
-    out_pos = worldPosition.xyz;
     // warp position for a false horizon
+    //worldPosition = cylinderWarp(worldPosition);
     //worldPosition = sphereWarp(worldPosition);
+    // can put this before or after horizon warping for different lighting effects
+    out_pos = worldPosition.xyz;
+
     gl_Position = MVP.pv * worldPosition * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));

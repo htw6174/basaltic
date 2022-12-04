@@ -40,8 +40,9 @@ static u32 bc_getChunkIndexByChunkCoordinates(bc_WorldState *world, htw_geo_Grid
     // horizontal wrap
     chunkCoord.x = world->chunkCountX + chunkCoord.x; // to account for negative chunkX
     chunkCoord.x = chunkCoord.x % world->chunkCountX;
-    // vertical clamp
-    chunkCoord.y = max_int(0, min_int(world->chunkCountY - 1, chunkCoord.y));
+    // vertical wrap
+    chunkCoord.y += world->chunkCountY;
+    chunkCoord.y %= world->chunkCountY;
     u32 chunkIndex = (chunkCoord.y * world->chunkCountX) + chunkCoord.x;
     return chunkIndex;
 }
@@ -78,7 +79,8 @@ static u32 bc_getChunkIndexAtOffset(bc_WorldState *world, u32 startingChunk, htw
 static void bc_gridCoordinatesToChunkAndCell(bc_WorldState *world, htw_geo_GridCoord worldCoord, u32 *chunkIndex, u32 *cellIndex) {
     worldCoord.x += world->worldWidth;
     worldCoord.x %= world->worldWidth;
-    worldCoord.y = max_int(0, min_int(worldCoord.y, world->worldWidth));
+    worldCoord.y += world->worldHeight;
+    worldCoord.y %= world->worldHeight;
 
     *chunkIndex = bc_getChunkIndexByWorldCoordinates(world, worldCoord);
     htw_geo_GridCoord chunkCoord = {
