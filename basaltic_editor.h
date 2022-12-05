@@ -19,6 +19,11 @@ typedef struct {
     float *frameDurationHistory;
     float *tickDurationHistory;
     float *worldStepsPerSecond;
+
+    bool gameRestarting;
+    u32 worldChunkWidth;
+    u32 worldChunkHeight;
+    char newGameSeed[BC_MAX_SEED_LENGTH];
 } bc_EditorContext;
 
 bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext);

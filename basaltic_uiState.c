@@ -13,6 +13,9 @@ bc_UiState bc_createUiState() {
         .cameraY = 0,
         .cameraMovementSpeed = 0.15,
         .cameraRotationSpeed = 1.5,
+        // Must set these after initialization with bc_SetCameraWrapLimits
+        .cameraWrapX = 0.0,
+        .cameraWrapY = 0.0,
         // world
         .activeLayer = BC_WORLD_LAYER_SURFACE,
         .mouse = {0},
@@ -23,5 +26,10 @@ bc_UiState bc_createUiState() {
         // menus
     };
     return newUi;
+}
+
+void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY) {
+    ui->cameraWrapX = worldGridSizeX / 2;
+    ui->cameraWrapY = worldGridSizeY / 2;
 }
 

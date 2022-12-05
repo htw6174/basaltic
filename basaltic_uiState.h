@@ -36,8 +36,12 @@ typedef struct bc_UiState {
     float cameraYaw;
     float cameraX;
     float cameraY;
+    // camera limits
     float cameraMovementSpeed;
     float cameraRotationSpeed;
+    // max camera distance from origin, in hex coordinate space
+    float cameraWrapX;
+    float cameraWrapY;
     // world
     bc_WorldLayer activeLayer;
     bc_Mouse mouse;
@@ -50,5 +54,6 @@ typedef struct bc_UiState {
 } bc_UiState;
 
 bc_UiState bc_createUiState();
+void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 
 #endif // BASALTIC_UISTATE_H_INCLUDED

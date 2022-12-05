@@ -18,8 +18,6 @@
 #include "cimgui/cimgui.h"
 #include"cimgui/cimgui_impl.h"
 
-static bool gameRestarting = false;
-
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void characterInspector(bc_Character *character);
 
@@ -59,6 +57,10 @@ bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
         .frameDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
         .tickDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
         .worldStepsPerSecond = calloc(bc_frameHistoryLength, sizeof(float)),
+
+        .gameRestarting = false,
+        .worldChunkWidth = 4,
+        .worldChunkHeight = 4,
     };
 
     return newEditor;
@@ -110,13 +112,14 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
         igText("Press backquote (`/~) to toggle editor");
         igCheckbox("Demo Window", &editorContext->showDemoWindow);
 
-        static char newGameSeed[BC_MAX_SEED_LENGTH];
+        igSliderInt("(in chunks)##chunkWidth", &editorContext->worldChunkWidth, 1, 16, "Width: %u", 0);
+        igSliderInt("(in chunks)##chunkHeight", &editorContext->worldChunkHeight, 1, 16, "Height: %u", 0);
         igText("World generation seed:");
-        igInputText("##seedInput", newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+        igInputText("##seedInput", editorContext->newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
 
         if (igButton("Start new game", (ImVec2){0, 0})) {
             bc_requestGameStop();
-            gameRestarting = true;
+            editorContext->gameRestarting = true;
         }
 
         if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY && world != NULL) {
@@ -183,11 +186,11 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
             }
         }
 
-        if (gameRestarting == true) {
+        if (editorContext->gameRestarting == true) {
             if (bc_isGameRunning() == false) {
                 ui->interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
-                bc_startNewGame(newGameSeed);
-                gameRestarting = false;
+                bc_startNewGame(editorContext->worldChunkWidth, editorContext->worldChunkHeight, editorContext->newGameSeed);
+                editorContext->gameRestarting = false;
             }
         }
 

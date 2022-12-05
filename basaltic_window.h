@@ -16,6 +16,7 @@
 #define TEXT_POOL_CAPACITY 8
 
 // Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
+// TODO: allow vision distance to be changed at runtime
 #define MAX_VISIBLE_CHUNK_DISTANCE 2
 #define VISIBLE_CHUNK_AREA_DIAMETER ((MAX_VISIBLE_CHUNK_DISTANCE * 2) - 1)
 #define MAX_VISIBLE_CHUNKS (VISIBLE_CHUNK_AREA_DIAMETER * VISIBLE_CHUNK_AREA_DIAMETER)
@@ -179,9 +180,15 @@ typedef struct {
     bool showCharacterDebug;
     bc_DebugSwarm characterDebug;
     bc_Camera camera;
+
+    vec3 wrapInstancePositions[4];
 } bc_GraphicsState;
 
 void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height);
+
+void bc_changeScreenSize(bc_GraphicsState *graphics, u32 width, u32 height);
+void bc_setGraphicsWorldWrap(bc_GraphicsState *graphics, u32 worldWidth, u32 worldHeight);
+
 /**
  * @brief ...
  *

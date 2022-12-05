@@ -93,6 +93,32 @@ static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMo
 
     ui->cameraX += xGlobalMovement;
     ui->cameraY += yGlobalMovement;
+
+    // Wrap camera if outsize wrap limit:
+    // Convert camera cartesian coordinates to hex space (expands y)
+    // Check against camera wrap bounds
+    // If out of bounds: wrap in hex space, convert back to cartesian space, and assign back to camera
+    float cameraHexX = htw_geo_cartesianToHexPositionX(ui->cameraX, ui->cameraY);
+    float cameraHexY = htw_geo_cartesianToHexPositionY(ui->cameraY);
+    if (cameraHexX > ui->cameraWrapX) {
+        cameraHexX -= ui->cameraWrapX * 2;
+        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    } else if (cameraHexX < -ui->cameraWrapX) {
+        cameraHexX += ui->cameraWrapX * 2;
+        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    }
+
+    if (cameraHexY > ui->cameraWrapY) {
+        cameraHexY -= ui->cameraWrapY * 2;
+        ui->cameraY = htw_geo_hexToCartesianPositionY(cameraHexY);
+        // x position is dependent on y position when converting between hex and cartesian space, so also need to assign back to cameraX
+        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    } else if (cameraHexY < -ui->cameraWrapY) {
+        cameraHexY += ui->cameraWrapY * 2;
+        ui->cameraY = htw_geo_hexToCartesianPositionY(cameraHexY);
+        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    }
+
 }
 
 static void editMap(bc_CommandQueue commandQueue, u32 chunkIndex, u32 cellIndex, s32 value) {

@@ -29,7 +29,7 @@ typedef struct {
 
 int bc_startEngine(bc_StartupSettings startSettings);
 
-void bc_startNewGame(char *seed);
+void bc_startNewGame(u32 width, u32 height, char *seed);
 void bc_loadGame(char *path);
 void bc_continueGame();
 void bc_requestGameStop();

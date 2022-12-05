@@ -18,6 +18,8 @@ static SDL_Thread *logicThread = NULL;
 static bc_EngineSettings *engineConfig = NULL;
 static bc_SuperInfo *superInfo = NULL;
 
+static bc_UiState ui;
+
 static bc_WorldState *world = NULL;
 static bc_CommandQueue worldInputQueue;
 
@@ -41,7 +43,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     u32 frameInterval = 1000 / engineConfig->frameRateLimit;
 
     // TODO: should allocate heap space for these large structures instead of leaving them on the stack. Also: should I init by passing pointer to an existing struct, or returning the whole thing?
-    bc_UiState ui = bc_createUiState();
+    ui = bc_createUiState();
     bc_GraphicsState graphics;
     bc_initGraphics(&graphics, 1280, 720);
     bc_EditorContext editorContext = bc_initEditor(startSettings.enableEditor, graphics.vkContext);
@@ -55,7 +57,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
             break;
         case BC_STARTUP_MODE_NEWGAME:
             ui.interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
-            bc_startNewGame(startSettings.newGameSeed);
+            bc_startNewGame(8, 8, startSettings.newGameSeed);
             break;
         case BC_STARTUP_MODE_CONTINUEGAME:
             // TODO: set load game path from most recent save
@@ -126,12 +128,14 @@ void loadEngineConfig(char *path) {
     engineConfig = calloc(1, sizeof(bc_EngineSettings));
      *engineConfig = (bc_EngineSettings){
         .frameRateLimit = 60, // TODO: figure out why changing this doesn't increase framerate above 60
-        .tickRateLimit = 1000000,
+        .tickRateLimit = 1000,
     };
 }
 
 void startGame() {
     u32 tickInterval = 1000 / engineConfig->tickRateLimit;
+
+    bc_SetCameraWrapLimits(&ui, world->worldWidth, world->worldHeight);
 
     // NOTE: remember to put anything being passed to another thread on the heap
     bc_LogicThreadInput *logicLoopParams = malloc(sizeof(bc_LogicThreadInput));
@@ -152,10 +156,10 @@ void endGame() {
     logicThread = NULL;
 }
 
-void bc_startNewGame(char *seed) {
+void bc_startNewGame(u32 width, u32 height, char *seed) {
     logicThreadState = BC_PROCESS_STATE_RUNNING;
 
-    world = bc_createWorldState(8, 8, seed);
+    world = bc_createWorldState(width, height, seed);
     bc_initializeWorldState(world);
     // TODO: set interface mode and active character
     startGame();

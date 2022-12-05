@@ -108,7 +108,7 @@ static htw_geo_GridCoord bc_chunkAndCellToWorldCoordinates(bc_WorldState *world,
 
 static void bc_getChunkRootPosition(bc_WorldState *world, u32 chunkIndex, float *worldX, float *worldY) {
     u32 chunkX = chunkIndex % world->chunkCountX;
-    u32 chunkY = chunkIndex / world->chunkCountY;
+    u32 chunkY = chunkIndex / world->chunkCountX;
     s32 gridX = chunkX * bc_chunkSize;
     s32 gridY = chunkY * bc_chunkSize;
     htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){gridX, gridY}, worldX, worldY);
