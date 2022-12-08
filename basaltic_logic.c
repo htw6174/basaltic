@@ -84,20 +84,28 @@ int bc_initializeWorldState(bc_WorldState *world) {
     u32 chunkCount = world->chunkCountX * world->chunkCountY;
     // TODO: single malloc for all world data, get offset of each array
     world->chunks = malloc(sizeof(bc_MapChunk) * chunkCount);
+
+    float worldCartesianWidth = htw_geo_hexToCartesianPositionX(world->worldWidth, 0);
+    float worldCartesianHeight = htw_geo_hexToCartesianPositionY(world->worldHeight);
+
     for (int c = 0, y = 0; y < world->chunkCountY; y++) {
         for (int x = 0; x < world->chunkCountX; x++, c++) {
             // generate chunk data
             bc_MapChunk *chunk = &world->chunks[c];
             s32 cellPosX = x * width;
             s32 cellPosY = y * height;
-            chunk->heightMap = htw_geo_createValueMap(width, height, 64);
-            htw_geo_fillPerlin(chunk->heightMap, world->seed, 6, cellPosX, cellPosY, 0.05);
+            chunk->heightMap = htw_geo_createValueMap(width, height, 128);
+            htw_geo_fillSimplex(chunk->heightMap, world->seed, 8, cellPosX, cellPosY, world->worldWidth, 4);
 
             chunk->temperatureMap = htw_geo_createValueMap(width, height, world->chunkCountY * height);
-            htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
+            //htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
+            //htw_geo_fillPerlin(chunk->temperatureMap, world->seed, 1, cellPosX, cellPosY, 0.05, worldCartesianWidth, worldCartesianHeight);
+            htw_geo_fillSimplex(chunk->temperatureMap, world->seed + 1, 4, cellPosX, cellPosY, world->worldWidth, 4);
 
             chunk->rainfallMap = htw_geo_createValueMap(width, height, 255);
-            htw_geo_fillPerlin(chunk->rainfallMap, world->seed, 2, cellPosX, cellPosY, 0.1);
+            //htw_geo_fillPerlin(chunk->rainfallMap, world->seed, 2, cellPosX, cellPosY, 0.1, worldCartesianWidth, worldCartesianHeight);
+            htw_geo_fillSimplex(chunk->rainfallMap, world->seed + 2, 6, cellPosX, cellPosY, world->worldWidth, 4);
+            //htw_geo_fillUniform(chunk->rainfallMap, 0);
 
             chunk->visibilityMap = htw_geo_createValueMap(width, height, UINT32_MAX);
             //htw_geo_fillChecker(chunk->visibilityMap, 0, 1, 4);

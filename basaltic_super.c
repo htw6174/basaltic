@@ -57,7 +57,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
             break;
         case BC_STARTUP_MODE_NEWGAME:
             ui.interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
-            bc_startNewGame(8, 8, startSettings.newGameSeed);
+            bc_startNewGame(3, 3, startSettings.newGameSeed);
             break;
         case BC_STARTUP_MODE_CONTINUEGAME:
             // TODO: set load game path from most recent save
