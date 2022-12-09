@@ -174,6 +174,10 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
                 }
             }
 
+            if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
+                igSliderInt("Sea level", &graphics->worldInfo.seaLevel, 0, 128, "%i", 0);
+            }
+
             if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
                 if (igButton("Enable All", (ImVec2){0, 0})) {
                     graphics->worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;

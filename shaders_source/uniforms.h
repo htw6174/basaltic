@@ -13,6 +13,7 @@ layout(std140, set = 0, binding = 2) uniform worldInfo {
     float totalWidth;
     int timeOfDay;
     // season info, weather, etc.
+	int seaLevel;
 	// debug options
 	uint visibilityOverrideBits;
 } WorldInfo;

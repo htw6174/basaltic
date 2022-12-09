@@ -111,6 +111,7 @@ void bc_initGraphics(bc_GraphicsState *graphics, u32 width, u32 height) {
         .gridToWorld = (vec3){{1.0, 1.0, 0.2}},
         .timeOfDay = 0,
         .totalWidth = 0,
+        .seaLevel = 64,
         .visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL,
     };
 }

@@ -18,8 +18,6 @@ precision mediump float;
 
 #include "uniforms.h"
 
-#define WORLD_RADIUS 81.48733f
-#define WORLD_CIRCUMFERENCE 512.0f
 #define TAU 6.28319f
 
 layout(push_constant) uniform mvp {
@@ -95,6 +93,8 @@ void main()
     uint visibilityBits = bitfieldExtract(cellData.packed2, 0, 8);
     visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
+    elevation = max(elevation, WorldInfo.seaLevel);
+
     vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
     vec4 worldPosition = MVP.m * localPosition;
     // warp position for a false horizon
@@ -107,7 +107,9 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
-    vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? vec3(paletteX / 255.0, paletteY / 255.0, 0.0) : vec3(0.3, 0.3, 0.3);
+    vec3 paletteSample = vec3(paletteX / 255.0, paletteY / 255.0, 0.0); // TODO: sample from palette textures
+    paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0) : paletteSample;
+    vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? paletteSample : vec3(0.3, 0.3, 0.3);
     float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;
     out_color = vec4(cellColor, a);
     out_chunkIndex = TerrainBuffer.chunkIndex;
