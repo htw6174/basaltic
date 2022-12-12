@@ -2,6 +2,8 @@
 
 precision mediump float;
 
+#include "uniforms.h"
+
 #define SPECULAR 0.5
 #define DIFFUSE 0.7
 #define REFLECTION 1.0
@@ -19,13 +21,6 @@ precision mediump float;
 
 // NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
-
-layout(set = 0, binding = 0) uniform windowInfo {
-	vec2 windowSize;
-	vec2 mousePosition;
-	vec3 cameraPosition;
-	vec3 cameraFocalPoint;
-} WindowInfo;
 
 layout(std430, set = 0, binding = 1) buffer feedbackBuffer {
 	uint hoveredChunk;
@@ -77,6 +72,11 @@ void main()
 	}
 	vec3 litColor = in_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 	litColor = gl_FrontFacing ? litColor : vec3(0.0, 0.0, 0.0);
+
+	//vec2 mouseNormalized = mousePos / WindowInfo.windowSize;
+	//litColor = vec3(mouseNormalized, 1.0 - (mouseDist / 10.0));
+	//litColor = WindowInfo.cameraFocalPoint / 64.0;
+
 	//litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
 	out_color = vec4(litColor, in_color.a); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
 	//out_color = vec4(in_color, 1.0);

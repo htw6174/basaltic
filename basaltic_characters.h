@@ -2,6 +2,7 @@
 #define BASALTIC_CHARACTERS_H_INCLUDED
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "htw_core.h"
 #include "htw_geomap.h" // NOTE: only needed for GridCoord def; should be in seperate smaller header?
 //#include "basaltic_logic.h"
@@ -84,12 +85,14 @@ typedef struct bc_CharacterSkills {
 
 typedef struct bc_CharacterState {
     htw_geo_GridCoord worldCoord;
+    htw_geo_GridCoord destinationCoord;
     s32 currentHitPoints;
     s32 currentStamina;
 } bc_CharacterState;
 
 typedef struct bc_Character {
     bc_CharacterId id;
+    bool isControlledByPlayer; // TODO: could be useful to keep track of more info here, like faction/player ID for multiplayer
     bc_CharacterState currentState;
     bc_CharacterPrimaryStats primaryStats;
     bc_CharacterSecondaryStats secondaryStats;
@@ -98,6 +101,14 @@ typedef struct bc_Character {
 } bc_Character;
 
 bc_Character bc_createRandomCharacter();
-u32 bc_moveCharacter(bc_Character *subject, htw_geo_GridCoord newCoord);
+bool bc_setCharacterDestination(bc_Character *subject, htw_geo_GridCoord destinationCoord);
+bool bc_setCharacterPosition(bc_Character *subject, htw_geo_GridCoord newCoord);
+/**
+ * @brief Returns true if the character moved, false otherwise
+ *
+ * @param subject p_subject:...
+ * @return bool
+ */
+bool bc_doCharacterMove(bc_Character *subject);
 
 #endif // BASALTIC_CHARACTERS_H_INCLUDED

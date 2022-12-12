@@ -16,8 +16,10 @@ typedef struct {
     bool autoStep;
 } LogicState;
 
-int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue);
+static int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue);
 static void doWorldStep(bc_WorldState *world);
+
+static void updateCharacters(bc_WorldState *world);
 
 static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit);
 static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove);
@@ -119,7 +121,7 @@ int bc_initializeWorldState(bc_WorldState *world) {
         // generate random character TODO
         bc_Character *newCharacter = &world->characters[i];
         *newCharacter = bc_createRandomCharacter();
-        newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->worldWidth), htw_randRange(world->worldHeight)};
+        newCharacter->currentState.destinationCoord = newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->worldWidth), htw_randRange(world->worldHeight)};
     }
 
     return 0;
@@ -167,8 +169,7 @@ int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQu
     return 0;
 }
 
-static void doWorldStep(bc_WorldState *world) {
-    // TODO: all the rest
+static void worldStepStressTest(bc_WorldState *world) {
 
     // Stress TEST: do something with an area around every character, every frame
     // for 1024 characters with sight range 4, this is 38k updates
@@ -209,8 +210,34 @@ static void doWorldStep(bc_WorldState *world) {
             //htw_geo_setMapValueByIndex(heightMap, i, currentValue + wave);
         }
     }
+}
+
+static void doWorldStep(bc_WorldState *world) {
+    // TODO: all the rest
+    //worldStepStressTest(world);
+
+    updateCharacters(world);
 
     world->step++;
+}
+
+static void updateCharacters(bc_WorldState *world) {
+    u32 characterCount = world->characterPoolSize;
+
+    for (u32 i = 0; i < characterCount; i++) {
+        bc_Character *subject = &world->characters[i];
+
+        if (bc_doCharacterMove(subject)) {
+            // character moved this turn
+        } else {
+            // rest
+            // TODO: make rest it's own action which is defaulted to for player controlled characters when no other action is taken
+            subject->currentState.currentStamina += 5;
+        }
+        if (subject->isControlledByPlayer) {
+            revealMap(world, subject);
+        }
+    }
 }
 
 static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {
@@ -223,8 +250,7 @@ static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {
 static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove) {
     // TODO: schedule move for next step instead of executing immediately
     htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, characterMove->chunkIndex, characterMove->cellIndex);
-    bc_moveCharacter(characterMove->subject, destCoord);
-    revealMap(world, characterMove->subject);
+    bc_setCharacterDestination(characterMove->subject, destCoord);
 }
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?

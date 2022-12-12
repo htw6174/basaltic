@@ -59,8 +59,8 @@ bc_EditorContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
         .worldStepsPerSecond = calloc(bc_frameHistoryLength, sizeof(float)),
 
         .gameRestarting = false,
-        .worldChunkWidth = 4,
-        .worldChunkHeight = 4,
+        .worldChunkWidth = 3,
+        .worldChunkHeight = 3,
     };
 
     return newEditor;
@@ -130,6 +130,10 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
             igText("Seed string: %s", world->seedString);
             igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell", ui->hoveredCellIndex);
+
+            igValue_Uint("Mouse x", ui->mouse.x);
+            igValue_Uint("Mouse y", ui->mouse.y);
+
             igSpacing();
             bc_MapChunk hoveredChunk = world->chunks[ui->hoveredChunkIndex];
 
@@ -162,8 +166,12 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
 
             if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
                 if (igButton("Take control of random character", (ImVec2){0, 0})) {
+                    if (ui->activeCharacter != NULL) {
+                        ui->activeCharacter->isControlledByPlayer = false;
+                    }
                     u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
                     ui->activeCharacter = &world->characters[randCharacterIndex];
+                    ui->activeCharacter->isControlledByPlayer = true;
                     bc_snapCameraToCharacter(ui, ui->activeCharacter);
                 }
 
@@ -175,6 +183,7 @@ void bc_drawEditor(bc_EditorContext *editorContext, bc_SuperInfo *superInfo, bc_
             }
 
             if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
+                igSliderInt("Time of day", &graphics->worldInfo.timeOfDay, 0, 255, "%i", 0);
                 igSliderInt("Sea level", &graphics->worldInfo.seaLevel, 0, 128, "%i", 0);
             }
 
@@ -238,4 +247,6 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit) {
 void characterInspector(bc_Character *character) {
     // TODO
     igValue_Uint("Character ID", character->id);
+    igValue_Int("Health", character->currentState.currentHitPoints);
+    igValue_Int("Stamina", character->currentState.currentStamina);
 }

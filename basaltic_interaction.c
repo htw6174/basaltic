@@ -81,7 +81,7 @@ void bc_snapCameraToCharacter(bc_UiState *ui, bc_Character *subject) {
     htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
     htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
     ui->cameraDistance = 5;
-    // TODO: would like to set camera height also, but that requires inspecting world data as well
+    // TODO: would like to set camera height also, but that requires inspecting world data as well. Maybe setup a general purpose height adjust in bc_window
 }
 
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement) {

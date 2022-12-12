@@ -93,6 +93,8 @@ void main()
     uint visibilityBits = bitfieldExtract(cellData.packed2, 0, 8);
     visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
+    float waterDepth = (WorldInfo.seaLevel - elevation) / 64.0; // >0 on ocean
+
     elevation = max(elevation, WorldInfo.seaLevel);
 
     vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
@@ -108,9 +110,13 @@ void main()
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
     vec3 paletteSample = vec3(paletteX / 255.0, paletteY / 255.0, 0.0); // TODO: sample from palette textures
-    paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0) : paletteSample;
+    paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0 - waterDepth) : paletteSample;
     vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? paletteSample : vec3(0.3, 0.3, 0.3);
     float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;
+
+	//vec2 mouseNormalized = WindowInfo.mousePosition / WindowInfo.windowSize;
+	//cellColor = vec3(mouseNormalized, 0.0);
+
     out_color = vec4(cellColor, a);
     out_chunkIndex = TerrainBuffer.chunkIndex;
     out_cellIndex = cellIndex;
