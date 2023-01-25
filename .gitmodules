@@ -1,0 +1,3 @@
+[submodule "htw-libs"]
+	path = htw-libs
+	url = https://github.com/htw6174/htw-libs.git

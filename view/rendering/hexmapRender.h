@@ -1,0 +1,65 @@
+#ifndef HEXMAPRENDER_H_INCLUDED
+#define HEXMAPRENDER_H_INCLUDED
+
+#include "htw_core.h"
+#include "htw_vulkan.h"
+#include "ccVector.h"
+#include "basaltic_render.h"
+
+// Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
+// TODO: allow vision distance to be changed at runtime
+#define MAX_VISIBLE_CHUNK_DISTANCE 2
+#define VISIBLE_CHUNK_AREA_DIAMETER ((MAX_VISIBLE_CHUNK_DISTANCE * 2) - 1)
+#define MAX_VISIBLE_CHUNKS (VISIBLE_CHUNK_AREA_DIAMETER * VISIBLE_CHUNK_AREA_DIAMETER)
+
+typedef struct {
+    vec3 position;
+    u32 cellIndex;
+} bc_HexmapVertexData;
+
+typedef struct {
+    s16 elevation;
+    u8 paletteX;
+    u8 paletteY;
+    u8 visibilityBits;
+    u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
+    u16 unused2; // weather / temporary effect bitmask?
+    //int64_t aligner;
+} bc_TerrainCellData; // TODO: move this to a world logic source file? keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
+
+// NOTE: this struct isn't meant to be used directly - it exists to find the offset of an array of _bc_TerrainCellData packed into a buffer after the other fields in this struct
+typedef struct {
+    u32 chunkIndex;
+    bc_TerrainCellData chunkData;
+} bc_TerrainBufferData;
+
+// Unchanging model data needed to render any hexmap terrain chunk; only need one instance
+typedef struct {
+    uint32_t subdivisions; // TODO: unused
+    htw_PipelineHandle pipeline;
+    htw_DescriptorSetLayout chunkObjectLayout;
+    htw_DescriptorSet *chunkObjectDescriptorSets;
+    bc_Model chunkModel;
+} bc_RenderableHexmap;
+
+// Buffer data for an entire terrain layer, and tracking for what chunk data needs to be loaded each frame
+typedef struct {
+    // length MAX_VISIBLE_CHUNKS arrays that are compared to determine what chunks to reload each frame, and where to place them
+    s32 *closestChunks;
+    s32 *loadedChunks;
+    size_t terrainBufferSize;
+    bc_TerrainBufferData *terrainBufferData;
+    htw_SplitBuffer terrainBuffer; // split into multiple logical buffers used to describe each terrain chunk
+} bc_HexmapTerrain;
+
+bc_RenderableHexmap *bc_createRenderableHexmap(bc_RenderContext *rc);
+bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderContext *rc);
+
+// TODO: do these need to be seperate methods from other setup?
+void bc_writeTerrainBuffers(bc_RenderContext *rc, bc_RenderableHexmap *hexmap);
+void bc_updateHexmapDescriptors(bc_RenderContext *rc, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
+
+void bc_updateTerrainVisibleChunks(bc_RenderContext *rc, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk);
+void bc_drawHexmapTerrain(bc_RenderContext *rc, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
+
+#endif // HEXMAPRENDER_H_INCLUDED

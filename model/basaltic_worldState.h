@@ -3,7 +3,6 @@
 
 #include <math.h>
 #include "htw_geomap.h"
-#include "basaltic_commandQueue.h"
 #include "basaltic_characters.h"
 
 #define BC_MAX_SEED_LENGTH 256

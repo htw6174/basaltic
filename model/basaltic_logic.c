@@ -7,16 +7,16 @@
 #include "htw_geomap.h"
 #include "basaltic_defs.h"
 #include "basaltic_logic.h"
+#include "basaltic_model.h"
 #include "basaltic_worldState.h"
-#include "basaltic_commandQueue.h"
+#include "basaltic_commandBuffer.h"
 
 typedef struct {
-    bc_CommandQueue processingQueue;
+    bc_CommandBuffer processingBuffer;
     bool advanceSingleStep;
     bool autoStep;
 } LogicState;
 
-static int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue);
 static void doWorldStep(bc_WorldState *world);
 
 static void updateCharacters(bc_WorldState *world);
@@ -24,44 +24,6 @@ static void updateCharacters(bc_WorldState *world);
 static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit);
 static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove);
 static void revealMap(bc_WorldState *world, bc_Character* character);
-
-int bc_runLogicThread(void *in) {
-    // Extract input data
-    bc_LogicThreadInput *loopInput = (bc_LogicThreadInput*)in;
-    bc_WorldState *world = loopInput->world;
-    bc_CommandQueue inputQueue = loopInput->inputQueue;
-    Uint32 interval = loopInput->interval;
-    volatile bc_ProcessState *threadState = loopInput->threadState;
-
-    LogicState logic = {
-        .processingQueue = bc_createCommandQueue(bc_commandQueueMaxSize),
-        .advanceSingleStep = false,
-        .autoStep = false,
-    };
-
-    while (*threadState == BC_PROCESS_STATE_RUNNING) {
-        Uint64 startTime = SDL_GetTicks64(); // TODO: use something other than SDL for timing, so the dependency can be removed
-
-        doLogicTick(&logic, world, inputQueue);
-
-        if (logic.advanceSingleStep || logic.autoStep) {
-            doWorldStep(world);
-            logic.advanceSingleStep = false;
-        }
-        //bc_simulateWorld(input, world);
-
-        // delay until end of frame
-        Uint64 endTime = SDL_GetTicks64();
-        Uint64 duration = endTime - startTime;
-        if (duration < interval) {
-            SDL_Delay(interval - duration);
-        }
-    }
-
-    bc_destroyCommandQueue(logic.processingQueue);
-
-    return 0;
-}
 
 bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
     bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
@@ -132,38 +94,44 @@ void bc_destroyWorldState(bc_WorldState *world) {
     free(world);
 }
 
-int doLogicTick(LogicState *logic, bc_WorldState *world, bc_CommandQueue inputQueue) {
-    if (bc_commandQueueIsEmpty(inputQueue)) {
-        return 0;
-    }
-    if (bc_transferCommandQueue(logic->processingQueue, inputQueue)) {
-        bc_WorldInputCommand *commands;
-        u32 itemsInQueue = bc_beginQueueProcessing(logic->processingQueue, &commands);
-        for (int i = 0; i < itemsInQueue; i++) {
-            // TODO: process command
-            bc_WorldInputCommand currentCommand = commands[i];
-            switch (currentCommand.commandType) {
-                case BC_COMMAND_TYPE_STEP_ADVANCE:
-                    logic->advanceSingleStep = true;
+int bc_doLogicTick(bc_ModelData *model, bc_CommandBuffer inputBuffer) {
+    // Don't bother locking buffers if there are no pending commands
+    if (!bc_commandBufferIsEmpty(inputBuffer)) {
+        if (bc_transferCommandBuffer(model->processingBuffer, inputBuffer)) {
+            u32 itemsInBuffer = bc_beginBufferProcessing(model->processingBuffer);
+            for (int i = 0; i < itemsInBuffer; i++) {
+                bc_WorldCommand *currentCommand = (bc_WorldCommand*)bc_getNextCommand(model->processingBuffer);
+                if (currentCommand == NULL) {
                     break;
-                case BC_COMMAND_TYPE_STEP_PLAY:
-                    logic->autoStep = true;
-                    break;
-                case BC_COMMAND_TYPE_STEP_PAUSE:
-                    logic->autoStep = false;
-                    break;
-                case BC_COMMAND_TYPE_CHARACTER_MOVE:
-                    moveCharacter(world, &currentCommand.characterMoveCommand);
-                    break;
-                case BC_COMMAND_TYPE_TERRAIN_EDIT:
-                    editMap(world, &currentCommand.terrainEditCommand);
-                    break;
-                default:
-                    fprintf(stderr, "ERROR: invalid command type %i", currentCommand.commandType);
-                    break;
+                }
+                switch (currentCommand->commandType) {
+                    case BC_COMMAND_TYPE_STEP_ADVANCE:
+                        model->advanceSingleStep = true;
+                        break;
+                    case BC_COMMAND_TYPE_STEP_PLAY:
+                        model->autoStep = true;
+                        break;
+                    case BC_COMMAND_TYPE_STEP_PAUSE:
+                        model->autoStep = false;
+                        break;
+                    case BC_COMMAND_TYPE_CHARACTER_MOVE:
+                        moveCharacter(model->world, &currentCommand->characterMoveCommand);
+                        break;
+                    case BC_COMMAND_TYPE_TERRAIN_EDIT:
+                        editMap(model->world, &currentCommand->terrainEditCommand);
+                        break;
+                    default:
+                        fprintf(stderr, "ERROR: invalid command type %i", currentCommand->commandType);
+                        break;
+                }
             }
+            bc_endBufferProcessing(model->processingBuffer);
         }
-        bc_endQueueProcessing(logic->processingQueue);
+    }
+
+    if (model->advanceSingleStep || model->autoStep) {
+        doWorldStep(model->world);
+        model->advanceSingleStep = false;
     }
 
     return 0;

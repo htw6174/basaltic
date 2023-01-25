@@ -26,7 +26,7 @@ typedef struct bc_Mouse {
     u32 rightHeld;
 } bc_Mouse;
 
-typedef struct bc_UiState {
+typedef struct {
     bc_InterfaceMode interfaceMode;
     // camera
     bc_CameraMode cameraMode;
@@ -53,7 +53,7 @@ typedef struct bc_UiState {
     // menus
 } bc_UiState;
 
-bc_UiState bc_createUiState();
+bc_UiState *bc_createUiState();
 void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 
 #endif // BASALTIC_UISTATE_H_INCLUDED

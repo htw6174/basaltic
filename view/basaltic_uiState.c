@@ -1,7 +1,8 @@
 #include "basaltic_uiState.h"
 
-bc_UiState bc_createUiState() {
-    bc_UiState newUi = {
+bc_UiState* bc_createUiState() {
+    bc_UiState *ui = malloc(sizeof(bc_UiState));
+    *ui = (bc_UiState){
         .interfaceMode = BC_INTERFACE_MODE_SYSTEM_MENU,
         // camera
         .cameraMode = BC_CAMERA_MODE_PERSPECTIVE,
@@ -25,7 +26,7 @@ bc_UiState bc_createUiState() {
         .activeCharacter = NULL,
         // menus
     };
-    return newUi;
+    return ui;
 }
 
 void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY) {
