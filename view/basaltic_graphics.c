@@ -47,14 +47,14 @@ static void initDebugGraphics(bc_GraphicsState *graphics) {
     htw_PipelineHandle pipeline = htw_createPipeline(graphics->vkContext, debugPipelineLayouts, shaderSet);
 
     size_t instanceDataSize = sizeof(DebugInstanceData) * maxInstanceCount;
-    htw_ModelData model = {
+    htw_MeshBufferSet model = {
         .vertexCount = 24,
         .instanceCount = maxInstanceCount,
         .instanceBuffer = htw_createBuffer(graphics->vkContext, graphics->bufferPool, instanceDataSize, HTW_BUFFER_USAGE_VERTEX)
     };
 
-    bc_Model instancedModel = {
-        .model = model,
+    bc_Mesh instancedModel = {
+        .meshBufferSet = model,
         .instanceData = malloc(instanceDataSize),
         .instanceDataSize = instanceDataSize
     };
@@ -69,9 +69,9 @@ static void initDebugGraphics(bc_GraphicsState *graphics) {
 }
 
 static void updateDebugGraphics(bc_GraphicsState *graphics, bc_WorldState *world) {
-    bc_Model *characterDebugModel = &graphics->characterDebug.instancedModel;
+    bc_Mesh *characterDebugModel = &graphics->characterDebug.instancedModel;
     DebugInstanceData *instanceData = characterDebugModel->instanceData;
-    for (int i = 0; i < characterDebugModel->model.instanceCount; i++) {
+    for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
         bc_Character *character = &world->characters[i];
         htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
         u32 chunkIndex, cellIndex;
@@ -85,7 +85,7 @@ static void updateDebugGraphics(bc_GraphicsState *graphics, bc_WorldState *world
         };
         instanceData[i] = characterData;
     }
-    htw_writeBuffer(graphics->vkContext, characterDebugModel->model.instanceBuffer, characterDebugModel->instanceData, characterDebugModel->instanceDataSize);
+    htw_writeBuffer(graphics->vkContext, characterDebugModel->meshBufferSet.instanceBuffer, characterDebugModel->instanceData, characterDebugModel->instanceDataSize);
 }
 
 int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *world) {
@@ -110,7 +110,7 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
             htw_pushConstants(graphics->vkContext, graphics->characterDebug.pipeline, &mvp);
             htw_bindPipeline(graphics->vkContext, graphics->characterDebug.pipeline);
             htw_bindDescriptorSet(graphics->vkContext, graphics->characterDebug.pipeline, graphics->characterDebug.debugDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-            htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.model, HTW_DRAW_TYPE_INSTANCED);
+            htw_drawPipeline(graphics->vkContext, graphics->characterDebug.pipeline, &graphics->characterDebug.instancedModel.meshBufferSet, HTW_DRAW_TYPE_INSTANCED);
         }
     }
 

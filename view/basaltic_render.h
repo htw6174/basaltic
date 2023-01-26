@@ -34,16 +34,6 @@ typedef struct {
     u32 visibilityOverrideBits;
 } bc_WorldInfo;
 
-typedef struct {
-    htw_ModelData model;
-    void *vertexData;
-    void *indexData;
-    void *instanceData;
-    size_t vertexDataSize;
-    size_t indexDataSize;
-    size_t instanceDataSize;
-} bc_Model;
-
 typedef struct private_bc_RenderContext *bc_InternalRenderContext;
 
 typedef struct {

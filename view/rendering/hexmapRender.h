@@ -4,7 +4,8 @@
 #include "htw_core.h"
 #include "htw_vulkan.h"
 #include "ccVector.h"
-#include "basaltic_render.h"
+#include "basaltic_mesh.h"
+#include "basaltic_worldState.h"
 
 // Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
 // TODO: allow vision distance to be changed at runtime
@@ -39,7 +40,7 @@ typedef struct {
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout chunkObjectLayout;
     htw_DescriptorSet *chunkObjectDescriptorSets;
-    bc_Model chunkModel;
+    bc_Mesh chunkMesh;
 } bc_RenderableHexmap;
 
 // Buffer data for an entire terrain layer, and tracking for what chunk data needs to be loaded each frame
@@ -52,14 +53,14 @@ typedef struct {
     htw_SplitBuffer terrainBuffer; // split into multiple logical buffers used to describe each terrain chunk
 } bc_HexmapTerrain;
 
-bc_RenderableHexmap *bc_createRenderableHexmap(bc_RenderContext *rc);
-bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderContext *rc);
+bc_RenderableHexmap *bc_createRenderableHexmap(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout);
+bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool);
 
 // TODO: do these need to be seperate methods from other setup?
-void bc_writeTerrainBuffers(bc_RenderContext *rc, bc_RenderableHexmap *hexmap);
-void bc_updateHexmapDescriptors(bc_RenderContext *rc, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
+void bc_writeTerrainBuffers(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap);
+void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
 
-void bc_updateTerrainVisibleChunks(bc_RenderContext *rc, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk);
-void bc_drawHexmapTerrain(bc_RenderContext *rc, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
+void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk);
+void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions);
 
 #endif // HEXMAPRENDER_H_INCLUDED

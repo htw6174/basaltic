@@ -14,7 +14,7 @@ typedef struct {
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout debugLayout;
     htw_DescriptorSet debugDescriptorSet;
-    bc_Model instancedModel;
+    bc_Mesh instancedModel;
 } bc_DebugSwarm;
 
 typedef struct {

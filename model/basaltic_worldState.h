@@ -7,6 +7,8 @@
 
 #define BC_MAX_SEED_LENGTH 256
 
+static const u32 bc_chunkSize = 64;
+
 typedef struct {
     htw_ValueMap *heightMap;
     htw_ValueMap *temperatureMap;

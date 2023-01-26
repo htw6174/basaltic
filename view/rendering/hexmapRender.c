@@ -2,20 +2,22 @@
 #include "hexmapRender.h"
 #include "htw_core.h"
 #include "htw_vulkan.h"
-#include "basaltic_render.h"
+#include "basaltic_mesh.h"
+#include "basaltic_logic.h"
+#include "basaltic_worldState.h"
 
-static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap);
-static void updateHexmapDataBuffer(bc_RenderContext *rc, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
+static void createHexmapMesh(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout);
+static void updateHexmapDataBuffer(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
 static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, bc_TerrainCellData *target);
 
-bc_RenderableHexmap *bc_createRenderableHexmap(bc_RenderContext *rc) {
+bc_RenderableHexmap *bc_createRenderableHexmap(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout) {
     bc_RenderableHexmap *newHexmap = calloc(1, sizeof(bc_RenderableHexmap));
-    createHexmapMesh(rc, newHexmap);
+    createHexmapMesh(vkContext, newHexmap, bufferPool, perFrameLayout, perPassLayout);
     //createHexmapInstanceBuffers(rc, world);
     return newHexmap;
 }
 
-bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderContext *rc) {
+bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool) {
     bc_HexmapTerrain *newTerrain = calloc(1, sizeof(bc_HexmapTerrain));
     newTerrain->closestChunks = calloc(1, sizeof(u32) * MAX_VISIBLE_CHUNKS);
     newTerrain->loadedChunks = calloc(1, sizeof(u32) * MAX_VISIBLE_CHUNKS);
@@ -34,7 +36,7 @@ bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderContext *rc) {
     newTerrain->terrainBufferSize = offsetof(bc_TerrainBufferData, chunkData) + (sizeof(bc_TerrainCellData) * bufferCellCount);
 
     newTerrain->terrainBufferData = malloc(newTerrain->terrainBufferSize * MAX_VISIBLE_CHUNKS);
-    newTerrain->terrainBuffer = htw_createSplitBuffer(rc->vkContext, rc->bufferPool, newTerrain->terrainBufferSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE);
+    newTerrain->terrainBuffer = htw_createSplitBuffer(vkContext, bufferPool, newTerrain->terrainBufferSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE);
 
     return newTerrain;
 }
@@ -44,7 +46,7 @@ bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderContext *rc) {
  *
  * @param terrain
  */
-static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) {
+static void createHexmapMesh(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -70,21 +72,21 @@ static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) 
     };
     htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
     htw_ShaderSet shaderInfo = {
-        .vertexShader = htw_loadShader(rc->vkContext, "shaders_bin/hexTerrain.vert.spv"),
-        .fragmentShader = htw_loadShader(rc->vkContext, "shaders_bin/hexTerrain.frag.spv"),
+        .vertexShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.vert.spv"),
+        .fragmentShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.frag.spv"),
         .vertexInputStride = sizeof(bc_HexmapVertexData),
         .vertexInputCount = 2,
         .vertexInputInfos = vertexInputInfos,
         .instanceInputCount = 0,
     };
 
-    hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(rc->vkContext);
-    htw_DescriptorSetLayout terrainPipelineLayouts[] = {rc->perFrameLayout, rc->perPassLayout, NULL, hexmap->chunkObjectLayout};
-    hexmap->pipeline = htw_createPipeline(rc->vkContext, terrainPipelineLayouts, shaderInfo);
+    hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(vkContext);
+    htw_DescriptorSetLayout terrainPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, hexmap->chunkObjectLayout};
+    hexmap->pipeline = htw_createPipeline(vkContext, terrainPipelineLayouts, shaderInfo);
 
     // create descriptor set for each chunk, to swap between during each frame
     hexmap->chunkObjectDescriptorSets = malloc(sizeof(htw_DescriptorSet) * MAX_VISIBLE_CHUNKS);
-    htw_allocateDescriptors(rc->vkContext, hexmap->chunkObjectLayout, MAX_VISIBLE_CHUNKS, hexmap->chunkObjectDescriptorSets);
+    htw_allocateDescriptors(vkContext, hexmap->chunkObjectLayout, MAX_VISIBLE_CHUNKS, hexmap->chunkObjectDescriptorSets);
 
     // determine required size for vertex and triangle buffers
     const u32 width = bc_chunkSize;
@@ -109,23 +111,23 @@ static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) 
     // assign model data
     size_t vertexDataSize = vertexSize * vertexCount;
     size_t indexDataSize = sizeof(u32) * triangleCount;
-    htw_ModelData modelData = {
-        .vertexBuffer = htw_createBuffer(rc->vkContext, rc->bufferPool, vertexDataSize, HTW_BUFFER_USAGE_VERTEX),
-        .indexBuffer = htw_createBuffer(rc->vkContext, rc->bufferPool, indexDataSize, HTW_BUFFER_USAGE_INDEX),
+    htw_MeshBufferSet modelData = {
+        .vertexBuffer = htw_createBuffer(vkContext, bufferPool, vertexDataSize, HTW_BUFFER_USAGE_VERTEX),
+        .indexBuffer = htw_createBuffer(vkContext, bufferPool, indexDataSize, HTW_BUFFER_USAGE_INDEX),
         .vertexCount = vertexCount,
         .indexCount = triangleCount,
         .instanceCount = 0
     };
-    bc_Model chunkModel = {
-        .model = modelData,
+    bc_Mesh chunkMesh = {
+        .meshBufferSet = modelData,
         .vertexData = malloc(vertexDataSize),
         .vertexDataSize = vertexDataSize,
         .indexData = malloc(indexDataSize),
         .indexDataSize = indexDataSize
     };
-    hexmap->chunkModel = chunkModel;
+    hexmap->chunkMesh = chunkMesh;
 
-    // hexadon model data
+    // hexagon model data
     static const float halfHeight = 0.433012701892;
     static const vec3 hexagonPositions[] = {
         { {0.0, 0.0, 0.0} }, // center
@@ -147,8 +149,8 @@ static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) 
 
     // create and write model data for each cell
     // vert and tri array layout: | main chunk data (left to right, bottom to top) | right chunk edge strip (bottom to top) | top chunk edge strip (left to right) | top-right corner infill |
-    bc_HexmapVertexData *vertexData = hexmap->chunkModel.vertexData;
-    u32 *triData = hexmap->chunkModel.indexData;
+    bc_HexmapVertexData *vertexData = hexmap->chunkMesh.vertexData;
+    u32 *triData = hexmap->chunkMesh.indexData;
     u32 vIndex = 0;
     u32 tIndex = 0;
     for (int y = 0; y < height; y++) {
@@ -432,17 +434,17 @@ static void createHexmapMesh(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) 
 //     htw_printArray(stdout, triData, sizeof(triData[0]), triangleCount, trisPerCell, "%u, ");
 }
 
-void bc_writeTerrainBuffers(bc_RenderContext *rc, bc_RenderableHexmap *hexmap) {
-    bc_Model chunkModel = hexmap->chunkModel;
-    htw_writeBuffer(rc->vkContext, chunkModel.model.vertexBuffer, chunkModel.vertexData, chunkModel.vertexDataSize);
-    htw_writeBuffer(rc->vkContext, chunkModel.model.indexBuffer, chunkModel.indexData, chunkModel.indexDataSize);
+void bc_writeTerrainBuffers(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap) {
+    bc_Mesh chunkMesh = hexmap->chunkMesh;
+    htw_writeBuffer(vkContext, chunkMesh.meshBufferSet.vertexBuffer, chunkMesh.vertexData, chunkMesh.vertexDataSize);
+    htw_writeBuffer(vkContext, chunkMesh.meshBufferSet.indexBuffer, chunkMesh.indexData, chunkMesh.indexDataSize);
 }
 
-void bc_updateHexmapDescriptors(bc_RenderContext *rc, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain) {
-    htw_updateTerrainObjectDescriptors(rc->vkContext, hexmap->chunkObjectDescriptorSets, terrain->terrainBuffer);
+void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain) {
+    htw_updateTerrainObjectDescriptors(vkContext, hexmap->chunkObjectDescriptorSets, terrain->terrainBuffer);
 }
 
-void bc_updateTerrainVisibleChunks(bc_RenderContext *rc, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk) {
+void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -533,12 +535,12 @@ void bc_updateTerrainVisibleChunks(bc_RenderContext *rc, bc_WorldState *world, b
 
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         // TODO: only update chunk if freshly visible or has pending updates
-        updateHexmapDataBuffer(rc, world, terrain, loadedChunks[c], c);
+        updateHexmapDataBuffer(vkContext, world, terrain, loadedChunks[c], c);
     }
 }
 
-void bc_drawHexmapTerrain(bc_RenderContext *rc, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain) {
-    htw_bindPipeline(rc->vkContext, hexmap->pipeline);
+void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions) {
+    htw_bindPipeline(vkContext, hexmap->pipeline);
 
     static mat4x4 modelMatrix;
 
@@ -549,19 +551,19 @@ void bc_drawHexmapTerrain(bc_RenderContext *rc, bc_WorldState *world, bc_Rendera
         bc_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
         vec3 chunkPos = {{chunkX, chunkY, 0.0}};
 
-        htw_bindDescriptorSet(rc->vkContext, hexmap->pipeline, hexmap->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
+        htw_bindDescriptorSet(vkContext, hexmap->pipeline, hexmap->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
         // Draw once for each 'wrap instance', to allow for seemless world wrapping
         // TODO: also try acheiving this with instanced rendering or drawing only the instance that would be closest to the camera focus
         for (int i = 0; i < 4; i++) {
-            vec3 copyPos = vec3Add(chunkPos, rc->wrapInstancePositions[i]);
+            vec3 copyPos = vec3Add(chunkPos, instancePositions[i]);
             mat4x4SetTranslation(modelMatrix, copyPos);
-            htw_setModelTransform(rc->vkContext, hexmap->pipeline, modelMatrix);
-            htw_drawPipeline(rc->vkContext, hexmap->pipeline, &hexmap->chunkModel.model, HTW_DRAW_TYPE_INDEXED);
+            htw_setModelTransform(vkContext, hexmap->pipeline, modelMatrix);
+            htw_drawPipeline(vkContext, hexmap->pipeline, &hexmap->chunkMesh.meshBufferSet, HTW_DRAW_TYPE_INDEXED);
         }
     }
 }
 
-static void updateHexmapDataBuffer (bc_RenderContext *rc, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
+static void updateHexmapDataBuffer (htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
     bc_MapChunk *chunk = &world->chunks[chunkIndex];
@@ -603,7 +605,7 @@ static void updateHexmapDataBuffer (bc_RenderContext *rc, bc_WorldState *world, 
     chunk = &world->chunks[topRightChunk];
     setHexmapBufferFromCell(chunk, 0, 0, &cellData[edgeDataIndex]); // set last position in buffer
 
-    htw_writeSubBuffer(rc->vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainBufferSize);
+    htw_writeSubBuffer(vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainBufferSize);
 }
 
 static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, bc_TerrainCellData *target) {

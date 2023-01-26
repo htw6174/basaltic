@@ -4,7 +4,6 @@
 #include "htw_core.h"
 
 // TODO: move most of these defs into the View or Model modules
-static const u32 bc_chunkSize = 64;
 
 typedef enum {
     BC_SUPERVISOR_SIGNAL_NONE,

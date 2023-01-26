@@ -47,8 +47,8 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
     createDefaultPipeline(rc);
     //initTextGraphics(graphics);
-    prc->renderableHexmap = bc_createRenderableHexmap(rc);
-    prc->surfaceTerrain = bc_createHexmapTerrain(rc);
+    prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
+    prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
     //initDebugGraphics(graphics);
 
     htw_finalizeBufferPool(vkContext, rc->bufferPool);
@@ -58,13 +58,13 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     //writeTextBuffers(graphics); // Must be within a oneTimeCommand execution to transition image layouts TODO: is there a better way to structure things, to make this more clear?
     htw_endOneTimeCommands(vkContext);
 
-    bc_writeTerrainBuffers(rc, rc->internalRenderContext->renderableHexmap);
+    bc_writeTerrainBuffers(rc->vkContext, rc->internalRenderContext->renderableHexmap);
 
     // assign buffers to descriptor sets
     htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
 
     //updateTextDescriptors(graphics);
-    bc_updateHexmapDescriptors(rc, prc->renderableHexmap, prc->surfaceTerrain);
+    bc_updateHexmapDescriptors(rc->vkContext, prc->renderableHexmap, prc->surfaceTerrain);
 
     // initialize highlighted cell
     rc->feedbackInfo = (bc_FeedbackInfo){
@@ -141,10 +141,10 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
         float cameraY = rc->windowInfo.cameraFocalPoint.y;
         u32 centerChunk = bc_getChunkIndexByWorldPosition(world, cameraX, cameraY);
-        bc_updateTerrainVisibleChunks(rc, world, rc->internalRenderContext->surfaceTerrain, centerChunk);
+        bc_updateTerrainVisibleChunks(rc->vkContext, world, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
         htw_pushConstants(rc->vkContext, rc->internalRenderContext->renderableHexmap->pipeline, &mvp);
-        bc_drawHexmapTerrain(rc, world, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain);
+        bc_drawHexmapTerrain(rc->vkContext, world, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
     }
 }
 
@@ -180,6 +180,7 @@ static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
 }
 
+// NOTE/TODO: is it better to add more arguments to this kind of method, to make it clear what needs to be setup first? e.g. this needs the perFrame and perPass layouts created first
 static void createDefaultPipeline(bc_RenderContext *rc) {
     htw_ShaderInputInfo positionInfo = {
         .size = sizeof(vec3),
@@ -188,7 +189,7 @@ static void createDefaultPipeline(bc_RenderContext *rc) {
     };
     htw_ShaderInputInfo vertexInfos[] = {positionInfo};
     htw_ShaderSet shaderSet = {
-        .vertexShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.vert.spv"),
+        .vertexShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.vert.spv"), // TODO: default shader for simple meshes
         .fragmentShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.frag.spv"),
         .vertexInputStride = sizeof(vec3),
         .vertexInputCount = 1,
