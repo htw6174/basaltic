@@ -13,7 +13,7 @@ static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellInde
 static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex);
 static void advanceStep(bc_CommandBuffer commandBuffer);
 
-// TODO: add seperate input handling for each interfaceMode setting, allow logicInput to be NULL if interfaceMode doesn't require world interaction
+// TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
@@ -137,6 +137,7 @@ static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellInde
     bc_pushCommandToBuffer(commandBuffer, &inputCommand, sizeof(inputCommand));
 }
 
+// FIXME
 static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
     if (character == NULL) return;
     bc_CharacterMoveCommand moveCommand = {

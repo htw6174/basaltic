@@ -32,10 +32,7 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     newWorld->seed = xxh_hash(0, BC_MAX_SEED_LENGTH, (u8*)newWorld->seedString);
     newWorld->step = 0;
 
-    newWorld->chunkCountX = chunkCountX;
-    newWorld->chunkCountY = chunkCountY;
-    newWorld->worldWidth = chunkCountX * bc_chunkSize;
-    newWorld->worldHeight = chunkCountY * bc_chunkSize;
+    newWorld->surfaceMap = htw_geo_createChunkMap(bc_chunkSize, chunkCountX, chunkCountY, sizeof(bc_CellData));
 
     newWorld->characterPoolSize = CHARACTER_POOL_SIZE;
     return newWorld;
@@ -45,35 +42,50 @@ int bc_initializeWorldState(bc_WorldState *world) {
     // World generation
     u32 width = bc_chunkSize;
     u32 height = bc_chunkSize;
-    u32 chunkCount = world->chunkCountX * world->chunkCountY;
-    // TODO: single malloc for all world data, get offset of each array
-    world->chunks = malloc(sizeof(bc_MapChunk) * chunkCount);
+    u32 cellsPerChunk = width * height;
+    u32 chunkCount = world->surfaceMap->chunkCountX * world->surfaceMap->chunkCountY;
 
-    float worldCartesianWidth = htw_geo_hexToCartesianPositionX(world->worldWidth, 0);
-    float worldCartesianHeight = htw_geo_hexToCartesianPositionY(world->worldHeight);
+    float worldCartesianWidth = htw_geo_hexToCartesianPositionX(world->surfaceMap->mapWidth, 0);
+    float worldCartesianHeight = htw_geo_hexToCartesianPositionY(world->surfaceMap->mapHeight);
 
-    for (int c = 0, y = 0; y < world->chunkCountY; y++) {
-        for (int x = 0; x < world->chunkCountX; x++, c++) {
+    for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
+        for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
             // generate chunk data
-            bc_MapChunk *chunk = &world->chunks[c];
             s32 cellPosX = x * width;
             s32 cellPosY = y * height;
-            chunk->heightMap = htw_geo_createValueMap(width, height, 128);
-            htw_geo_fillSimplex(chunk->heightMap, world->seed, 8, cellPosX, cellPosY, world->worldWidth, 4);
+            bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
 
-            chunk->temperatureMap = htw_geo_createValueMap(width, height, world->chunkCountY * height);
+            for (int i = 0; i < cellsPerChunk; i++) {
+                bc_CellData *cell = &cellData[i];
+                htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
+                s32 grad = remap_int(cellCoord.y, 0, world->surfaceMap->mapHeight, 0, 255);
+                s32 poleGrad1 = htw_geo_circularGradientByGridCoord(
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth / 4.0);
+                s32 poleGrad2 = htw_geo_circularGradientByGridCoord(
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth / 2.0);
+                cell->height = 128;
+                cell->temperature = poleGrad1;
+                cell->nutrient = poleGrad2;
+                cell->rainfall = 128;
+                cell->visibility = 0;
+            }
+            // Max 128
+            //htw_geo_fillSimplex(chunk->heightMap, world->seed, 8, cellPosX, cellPosY, world->worldWidth, 4);
+
+            // Max of mapheight?
             //htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
             //htw_geo_fillPerlin(chunk->temperatureMap, world->seed, 1, cellPosX, cellPosY, 0.05, worldCartesianWidth, worldCartesianHeight);
-            htw_geo_fillSimplex(chunk->temperatureMap, world->seed + 1, 4, cellPosX, cellPosY, world->worldWidth, 4);
+            //htw_geo_fillSimplex(chunk->temperatureMap, world->seed + 1, 4, cellPosX, cellPosY, world->worldWidth, 4);
+            //htw_geo_fillCircularGradient(chunk->temperatureMap, (htw_geo_GridCoord){-cellPosX, -cellPosY}, 255, 0, world->worldWidth / 2);
 
-            chunk->rainfallMap = htw_geo_createValueMap(width, height, 255);
+            // Max of mapheight?
+            //htw_geo_fillSimplex(chunk->nutrientMap, world->seed + 2, 4, cellPosX, cellPosY, world->worldWidth, 4);
+
+            // Max 255
             //htw_geo_fillPerlin(chunk->rainfallMap, world->seed, 2, cellPosX, cellPosY, 0.1, worldCartesianWidth, worldCartesianHeight);
-            htw_geo_fillSimplex(chunk->rainfallMap, world->seed + 2, 6, cellPosX, cellPosY, world->worldWidth, 4);
-            //htw_geo_fillUniform(chunk->rainfallMap, 0);
+            //htw_geo_fillSimplex(chunk->rainfallMap, world->seed + 3, 6, cellPosX, cellPosY, world->worldWidth, 4);
 
-            chunk->visibilityMap = htw_geo_createValueMap(width, height, UINT32_MAX);
             //htw_geo_fillChecker(chunk->visibilityMap, 0, 1, 4);
-            htw_geo_fillUniform(chunk->visibilityMap, 0);
         }
     }
 
@@ -83,7 +95,7 @@ int bc_initializeWorldState(bc_WorldState *world) {
         // generate random character TODO
         bc_Character *newCharacter = &world->characters[i];
         *newCharacter = bc_createRandomCharacter();
-        newCharacter->currentState.destinationCoord = newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->worldWidth), htw_randRange(world->worldHeight)};
+        newCharacter->currentState.destinationCoord = newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->surfaceMap->mapWidth), htw_randRange(world->surfaceMap->mapHeight)};
     }
 
     return 0;
@@ -148,15 +160,15 @@ static void worldStepStressTest(bc_WorldState *world) {
 
     // Stress TEST: do something with every tile, every frame
     // on an 8x8 chunk world, this is 262k updates
-    u32 chunkCount = world->chunkCountX * world->chunkCountY;
+    u32 chunkCount = world->surfaceMap->chunkCountX * world->surfaceMap->chunkCountY;
     u32 cellsPerChunk = bc_chunkSize * bc_chunkSize;
     for (int c = 0; c < chunkCount; c++) {
-        htw_ValueMap *heightMap = world->chunks[c].heightMap;
+        bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
         for (int i = 0; i < cellsPerChunk; i++) {
-            s32 currentValue = htw_geo_getMapValueByIndex(heightMap, i);
+            s32 currentValue = cellData[i].height;
             // With worldCoord lookup: ~60 tps
             // Without worldCoord lookup: ~140 tps
-            htw_geo_GridCoord worldCoord = bc_chunkAndCellToWorldCoordinates(world, c, i);
+            htw_geo_GridCoord worldCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
 
             // running this block drops tps to *6*
             // Not unexpected considering all the conversions, lookups across chunk boundaries, and everything being unoptimized
@@ -166,13 +178,11 @@ static void worldStepStressTest(bc_WorldState *world) {
             for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
                 htw_geo_CubeCoord cubeNeighbor = htw_geo_addCubeCoords(cubeHere, htw_geo_cubeDirections[d]);
                 htw_geo_GridCoord gridNeighbor = htw_geo_cubeToGridCoord(cubeNeighbor);
-                u32 chunkHere, cellHere;
-                bc_gridCoordinatesToChunkAndCell(world, gridNeighbor, &chunkHere, &cellHere);
-                neighborAverage += htw_geo_getMapValueByIndex(world->chunks[chunkHere].heightMap, cellHere);
+                neighborAverage += ((bc_CellData*)htw_geo_getCell(world->surfaceMap, gridNeighbor))->height;
             }
             neighborAverage /= HEX_DIRECTION_COUNT;
             s32 erosion = lerp_int(currentValue, neighborAverage, 0.2);
-            htw_geo_setMapValueByIndex(heightMap, i, erosion);
+            cellData[i].height = erosion;
 
             //s32 wave = sin(world->step / 20) * 2.0;
             //htw_geo_setMapValueByIndex(heightMap, i, currentValue + wave);
@@ -210,26 +220,27 @@ static void updateCharacters(bc_WorldState *world) {
 
 static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {
     // TODO: handle brush modes, sizes
-    htw_ValueMap *heightMap = world->chunks[terrainEdit->chunkIndex].heightMap;
-    s32 currentValue = htw_geo_getMapValueByIndex(heightMap, terrainEdit->cellIndex);
-    htw_geo_setMapValueByIndex(heightMap, terrainEdit->cellIndex, currentValue + terrainEdit->value);
+    bc_CellData *cell = world->surfaceMap->chunks[terrainEdit->chunkIndex].cellData;
+    cell = &cell[terrainEdit->cellIndex];
+    cell->height += terrainEdit->value;
 }
 
 static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove) {
     // TODO: schedule move for next step instead of executing immediately
-    htw_geo_GridCoord destCoord = bc_chunkAndCellToWorldCoordinates(world, characterMove->chunkIndex, characterMove->cellIndex);
+    htw_geo_GridCoord destCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, characterMove->chunkIndex, characterMove->cellIndex);
     bc_setCharacterDestination(characterMove->subject, destCoord);
 }
 
 // FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?
+// TODO: should take a specific chunkmap instead of entire world state
 // Reveal an area of map around the target character's position according to their sight radius
 static void revealMap(bc_WorldState *world, bc_Character* character) {
     // TODO: factor in terrain height, character size, and attributes e.g. isFlying
     // get character's current cell information
     htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
     u32 charChunkIndex, charCellIndex;
-    bc_gridCoordinatesToChunkAndCell(world, characterCoord, &charChunkIndex, &charCellIndex);
-    u32 characterElevation = htw_geo_getMapValueByIndex(world->chunks[charChunkIndex].heightMap, charCellIndex);
+    htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &charChunkIndex, &charCellIndex);
+    s32 characterElevation = bc_getCellByIndex(world->surfaceMap, charChunkIndex, charCellIndex)->height;
 
     htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(characterCoord);
     htw_geo_CubeCoord relativeCoord = {0, 0, 0};
@@ -245,8 +256,8 @@ static void revealMap(bc_WorldState *world, bc_Character* character) {
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         u32 chunkIndex, cellIndex;
-        bc_gridCoordinatesToChunkAndCell(world, worldCoord, &chunkIndex, &cellIndex);
-        htw_ValueMap *visibilityMap = world->chunks[chunkIndex].visibilityMap;
+        htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, worldCoord, &chunkIndex, &cellIndex);
+        bc_CellData *cell = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex);
 
         bc_TerrainVisibilityBitFlags cellVisibility = 0;
         // restrict sight by distance
@@ -257,13 +268,12 @@ static void revealMap(bc_WorldState *world, bc_Character* character) {
             cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
         }
         // restrict sight by relative elevation
-        u32 elevation = htw_geo_getMapValueByIndex(world->chunks[chunkIndex].heightMap, cellIndex);
+        s32 elevation = cell->height;
         if (elevation > characterElevation + 1) { // TODO: instead of constant +1, derive from character attributes
             cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
         }
 
-        u32 currentVisibility = htw_geo_getMapValueByIndex(visibilityMap, cellIndex);
-        htw_geo_setMapValueByIndex(visibilityMap, cellIndex, currentVisibility | cellVisibility);
+        cell->visibility |= cellVisibility;
 
         htw_geo_getNextHexSpiralCoord(&relativeCoord);
     }

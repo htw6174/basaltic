@@ -37,7 +37,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ViewContext* vc, bc_ModelDa
 
 void bc_view_onModelStart(bc_ViewContext *vc, bc_ModelData *model) {
     bc_WorldState *world = model->world;
-    bc_SetCameraWrapLimits(vc->ui, world->worldWidth, world->worldHeight);
+    bc_SetCameraWrapLimits(vc->ui, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
     bc_updateRenderContextWithWorldParams(vc->rc, model->world);
 }
 

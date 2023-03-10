@@ -14,42 +14,48 @@ bc_StartupSettings parseArgs(int argc, char *argv[]);
 
 bc_StartupSettings parseArgs(int argc, char *argv[]) {
     // get arg option limits
-    u32 maxPathLength = pathconf(".", _PC_PATH_MAX);
-    u32 maxSeedLength = 256;
+    size_t maxPathLength = pathconf(".", _PC_PATH_MAX);
+    size_t maxStartModelArgCount = 256;
     // default settings
     bc_StartupSettings settings = {
-        .startupMode = BC_STARTUP_MODE_MAINMENU,
+        .startupMode = BC_STARTUP_MODE_NO_MODEL,
         .enableEditor = false,
         .dataDirectory = calloc(maxPathLength, sizeof(char)),
-        .loadGamePath = calloc(maxPathLength, sizeof(char)),
-        .newGameSeed = calloc(maxSeedLength, sizeof(char)),
+        .loadModelPath = calloc(maxPathLength, sizeof(char)),
+        .startModelArgCount = 0,
+        .startModelArgs = calloc(maxStartModelArgCount, sizeof(char *)),
     };
 
     // default settings
     strcpy(settings.dataDirectory, "..");
-    strcpy(settings.loadGamePath, "");
-    strcpy(settings.newGameSeed, "6174");
+    strcpy(settings.loadModelPath, "");
+    //strcpy(settings.startModelArgs, "seed=6174 width=3 height=3");
 
     for (int i = 1; i < argc; i++) {
         char *arg = argv[i];
         if (arg[0] == '-') {
             switch (arg[1]) {
                 case 'n':
-                    settings.startupMode = BC_STARTUP_MODE_NEWGAME;
-                    strcpy(settings.newGameSeed, argv[i + 1]);
+                    settings.startupMode = BC_STARTUP_MODE_START_MODEL;
                     i++;
-                    printf("Starting new game with seed '%s'\n", settings.newGameSeed);
+                    // get next arg, break if it is a new switch
+                    while ((arg = argv[i])[0] != '-') {
+                        size_t arglen = strlen(arg) + 1;
+                        char* dstArg = settings.startModelArgs[settings.startModelArgCount] = calloc(arglen, sizeof(char));
+                        strcpy(dstArg, arg);
+                        settings.startModelArgCount++;
+                        // break if end of args
+                        i++;
+                        if (i >= argc) {
+                            break;
+                        }
+                    }
                     break;
                 case 'l':
-                    settings.startupMode = BC_STARTUP_MODE_LOADGAME;
-                    strcpy(settings.loadGamePath, argv[i + 1]);
+                    settings.startupMode = BC_STARTUP_MODE_LOAD_MODEL;
+                    strcpy(settings.loadModelPath, argv[i + 1]);
                     i++;
-                    printf("Loading save '%s'\n", settings.loadGamePath);
-                    break;
-                case 'c':
-                    settings.startupMode = BC_STARTUP_MODE_CONTINUEGAME;
-                    strcpy(settings.loadGamePath, ""); // TODO: determine path of most recent save game here or somewhere else?
-                    printf("Loading most recent save\n");
+                    printf("Loading saved model from '%s'\n", settings.loadModelPath);
                     break;
                 case 'd':
                     strcpy(settings.dataDirectory, argv[i + 1]);

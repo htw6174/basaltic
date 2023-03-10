@@ -98,10 +98,6 @@ int bc_drawFrame(bc_GraphicsState *graphics, bc_UiState *ui, bc_WorldState *worl
     if (ui->interfaceMode == BC_INTERFACE_MODE_GAMEPLAY) {
         if (world != NULL) {
 
-            // update ui with feedback info from shaders
-            htw_retreiveBuffer(graphics->vkContext, graphics->feedbackInfoBuffer, &graphics->feedbackInfo, sizeof(_bc_FeedbackInfo));
-            ui->hoveredChunkIndex = graphics->feedbackInfo.chunkIndex;
-            ui->hoveredCellIndex = graphics->feedbackInfo.cellIndex;
         }
 
         if (graphics->showCharacterDebug) {

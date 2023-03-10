@@ -3,6 +3,7 @@
 
 #include "htw_core.h"
 #include "htw_vulkan.h"
+#include "htw_geomap.h"
 #include "ccVector.h"
 #include "basaltic_mesh.h"
 #include "basaltic_worldState.h"
@@ -19,9 +20,11 @@ typedef struct {
 } bc_HexmapVertexData;
 
 typedef struct {
+    // joined to int packed1
     s16 elevation;
     u8 paletteX;
     u8 paletteY;
+    // joined to uint packed2
     u8 visibilityBits;
     u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
     u16 unused2; // weather / temporary effect bitmask?
@@ -60,7 +63,7 @@ bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPoo
 void bc_writeTerrainBuffers(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap);
 void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
 
-void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk);
-void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions);
+void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 centerChunk);
+void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions);
 
 #endif // HEXMAPRENDER_H_INCLUDED

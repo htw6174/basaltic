@@ -2,13 +2,14 @@
 #include "hexmapRender.h"
 #include "htw_core.h"
 #include "htw_vulkan.h"
+#include "htw_geomap.h"
 #include "basaltic_mesh.h"
 #include "basaltic_logic.h"
 #include "basaltic_worldState.h"
 
 static void createHexmapMesh(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout);
-static void updateHexmapDataBuffer(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
-static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, bc_TerrainCellData *target);
+static void updateHexmapDataBuffer(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
+static void setHexmapBufferFromCell(bc_CellData *cell, bc_TerrainCellData *target);
 
 bc_RenderableHexmap *bc_createRenderableHexmap(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout) {
     bc_RenderableHexmap *newHexmap = calloc(1, sizeof(bc_RenderableHexmap));
@@ -444,7 +445,7 @@ void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *h
     htw_updateTerrainObjectDescriptors(vkContext, hexmap->chunkObjectDescriptorSets, terrain->terrainBuffer);
 }
 
-void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 centerChunk) {
+void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -462,7 +463,7 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *worl
     s32 *loadedChunks = terrain->loadedChunks;
     for (int c = 0, y = 1 - MAX_VISIBLE_CHUNK_DISTANCE; y < MAX_VISIBLE_CHUNK_DISTANCE; y++) {
         for (int x = 1 - MAX_VISIBLE_CHUNK_DISTANCE; x < MAX_VISIBLE_CHUNK_DISTANCE; x++, c++) {
-            closestChunks[c] = bc_getChunkIndexAtOffset(world, centerChunk, (htw_geo_GridCoord){x, y});
+            closestChunks[c] = htw_geo_getChunkIndexAtOffset(chunkMap, centerChunk, (htw_geo_GridCoord){x, y});
         }
     }
 
@@ -535,11 +536,11 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, bc_WorldState *worl
 
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         // TODO: only update chunk if freshly visible or has pending updates
-        updateHexmapDataBuffer(vkContext, world, terrain, loadedChunks[c], c);
+        updateHexmapDataBuffer(vkContext, chunkMap, terrain, loadedChunks[c], c);
     }
 }
 
-void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions) {
+void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions) {
     htw_bindPipeline(vkContext, hexmap->pipeline);
 
     static mat4x4 modelMatrix;
@@ -548,7 +549,7 @@ void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_Ren
     for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
         u32 chunkIndex = terrain->loadedChunks[c];
         static float chunkX, chunkY;
-        bc_getChunkRootPosition(world, chunkIndex, &chunkX, &chunkY);
+        htw_geo_getChunkRootPosition(chunkMap, chunkIndex, &chunkX, &chunkY);
         vec3 chunkPos = {{chunkX, chunkY, 0.0}};
 
         htw_bindDescriptorSet(vkContext, hexmap->pipeline, hexmap->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
@@ -563,10 +564,10 @@ void bc_drawHexmapTerrain(htw_VkContext *vkContext, bc_WorldState *world, bc_Ren
     }
 }
 
-static void updateHexmapDataBuffer (htw_VkContext *vkContext, bc_WorldState *world, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
+static void updateHexmapDataBuffer (htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
-    bc_MapChunk *chunk = &world->chunks[chunkIndex];
+    htw_Chunk *chunk = &chunkMap->chunks[chunkIndex];
 
     size_t subBufferOffset = subBufferIndex * terrain->terrainBuffer.subBufferHostSize;
     bc_TerrainBufferData *subBuffer = ((void*)terrain->terrainBufferData) + subBufferOffset; // cast to void* so that offset is applied correctly
@@ -577,48 +578,49 @@ static void updateHexmapDataBuffer (htw_VkContext *vkContext, bc_WorldState *wor
     for (s32 y = 0; y < height; y++) {
         for (s32 x = 0; x < width; x++) {
             u32 c = x + (y * width);
-            setHexmapBufferFromCell(chunk, x, y, &cellData[c]);
+            bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
+            setHexmapBufferFromCell(cell, &cellData[c]);
         }
     }
 
     u32 edgeDataIndex = width * height;
     // get chunk data from chunk at x + 1
-    u32 rightChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 0});
-    chunk = &world->chunks[rightChunk];
+    u32 rightChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){1, 0});
+    chunk = &chunkMap->chunks[rightChunk];
     for (s32 y = 0; y < height; y++) {
         u32 c = edgeDataIndex + y; // right edge of this row
-        setHexmapBufferFromCell(chunk, 0, y, &cellData[c]);
+        bc_CellData *cell = bc_getCellByIndex(chunkMap, rightChunk, y * chunkMap->chunkSize);
+        setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += height;
 
     // get chunk data from chunk at y + 1
-    u32 topChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){0, 1});
-    chunk = &world->chunks[topChunk];
+    u32 topChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){0, 1});
+    chunk = &chunkMap->chunks[topChunk];
     for (s32 x = 0; x < width; x++) {
         u32 c = edgeDataIndex + x;
-        setHexmapBufferFromCell(chunk, x, 0, &cellData[c]);
+        bc_CellData *cell = bc_getCellByIndex(chunkMap, topChunk, x);
+        setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += width;
 
     // get chunk data from chunk at x+1, y+1 (only one cell)
-    u32 topRightChunk = bc_getChunkIndexAtOffset(world, chunkIndex, (htw_geo_GridCoord){1, 1});
-    chunk = &world->chunks[topRightChunk];
-    setHexmapBufferFromCell(chunk, 0, 0, &cellData[edgeDataIndex]); // set last position in buffer
+    u32 topRightChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){1, 1});
+    chunk = &chunkMap->chunks[topRightChunk];
+    bc_CellData *cell = bc_getCellByIndex(chunkMap, topRightChunk, 0);
+    setHexmapBufferFromCell(cell, &cellData[edgeDataIndex]); // set last position in buffer
 
     htw_writeSubBuffer(vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainBufferSize);
 }
 
-static void setHexmapBufferFromCell(bc_MapChunk *chunk, s32 cellX, s32 cellY, bc_TerrainCellData *target) {
-    htw_geo_GridCoord cellCoord = {cellX, cellY};
-    s32 rawElevation = htw_geo_getMapValue(chunk->heightMap, cellCoord);
-    s32 rawTemperature = htw_geo_getMapValue(chunk->temperatureMap, cellCoord);
-    s32 rawRainfall = htw_geo_getMapValue(chunk->rainfallMap, cellCoord);
-    u32 visibilityBits = htw_geo_getMapValue(chunk->visibilityMap, cellCoord);
+static void setHexmapBufferFromCell(bc_CellData *cell, bc_TerrainCellData *target) {
     bc_TerrainCellData cellData = {
-        .elevation = rawElevation,
-        .paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
-        .paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
-        .visibilityBits = (u8)visibilityBits,
+        .elevation = cell->height,
+        .paletteX = (u8)cell->temperature,
+        .paletteY = (u8)cell->nutrient,
+        //.paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
+        //.paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
+        .visibilityBits = (u8)cell->visibility,
     };
     *target = cellData;
 

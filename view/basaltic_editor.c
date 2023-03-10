@@ -2,12 +2,14 @@
 #include <stdbool.h>
 #include "htw_core.h"
 #include "htw_random.h"
+#include "htw_geomap.h"
 #include "basaltic_view.h"
 #include "basaltic_editor.h"
 #include "basaltic_defs.h"
 #include "basaltic_super.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
+#include "basaltic_render.h"
 #include "basaltic_worldState.h"
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
@@ -75,12 +77,13 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             igValue_Uint("Mouse y", ui->mouse.y);
 
             igSpacing();
-            bc_MapChunk hoveredChunk = world->chunks[ui->hoveredChunkIndex];
+            bc_CellData *hoveredCell = bc_getCellByIndex(world->surfaceMap, ui->hoveredChunkIndex, ui->hoveredCellIndex);
 
             igText("Cell info:");
-            igValue_Int("Height", htw_geo_getMapValueByIndex(hoveredChunk.heightMap, ui->hoveredCellIndex));
-            igValue_Int("Temperature", htw_geo_getMapValueByIndex(hoveredChunk.temperatureMap, ui->hoveredCellIndex));
-            igValue_Int("Rainfall", htw_geo_getMapValueByIndex(hoveredChunk.rainfallMap, ui->hoveredCellIndex));
+            igValue_Int("Height", hoveredCell->height);
+            igValue_Int("Temperature", hoveredCell->temperature);
+            igValue_Int("Nutrients", hoveredCell->nutrient);
+            igValue_Int("Rainfall", hoveredCell->rainfall);
             igSpacing();
 
             igValue_Uint("World seed", world->seed);
@@ -121,23 +124,24 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
                     igText("No active character");
                 }
             }
-
-            // if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
-            //     igSliderInt("Time of day", &graphics->worldInfo.timeOfDay, 0, 255, "%i", 0);
-            //     igSliderInt("Sea level", &graphics->worldInfo.seaLevel, 0, 128, "%i", 0);
-            // }
-            //
-            // if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
-            //     if (igButton("Enable All", (ImVec2){0, 0})) {
-            //         graphics->worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
-            //     }
-            //     if (igButton("Disable All", (ImVec2){0, 0})) {
-            //         graphics->worldInfo.visibilityOverrideBits = 0;
-            //     }
-            //     bitmaskToggle("Geometry", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
-            //     bitmaskToggle("Color", &graphics->worldInfo.visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
-            // }
         }
+    }
+
+    bc_WorldInfo *worldInfo = &vc->rc->worldInfo;
+    if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
+        igSliderInt("Time of day", &worldInfo->timeOfDay, 0, 255, "%i", 0);
+        igSliderInt("Sea level", &worldInfo->seaLevel, 0, 128, "%i", 0);
+    }
+
+    if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
+        if (igButton("Enable All", (ImVec2){0, 0})) {
+            worldInfo->visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
+        }
+        if (igButton("Disable All", (ImVec2){0, 0})) {
+            worldInfo->visibilityOverrideBits = 0;
+        }
+        bitmaskToggle("Geometry", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
+        bitmaskToggle("Color", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
     }
 
     igEnd();

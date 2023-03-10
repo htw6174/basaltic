@@ -13,6 +13,7 @@ typedef struct {
     mat4x4 m;
 } PushConstantData;
 
+// TODO: roll this into the parent struct, now that I don't have to worry about circular includes?
 typedef struct private_bc_RenderContext {
     bc_RenderableHexmap *renderableHexmap;
     bc_HexmapTerrain *surfaceTerrain;
@@ -46,25 +47,35 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
 
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
     createDefaultPipeline(rc);
-    //initTextGraphics(graphics);
-    prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
-    prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
-    //initDebugGraphics(graphics);
 
+    // allocate device buffers to be written to later
+    {
+        //initTextGraphics(graphics);
+        prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
+        prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
+        //initDebugGraphics(graphics);
+    }
     htw_finalizeBufferPool(vkContext, rc->bufferPool);
 
-    // write data from host into buffers (device memory)
-    htw_beginOneTimeCommands(vkContext);
-    //writeTextBuffers(graphics); // Must be within a oneTimeCommand execution to transition image layouts TODO: is there a better way to structure things, to make this more clear?
-    htw_endOneTimeCommands(vkContext);
+    // write data from host into device memory buffers
+    {
+        // do any buffer updates that require a vkCommandBuffer e.g. image layout transitions
+        {
+            htw_beginOneTimeCommands(vkContext);
+            //writeTextBuffers(graphics);
+            htw_endOneTimeCommands(vkContext);
+        }
 
-    bc_writeTerrainBuffers(rc->vkContext, rc->internalRenderContext->renderableHexmap);
+        bc_writeTerrainBuffers(rc->vkContext, rc->internalRenderContext->renderableHexmap);
+    }
 
     // assign buffers to descriptor sets
-    htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
+    {
+        htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
 
-    //updateTextDescriptors(graphics);
-    bc_updateHexmapDescriptors(rc->vkContext, prc->renderableHexmap, prc->surfaceTerrain);
+        //updateTextDescriptors(graphics);
+        bc_updateHexmapDescriptors(rc->vkContext, prc->renderableHexmap, prc->surfaceTerrain);
+    }
 
     // initialize highlighted cell
     rc->feedbackInfo = (bc_FeedbackInfo){
@@ -86,7 +97,7 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
 
 void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *world) {
     if (world != NULL) {
-        bc_setRenderWorldWrap(rc, world->worldWidth, world->worldHeight);
+        bc_setRenderWorldWrap(rc, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
         updateWorldInfoBuffer(rc, world);
     }
 }
@@ -125,6 +136,11 @@ void bc_updateRenderContextWithUiState(bc_RenderContext *rc, bc_WindowContext *w
                     cameraFocalPoint.xyz,
                     (vec3){ {0.f, 0.f, 1.f} });
     }
+
+    // update ui with feedback info from shaders
+    htw_retreiveBuffer(rc->vkContext, rc->feedbackInfoBuffer, &rc->feedbackInfo, sizeof(bc_FeedbackInfo));
+    ui->hoveredChunkIndex = rc->feedbackInfo.chunkIndex;
+    ui->hoveredCellIndex = rc->feedbackInfo.cellIndex;
 }
 
 void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
@@ -141,10 +157,11 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
         float cameraY = rc->windowInfo.cameraFocalPoint.y;
         u32 centerChunk = bc_getChunkIndexByWorldPosition(world, cameraX, cameraY);
-        bc_updateTerrainVisibleChunks(rc->vkContext, world, rc->internalRenderContext->surfaceTerrain, centerChunk);
+        bc_updateTerrainVisibleChunks(rc->vkContext, world->surfaceMap, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
-        htw_pushConstants(rc->vkContext, rc->internalRenderContext->renderableHexmap->pipeline, &mvp);
-        bc_drawHexmapTerrain(rc->vkContext, world, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
+        // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
+        htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
+        bc_drawHexmapTerrain(rc->vkContext, world->surfaceMap, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
     }
 }
 
@@ -175,7 +192,7 @@ static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s
 
 static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     // TODO: update parts of this per simulation tick
-    rc->worldInfo.totalWidth = world->worldWidth;
+    rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
     htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
 }

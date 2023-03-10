@@ -4,6 +4,32 @@
 #include "basaltic_commandBuffer.h"
 #include "basaltic_logic.h"
 
+void bc_model_argsToStartSettings(int argc, char *argv[], bc_ModelSetupSettings *destinationSettings) {
+    // assign defaults
+    destinationSettings->seed = "6174";
+    destinationSettings->width = 3;
+    destinationSettings->height = 3;
+
+    // TODO: have this change settings according to name provided in arg; for now will use no names and expect a specific order
+    for (int i = 0; i < argc; i++) {
+        switch (i) {
+            case 0:
+                destinationSettings->seed = calloc(BC_MAX_SEED_LENGTH, sizeof(char));
+                strcpy(destinationSettings->seed, argv[i]);
+                break;
+            case 1:
+                // TODO: convert whole string to int, cap to max chunk dimensions. Right now will only take first digit
+                destinationSettings->width = charToInt(argv[i][0]);
+                break;
+            case 2:
+                destinationSettings->height = charToInt(argv[i][0]);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 int bc_model_start(void* in) {
     // Extract input data
     bc_ModelThreadInput *threadInput = (bc_ModelThreadInput*)in;

@@ -31,6 +31,8 @@ typedef struct {
     bc_ModelData **modelDataRef; // modelData instance is created and destoryed by the model Module, this reference gives the supervisor a way to access modelData after starting the thread
 } bc_ModelThreadInput;
 
+void bc_model_argsToStartSettings(int argc, char *argv[], bc_ModelSetupSettings *destinationSettings);
+
 /**
  * @brief Should NOT be called directly, instead use in a call to SDL_CreateThread
  *

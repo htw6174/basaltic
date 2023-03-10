@@ -10,8 +10,9 @@ typedef struct {
     bc_StartupMode startupMode;
     bool enableEditor;
     char *dataDirectory;
-    char *loadGamePath;
-    char *newGameSeed;
+    char *loadModelPath;
+    size_t startModelArgCount;
+    char **startModelArgs;
 } bc_StartupSettings;
 
 typedef struct {

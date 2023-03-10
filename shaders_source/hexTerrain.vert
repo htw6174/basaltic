@@ -85,9 +85,8 @@ void main()
     terrainData cellData = TerrainBuffer.data[cellIndex];
     // extract a 16 bit int and uint from one 32 bit int
     int elevation = bitfieldExtract(cellData.packed1, 0, 16);
-    // convert to uint to ignore sign bit in bitfieldExtract
+    // convert to uint so bitfieldExtract ignores sign bit
     uint uPacked1 = cellData.packed1;
-    //uint paletteIndex = bitfieldExtract(uPacked1, 16, 16);
     uint paletteX = bitfieldExtract(uPacked1, 16, 8);
     uint paletteY = bitfieldExtract(uPacked1, 24, 8);
     uint visibilityBits = bitfieldExtract(cellData.packed2, 0, 8);

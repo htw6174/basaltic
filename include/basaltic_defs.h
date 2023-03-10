@@ -3,8 +3,6 @@
 
 #include "htw_core.h"
 
-// TODO: move most of these defs into the View or Model modules
-
 typedef enum {
     BC_SUPERVISOR_SIGNAL_NONE,
     BC_SUPERVISOR_SIGNAL_START_MODEL,
@@ -21,12 +19,12 @@ typedef enum {
 } bc_ProcessState;
 
 typedef enum bc_StartupMode {
-    BC_STARTUP_MODE_MAINMENU,
-    BC_STARTUP_MODE_NEWGAME,
-    BC_STARTUP_MODE_LOADGAME,
-    BC_STARTUP_MODE_CONTINUEGAME
+    BC_STARTUP_MODE_NO_MODEL,
+    BC_STARTUP_MODE_START_MODEL,
+    BC_STARTUP_MODE_LOAD_MODEL
 } bc_StartupMode;
 
+// TODO: move to view module
 typedef enum bc_InterfaceMode {
     BC_INTERFACE_MODE_SYSTEM_MENU,
     BC_INTERFACE_MODE_GAMEPLAY,

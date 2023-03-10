@@ -78,26 +78,22 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     bool isModelPassedToView = false;
     bc_ModelData *visibleModelData = NULL;
 
-    // TODO: need to pass this option through to the view's UI system
-    // // launch game according to startupMode
-    // switch (startSettings.startupMode) {
-    //     case BC_STARTUP_MODE_MAINMENU:
-    //         ui.interfaceMode = BC_INTERFACE_MODE_SYSTEM_MENU;
-    //         break;
-    //     case BC_STARTUP_MODE_NEWGAME:
-    //         ui.interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
-    //         bc_startNewGame(3, 3, startSettings.newGameSeed);
-    //         break;
-    //     case BC_STARTUP_MODE_CONTINUEGAME:
-    //         // TODO: set load game path from most recent save
-    //     case BC_STARTUP_MODE_LOADGAME:
-    //         ui.interfaceMode = BC_INTERFACE_MODE_GAMEPLAY;
-    //         bc_loadModel(startSettings.loadGamePath);
-    //         break;
-    //     default:
-    //         fprintf(stderr, "ERROR: Invalid startup mode");
-    //         break;
-    // }
+    // launch game according to startupMode
+    switch (startSettings.startupMode) {
+        case BC_STARTUP_MODE_NO_MODEL:
+            break;
+        case BC_STARTUP_MODE_START_MODEL:
+            bc_model_argsToStartSettings(startSettings.startModelArgCount, startSettings.startModelArgs, &sc.superInterface->modelSettings);
+            startModel(&sc);
+            break;
+        case BC_STARTUP_MODE_LOAD_MODEL:
+            // TODO
+            //bc_loadModel(startSettings.loadGamePath);
+            break;
+        default:
+            fprintf(stderr, "ERROR: Invalid startup mode");
+            break;
+    }
 
     while (sc.appState == BC_PROCESS_STATE_RUNNING) {
         Uint64 startTime = wc->milliSeconds = SDL_GetTicks64();
