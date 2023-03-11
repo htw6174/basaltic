@@ -26,14 +26,17 @@ layout(push_constant) uniform mvp {
 } MVP;
 
 // TODO: move terrain data buffer structs to a header file for other shaders?
-struct terrainData {
-    int packed1;
-    uint packed2;
+struct CellData {
+    int elevation;
+    int temperature;
+    int nutrient;
+    int rainfall;
+    uint visibility;
 };
 
 layout(std430, set = 3, binding = 0) readonly buffer terrainBuffer { // requires version 430 or ARB_shader_storage_buffer_object
     uint chunkIndex;
-    terrainData data[];
+    CellData data[];
 } TerrainBuffer;
 
 layout(location = 0) in vec3 in_position;
@@ -82,14 +85,9 @@ vec4 sphereWarp(vec4 worldPosition) {
 void main()
 {
     // unpack terrain data
-    terrainData cellData = TerrainBuffer.data[cellIndex];
-    // extract a 16 bit int and uint from one 32 bit int
-    int elevation = bitfieldExtract(cellData.packed1, 0, 16);
-    // convert to uint so bitfieldExtract ignores sign bit
-    uint uPacked1 = cellData.packed1;
-    uint paletteX = bitfieldExtract(uPacked1, 16, 8);
-    uint paletteY = bitfieldExtract(uPacked1, 24, 8);
-    uint visibilityBits = bitfieldExtract(cellData.packed2, 0, 8);
+    CellData cellData = TerrainBuffer.data[cellIndex];
+    int elevation = cellData.elevation;
+    uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
     float waterDepth = (WorldInfo.seaLevel - elevation) / 64.0; // >0 on ocean
@@ -108,7 +106,7 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
-    vec3 paletteSample = vec3(paletteX / 255.0, paletteY / 255.0, 0.0); // TODO: sample from palette textures
+    vec3 paletteSample = vec3(cellData.temperature / 255.0, cellData.nutrient / 255.0, cellData.rainfall / 255.0); // TODO: sample from palette textures
     paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0 - waterDepth) : paletteSample;
     vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? paletteSample : vec3(0.3, 0.3, 0.3);
     float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;

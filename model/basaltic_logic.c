@@ -9,6 +9,7 @@
 #include "basaltic_logic.h"
 #include "basaltic_model.h"
 #include "basaltic_worldState.h"
+#include "basaltic_worldGen.h"
 #include "basaltic_commandBuffer.h"
 
 typedef struct {
@@ -43,30 +44,32 @@ int bc_initializeWorldState(bc_WorldState *world) {
     u32 width = bc_chunkSize;
     u32 height = bc_chunkSize;
     u32 cellsPerChunk = width * height;
-    u32 chunkCount = world->surfaceMap->chunkCountX * world->surfaceMap->chunkCountY;
 
-    float worldCartesianWidth = htw_geo_hexToCartesianPositionX(world->surfaceMap->mapWidth, 0);
-    float worldCartesianHeight = htw_geo_hexToCartesianPositionY(world->surfaceMap->mapHeight);
+    bc_seedMountains(world->surfaceMap, 32, 128, 64);
+    //bc_growMountains(world->surfaceMap, 0.5);
 
     for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
         for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
             // generate chunk data
-            s32 cellPosX = x * width;
-            s32 cellPosY = y * height;
             bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
 
             for (int i = 0; i < cellsPerChunk; i++) {
                 bc_CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
+                float baseNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed, 8, 16);
                 s32 grad = remap_int(cellCoord.y, 0, world->surfaceMap->mapHeight, 0, 255);
                 s32 poleGrad1 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth / 4.0);
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth * 0.33);
                 s32 poleGrad2 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth / 2.0);
-                cell->height = 128;
-                cell->temperature = poleGrad1;
-                cell->nutrient = poleGrad2;
-                cell->rainfall = 128;
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
+                s32 poleGrad3 = htw_geo_circularGradientByGridCoord(
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, 0}, 255, 0, world->surfaceMap->mapWidth * 0.33);
+                s32 poleGrad4 = htw_geo_circularGradientByGridCoord(
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
+                cell->height += baseNoise * 32;
+                cell->temperature = fmaxf(poleGrad1, poleGrad4);
+                cell->nutrient = fmaxf(poleGrad2, poleGrad4);
+                cell->rainfall = fmaxf(poleGrad3, poleGrad4);
                 cell->visibility = 0;
             }
             // Max 128

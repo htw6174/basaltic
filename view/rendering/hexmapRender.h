@@ -19,6 +19,7 @@ typedef struct {
     u32 cellIndex;
 } bc_HexmapVertexData;
 
+// Compressed version of bc_CellData used for rendering
 typedef struct {
     // joined to int packed1
     s16 elevation;
@@ -29,12 +30,12 @@ typedef struct {
     u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
     u16 unused2; // weather / temporary effect bitmask?
     //int64_t aligner;
-} bc_TerrainCellData; // TODO: move this to a world logic source file? keep the data in a format that's useful for rendering (will be useful for terrain lookup and updates too)
+} bc_TerrainCellData;
 
 // NOTE: this struct isn't meant to be used directly - it exists to find the offset of an array of _bc_TerrainCellData packed into a buffer after the other fields in this struct
 typedef struct {
     u32 chunkIndex;
-    bc_TerrainCellData chunkData;
+    bc_CellData chunkData;
 } bc_TerrainBufferData;
 
 // Unchanging model data needed to render any hexmap terrain chunk; only need one instance

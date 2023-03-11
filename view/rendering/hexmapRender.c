@@ -34,7 +34,7 @@ bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPoo
     // include strips of adjacent chunk data in buffer size
     u32 bufferCellCount = (bc_chunkSize * bc_chunkSize) + (2 * bc_chunkSize) + 1;
     // Chunk data includes the chunk index out front
-    newTerrain->terrainBufferSize = offsetof(bc_TerrainBufferData, chunkData) + (sizeof(bc_TerrainCellData) * bufferCellCount);
+    newTerrain->terrainBufferSize = offsetof(bc_TerrainBufferData, chunkData) + (sizeof(bc_CellData) * bufferCellCount);
 
     newTerrain->terrainBufferData = malloc(newTerrain->terrainBufferSize * MAX_VISIBLE_CHUNKS);
     newTerrain->terrainBuffer = htw_createSplitBuffer(vkContext, bufferPool, newTerrain->terrainBufferSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE);
@@ -572,14 +572,15 @@ static void updateHexmapDataBuffer (htw_VkContext *vkContext, htw_ChunkMap *chun
     size_t subBufferOffset = subBufferIndex * terrain->terrainBuffer.subBufferHostSize;
     bc_TerrainBufferData *subBuffer = ((void*)terrain->terrainBufferData) + subBufferOffset; // cast to void* so that offset is applied correctly
     subBuffer->chunkIndex = chunkIndex;
-    bc_TerrainCellData *cellData = &subBuffer->chunkData; // address of cell data array
+    bc_CellData *cellData = &subBuffer->chunkData; // address of cell data array
 
     // get primary chunk data
     for (s32 y = 0; y < height; y++) {
         for (s32 x = 0; x < width; x++) {
             u32 c = x + (y * width);
             bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
-            setHexmapBufferFromCell(cell, &cellData[c]);
+            cellData[c] = *cell;
+            //setHexmapBufferFromCell(cell, &cellData[c]);
         }
     }
 
@@ -590,7 +591,8 @@ static void updateHexmapDataBuffer (htw_VkContext *vkContext, htw_ChunkMap *chun
     for (s32 y = 0; y < height; y++) {
         u32 c = edgeDataIndex + y; // right edge of this row
         bc_CellData *cell = bc_getCellByIndex(chunkMap, rightChunk, y * chunkMap->chunkSize);
-        setHexmapBufferFromCell(cell, &cellData[c]);
+        cellData[c] = *cell;
+        //setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += height;
 
@@ -600,7 +602,8 @@ static void updateHexmapDataBuffer (htw_VkContext *vkContext, htw_ChunkMap *chun
     for (s32 x = 0; x < width; x++) {
         u32 c = edgeDataIndex + x;
         bc_CellData *cell = bc_getCellByIndex(chunkMap, topChunk, x);
-        setHexmapBufferFromCell(cell, &cellData[c]);
+        cellData[c] = *cell;
+        //setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += width;
 
@@ -608,7 +611,8 @@ static void updateHexmapDataBuffer (htw_VkContext *vkContext, htw_ChunkMap *chun
     u32 topRightChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){1, 1});
     chunk = &chunkMap->chunks[topRightChunk];
     bc_CellData *cell = bc_getCellByIndex(chunkMap, topRightChunk, 0);
-    setHexmapBufferFromCell(cell, &cellData[edgeDataIndex]); // set last position in buffer
+    cellData[edgeDataIndex] = *cell;
+    //setHexmapBufferFromCell(cell, &cellData[edgeDataIndex]); // set last position in buffer
 
     htw_writeSubBuffer(vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainBufferSize);
 }
