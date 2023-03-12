@@ -19,6 +19,9 @@ typedef struct {
 } LogicState;
 
 static void doWorldStep(bc_WorldState *world);
+static void doMonthStep(bc_WorldState *world);
+
+static void updateVegetation(bc_CellData *cellData);
 
 static void updateCharacters(bc_WorldState *world);
 
@@ -50,16 +53,17 @@ int bc_initializeWorldState(bc_WorldState *world) {
 
     for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
         for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
-            // generate chunk data
             bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
 
             for (int i = 0; i < cellsPerChunk; i++) {
                 bc_CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
                 float baseNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed, 8, 16);
+                float nutrientNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed + 1, 4, 16);
+                float rainNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed + 2, 4, 4);
                 s32 grad = remap_int(cellCoord.y, 0, world->surfaceMap->mapHeight, 0, 255);
                 s32 poleGrad1 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth * 0.33);
+                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth * 0.67);
                 s32 poleGrad2 = htw_geo_circularGradientByGridCoord(
                     world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
                 s32 poleGrad3 = htw_geo_circularGradientByGridCoord(
@@ -67,10 +71,11 @@ int bc_initializeWorldState(bc_WorldState *world) {
                 s32 poleGrad4 = htw_geo_circularGradientByGridCoord(
                     world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
                 cell->height += baseNoise * 32;
-                cell->temperature = fmaxf(poleGrad1, poleGrad4);
-                cell->nutrient = fmaxf(poleGrad2, poleGrad4);
-                cell->rainfall = fmaxf(poleGrad3, poleGrad4);
+                cell->temperature = poleGrad1;
+                cell->nutrient = nutrientNoise * 32;
+                cell->rainfall = rainNoise * 32;
                 cell->visibility = 0;
+                cell->vegetation = 0;
             }
             // Max 128
             //htw_geo_fillSimplex(chunk->heightMap, world->seed, 8, cellPosX, cellPosY, world->worldWidth, 4);
@@ -199,7 +204,31 @@ static void doWorldStep(bc_WorldState *world) {
 
     updateCharacters(world);
 
+    // TEST: should only do this every months worth of steps
+    doMonthStep(world);
+
     world->step++;
+}
+
+static void doMonthStep(bc_WorldState *world) {
+    for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
+        for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
+            bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
+
+            for (int i = 0; i < world->surfaceMap->cellsPerChunk; i++) {
+                updateVegetation(&cellData[i]);
+            }
+        }
+    }
+}
+
+static void updateVegetation(bc_CellData *cellData) {
+    if (cellData->nutrient > cellData->vegetation) {
+        cellData->vegetation++;
+        cellData->nutrient -= cellData->vegetation;
+    } else {
+        cellData->nutrient += cellData->rainfall;
+    }
 }
 
 static void updateCharacters(bc_WorldState *world) {

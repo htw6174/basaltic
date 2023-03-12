@@ -32,6 +32,7 @@ struct CellData {
     int nutrient;
     int rainfall;
     uint visibility;
+    int vegetation;
 };
 
 layout(std430, set = 3, binding = 0) readonly buffer terrainBuffer { // requires version 430 or ARB_shader_storage_buffer_object
@@ -106,7 +107,7 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
-    vec3 paletteSample = vec3(cellData.temperature / 255.0, cellData.nutrient / 255.0, cellData.rainfall / 255.0); // TODO: sample from palette textures
+    vec3 paletteSample = vec3(cellData.temperature / 255.0, cellData.vegetation / 255.0, cellData.rainfall / 255.0); // TODO: sample from palette textures
     paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0 - waterDepth) : paletteSample;
     vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? paletteSample : vec3(0.3, 0.3, 0.3);
     float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;

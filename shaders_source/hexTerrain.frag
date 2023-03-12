@@ -19,6 +19,8 @@ precision mediump float;
 #define FOG_MAX 64.0
 #define FOG_COLOR vec3(0.1, 0.1, 0.2)
 
+const vec3 cliffColor = vec3(0.3, 0.2, 0.1);
+
 // NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
 
@@ -70,7 +72,9 @@ void main()
 		FeedbackBuffer.hoveredChunk = in_chunkIndex;
 		FeedbackBuffer.hoveredCell = in_cellIndex;
 	}
-	vec3 litColor = in_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	float cliff = 1.0 - normal.z;
+	vec3 surfaceColor = mix(in_color.rgb, cliffColor, cliff * cliff);
+	vec3 litColor = surfaceColor * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 	litColor = gl_FrontFacing ? litColor : vec3(0.0, 0.0, 0.0);
 
 	//vec2 mouseNormalized = mousePos / WindowInfo.windowSize;

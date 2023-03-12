@@ -20,6 +20,7 @@
 #include"cimgui/cimgui_impl.h"
 
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
+void coordInspector(const char *label, htw_geo_GridCoord coord);
 void characterInspector(bc_Character *character);
 
 bc_EditorContext* bc_view_setupEditor() {
@@ -72,9 +73,9 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             igText("Seed string: %s", world->seedString);
             igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell", ui->hoveredCellIndex);
+            coordInspector("Cell Position", htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, ui->hoveredChunkIndex, ui->hoveredCellIndex));
 
-            igValue_Uint("Mouse x", ui->mouse.x);
-            igValue_Uint("Mouse y", ui->mouse.y);
+            coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
 
             igSpacing();
             bc_CellData *hoveredCell = bc_getCellByIndex(world->surfaceMap, ui->hoveredChunkIndex, ui->hoveredCellIndex);
@@ -157,9 +158,18 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit) {
     }
 }
 
+void coordInspector(const char *label, htw_geo_GridCoord coord) {
+    igText(label);
+    igValue_Int("X", coord.x);
+    igSameLine(64, -1);
+    igValue_Int("Y", coord.y);
+}
+
 void characterInspector(bc_Character *character) {
     // TODO
     igValue_Uint("Character ID", character->id);
     igValue_Int("Health", character->currentState.currentHitPoints);
     igValue_Int("Stamina", character->currentState.currentStamina);
+    coordInspector("Current Position", character->currentState.worldCoord);
+    coordInspector("Target Position", character->currentState.destinationCoord);
 }

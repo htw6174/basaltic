@@ -15,6 +15,7 @@ typedef struct {
     s32 nutrient;
     s32 rainfall;
     u32 visibility;
+    s32 vegetation;
 } bc_CellData;
 
 typedef struct {

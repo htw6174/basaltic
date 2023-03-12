@@ -137,7 +137,6 @@ static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellInde
     bc_pushCommandToBuffer(commandBuffer, &inputCommand, sizeof(inputCommand));
 }
 
-// FIXME
 static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
     if (character == NULL) return;
     bc_CharacterMoveCommand moveCommand = {

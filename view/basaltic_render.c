@@ -6,6 +6,7 @@
 #include "basaltic_render.h"
 #include "basaltic_logic.h"
 #include "hexmapRender.h"
+#include "debugRender.h"
 #include "htw_geomap.h"
 
 typedef struct {
@@ -17,6 +18,7 @@ typedef struct {
 typedef struct private_bc_RenderContext {
     bc_RenderableHexmap *renderableHexmap;
     bc_HexmapTerrain *surfaceTerrain;
+    bc_DebugRenderContext *debugContext;
 } private_bc_RenderContext;
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
@@ -53,6 +55,7 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
         //initTextGraphics(graphics);
         prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
         prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
+        prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
         //initDebugGraphics(graphics);
     }
     htw_finalizeBufferPool(vkContext, rc->bufferPool);
@@ -159,9 +162,30 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         u32 centerChunk = bc_getChunkIndexByWorldPosition(world, cameraX, cameraY);
         bc_updateTerrainVisibleChunks(rc->vkContext, world->surfaceMap, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
+        // TODO: find a home for this logic. Maybe a character-specific renderer class.
+        bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
+        bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
+        for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
+            bc_Character *character = &world->characters[i];
+            htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
+            u32 chunkIndex, cellIndex;
+            htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &chunkIndex, &cellIndex);
+            s32 elevation = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex)->height;
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
+            bc_DebugInstanceData characterData = {
+                .color = (vec4){{0.0, 0.0, 1.0, 0.5}},
+                .position = (vec3){{posX, posY, elevation}},
+                .size = 1.0
+            };
+            instanceData[i] = characterData;
+        }
+        bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
+
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
         htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
         bc_drawHexmapTerrain(rc->vkContext, world->surfaceMap, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
+        bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
     }
 }
 

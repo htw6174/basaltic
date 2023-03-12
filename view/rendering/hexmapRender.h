@@ -20,6 +20,7 @@ typedef struct {
 } bc_HexmapVertexData;
 
 // Compressed version of bc_CellData used for rendering
+// TODO: deprecated, only go back to this if video memory starts to become an issue
 typedef struct {
     // joined to int packed1
     s16 elevation;

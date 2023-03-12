@@ -9,10 +9,11 @@ layout(push_constant) uniform matPV {
     mat4 m;
 } MPV;
 
-layout(location = 0) in vec4 in_position;
-layout(location = 1) in float in_size;
+layout(location = 0) in vec4 in_color;
+layout(location = 1) in vec4 in_position;
+layout(location = 2) in float in_size;
 
-layout(location = 0) out vec3 out_color;
+layout(location = 0) out vec4 out_color;
 
 vec3 octahedronPositions[6] = vec3[](
     // bottom
@@ -46,5 +47,5 @@ void main()
     float z = (in_position.z * WorldInfo.gridToWorld.z) + (vert.z * in_size);
     gl_Position = MPV.pv * vec4(xy, z, 1.0) * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
 
-    out_color = vec3(0.1, 0.1, 0.9);
+    out_color = in_color;
 }
