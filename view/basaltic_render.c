@@ -8,6 +8,7 @@
 #include "hexmapRender.h"
 #include "debugRender.h"
 #include "htw_geomap.h"
+#include "flecs.h"
 
 typedef struct {
     mat4x4 pv;
@@ -23,6 +24,8 @@ typedef struct private_bc_RenderContext {
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
 static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world);
+
+static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world);
 
 static void createDefaultPipeline(bc_RenderContext *rc);
 
@@ -102,6 +105,14 @@ void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *
     if (world != NULL) {
         bc_setRenderWorldWrap(rc, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
         updateWorldInfoBuffer(rc, world);
+
+        // ECS Queries
+        rc->characterQuery = ecs_query(world->ecsWorld, {
+            .filter.terms = {
+                {ecs_id(bc_GridPosition_c)}
+            }
+
+        });
     }
 }
 
@@ -162,25 +173,7 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         u32 centerChunk = bc_getChunkIndexByWorldPosition(world, cameraX, cameraY);
         bc_updateTerrainVisibleChunks(rc->vkContext, world->surfaceMap, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
-        // TODO: find a home for this logic. Maybe a character-specific renderer class.
-        bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
-        bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
-        for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
-            bc_Character *character = &world->characterPool->characters[i];
-            htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
-            u32 chunkIndex, cellIndex;
-            htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &chunkIndex, &cellIndex);
-            s32 elevation = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex)->height;
-            float posX, posY;
-            htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
-            bc_DebugInstanceData characterData = {
-                .color = (vec4){{0.0, 0.0, 1.0, 0.5}},
-                .position = (vec3){{posX, posY, elevation}},
-                .size = 1.0
-            };
-            instanceData[i] = characterData;
-        }
-        bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
+        drawCharacterDebug(rc, world);
 
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
         htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
@@ -219,6 +212,43 @@ static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
     htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
+}
+
+static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
+    // TODO: find a home for this logic. Maybe a character-specific renderer class.
+    bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
+    bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
+
+    ecs_iter_t it = ecs_query_iter(world->ecsWorld, rc->characterQuery);
+    u32 i = 0; // To track mesh instance index
+    // Outer loop: traverses different tables that match the query
+    while (ecs_query_next(&it)) {
+        bc_GridPosition_c *positions = ecs_field(&it, bc_GridPosition_c, 1);
+        // Inner loop: entities within a table
+        for (int e = 0; e < it.count; e++, i++) {
+            if (i >= rc->internalRenderContext->debugContext->maxInstanceCount) {
+                break;
+            }
+            htw_geo_GridCoord characterCoord = positions[e].position;
+            u32 chunkIndex, cellIndex;
+            htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &chunkIndex, &cellIndex);
+            s32 elevation = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex)->height;
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
+            bc_DebugInstanceData characterData = {
+                .color = (vec4){{0.0, 0.0, 1.0, 0.5}},
+                .position = (vec3){{posX, posY, elevation}},
+                .size = 1.0
+            };
+            instanceData[i] = characterData;
+        }
+    }
+    bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
+
+    // for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
+    //     bc_Character *character = &world->characterPool->characters[i];
+    //     htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
+    // }
 }
 
 // NOTE/TODO: is it better to add more arguments to this kind of method, to make it clear what needs to be setup first? e.g. this needs the perFrame and perPass layouts created first

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "htw_core.h"
 #include "htw_geomap.h"
+#include "flecs.h"
 
 typedef enum bc_GenderBitflags {
     BC_GENDER_NEITHER = 0x0,
@@ -105,10 +106,16 @@ typedef struct {
     htw_SpatialStorage *spatialStorage;
 } bc_CharacterPool;
 
+typedef struct {
+    htw_geo_GridCoord position;
+} bc_GridPosition_c;
+
+extern ECS_COMPONENT_DECLARE(bc_GridPosition_c);
+
 bc_CharacterPool *bc_createCharacterPool(size_t poolSize);
 bc_Character bc_createRandomCharacter();
 bool bc_setCharacterDestination(bc_Character *subject, htw_geo_GridCoord destinationCoord);
-void bc_placeTestCharacters(bc_CharacterPool *characterPool, u32 maxX, u32 maxY);
+void bc_placeTestCharacters(ecs_world_t *world, u32 count, u32 maxX, u32 maxY);
 
 /**
  * @brief Returns true if the character moved, false otherwise

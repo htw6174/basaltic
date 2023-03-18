@@ -11,6 +11,7 @@
 #include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
 #include "basaltic_commandBuffer.h"
+#include "flecs.h"
 
 typedef struct {
     bc_CommandBuffer processingBuffer;
@@ -38,7 +39,8 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
     newWorld->surfaceMap = htw_geo_createChunkMap(bc_chunkSize, chunkCountX, chunkCountY, sizeof(bc_CellData));
 
-    newWorld->characterPool = bc_createCharacterPool(CHARACTER_POOL_SIZE);
+    newWorld->ecsWorld = ecs_init();
+    //newWorld->characterPool = bc_createCharacterPool(CHARACTER_POOL_SIZE);
     return newWorld;
 }
 
@@ -98,12 +100,13 @@ int bc_initializeWorldState(bc_WorldState *world) {
     }
 
     // Populate world
-    bc_placeTestCharacters(world->characterPool, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
+    bc_placeTestCharacters(world->ecsWorld, CHARACTER_POOL_SIZE, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
 
     return 0;
 }
 
 void bc_destroyWorldState(bc_WorldState *world) {
+    ecs_fini(world->ecsWorld);
     free(world->seedString);
     free(world);
 }
@@ -226,7 +229,7 @@ static void updateVegetation(bc_CellData *cellData) {
 }
 
 static void updateCharacters(bc_WorldState *world) {
-    bc_moveCharacters(world->characterPool);
+    //bc_moveCharacters(world->characterPool);
     // // TODO: figure out a better model for doing things where the world needs to be edited based on character actions
     // if (character->isControlledByPlayer) {
     //     revealMap(world, character);

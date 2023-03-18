@@ -7,6 +7,7 @@
 #include "basaltic_window.h"
 #include "basaltic_uiState.h"
 #include "basaltic_logic.h"
+#include "flecs.h"
 
 typedef struct {
     mat4x4 projection;
@@ -57,6 +58,9 @@ typedef struct {
     htw_PipelineHandle defaultPipeline;
 
     vec3 wrapInstancePositions[4];
+
+    // ECS stuff
+    ecs_query_t *characterQuery;
 
     bc_InternalRenderContext internalRenderContext;
 } bc_RenderContext;

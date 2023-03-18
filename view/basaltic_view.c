@@ -28,7 +28,7 @@ void bc_view_processInputState(bc_ViewContext* vc, bc_CommandBuffer inputBuffer,
 u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ViewContext* vc, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer) {
     bc_WorldState *world = model == NULL ? NULL : model->world;
     // TODO
-    bc_updateRenderContextWithWorldParams(vc->rc, world);
+    //bc_updateRenderContextWithWorldParams(vc->rc, world);
     bc_updateRenderContextWithUiState(vc->rc, wc, vc->ui);
     bc_renderFrame(vc->rc, world);
     // TODO: return elapsed time in ms

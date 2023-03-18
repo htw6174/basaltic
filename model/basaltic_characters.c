@@ -3,6 +3,8 @@
 #include "htw_geomap.h"
 #include "basaltic_characters.h"
 
+ECS_COMPONENT_DECLARE(bc_GridPosition_c);
+
 bc_CharacterPool *bc_createCharacterPool(size_t poolSize) {
     bc_CharacterPool *newPool = calloc(1, sizeof(bc_CharacterPool));
     newPool->poolSize = poolSize;
@@ -50,13 +52,18 @@ bool bc_setCharacterDestination(bc_Character *subject, htw_geo_GridCoord destina
     return true;
 }
 
-void bc_placeTestCharacters(bc_CharacterPool *characterPool, u32 maxX, u32 maxY) {
-    for (int i = 0; i < characterPool->poolSize; i++) {
-        bc_Character newCharacter = bc_createRandomCharacter();
-        newCharacter.currentState.destinationCoord = newCharacter.currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(maxX), htw_randRange(maxY)};
-        htw_geo_spatialInsert(characterPool->spatialStorage, newCharacter.currentState.worldCoord, i);
-        characterPool->characters[i] = newCharacter;
+void bc_placeTestCharacters(ecs_world_t *world, u32 count, u32 maxX, u32 maxY) {
+    ECS_COMPONENT_DEFINE(world, bc_GridPosition_c);
+    for (int i = 0; i < count; i++) {
+        ecs_entity_t newCharacter = ecs_new(world, bc_GridPosition_c);
+        ecs_set(world, newCharacter, bc_GridPosition_c, {htw_randRange(maxX), htw_randRange(maxY)});
     }
+    // for (int i = 0; i < characterPool->poolSize; i++) {
+    //     bc_Character newCharacter = bc_createRandomCharacter();
+    //     newCharacter.currentState.destinationCoord = newCharacter.currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(maxX), htw_randRange(maxY)};
+    //     htw_geo_spatialInsert(characterPool->spatialStorage, newCharacter.currentState.worldCoord, i);
+    //     characterPool->characters[i] = newCharacter;
+    // }
 }
 
 bool bc_doCharacterMove(bc_Character *subject) {

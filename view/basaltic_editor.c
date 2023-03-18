@@ -110,7 +110,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             }
 
             //igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
-
+/*
             if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
                 if (igButton("Take control of random character", (ImVec2){0, 0})) {
                     if (ui->activeCharacter != NULL) {
@@ -144,6 +144,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
                     igText("No active character");
                 }
             }
+            */
         }
     }
 

@@ -4,6 +4,7 @@
 #include <math.h>
 #include "htw_geomap.h"
 #include "basaltic_characters.h"
+#include "flecs.h"
 
 #define BC_MAX_SEED_LENGTH 256
 
@@ -25,7 +26,8 @@ typedef struct {
     // Geography
     htw_ChunkMap *surfaceMap;
     // Characters
-    bc_CharacterPool *characterPool;
+    ecs_world_t *ecsWorld;
+    //bc_CharacterPool *characterPool;
 } bc_WorldState;
 
 static bc_CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
