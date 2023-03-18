@@ -9,6 +9,7 @@
 #include "basaltic_characters.h"
 
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
+static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex);
 static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellIndex, s32 value);
 static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex);
 static void advanceStep(bc_CommandBuffer commandBuffer);
@@ -17,9 +18,11 @@ static void advanceStep(bc_CommandBuffer commandBuffer);
 void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            moveCharacter(commandBuffer, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            selectCell(ui, ui->hoveredChunkIndex, ui->hoveredCellIndex);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
-            editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+            moveCharacter(commandBuffer, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            advanceStep(commandBuffer);
+            //editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
         }
     }
     if (useKeyboard && e->type == SDL_KEYDOWN) {
@@ -120,6 +123,11 @@ static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMo
         ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
     }
 
+}
+
+static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex) {
+    ui->selectedChunkIndex = chunkIndex;
+    ui->selectedCellIndex = cellIndex;
 }
 
 static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellIndex, s32 value) {

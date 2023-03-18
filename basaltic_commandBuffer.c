@@ -59,7 +59,7 @@ bool bc_pushCommandToBuffer(bc_CommandBuffer commandBuffer, const void* commandD
             return false;
         }
         void *copyDst = commandBuffer->arenaHead;
-        ptrdiff_t arenaOffset = commandBuffer->arena - commandBuffer->arenaHead;
+        ptrdiff_t arenaOffset = commandBuffer->arenaHead - commandBuffer->arena;
         commandBuffer->arenaHead += size;
         memcpy(copyDst, commandData, size);
         commandBuffer->commandArenaOffsets[commandBuffer->currentCommandsInBuffer++] = arenaOffset;

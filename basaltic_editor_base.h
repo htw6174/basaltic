@@ -31,6 +31,6 @@ bool bc_editorWantCaptureKeyboard(bc_EditorEngineContext *eec);
 void bc_handleEditorInputEvents(bc_EditorEngineContext *eec, SDL_Event *e);
 void bc_beginEditor();
 void bc_endEditor(bc_EditorEngineContext *eec);
-void bc_drawEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo);
+void bc_drawEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo, bc_EngineSettings *engineSettings);
 
 #endif // BASALTIC_EDITOR_BASE_H_INCLUDED

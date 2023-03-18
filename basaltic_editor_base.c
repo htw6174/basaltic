@@ -95,10 +95,14 @@ void bc_endEditor(bc_EditorEngineContext *eec) {
     ImGui_ImplVulkan_RenderDrawData(drawData, eec->vkContext->swapchainImages[eec->vkContext->currentImageIndex].commandBuffer, NULL);
 }
 
-void bc_drawEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo) {
+void bc_drawEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo, bc_EngineSettings *engineSettings) {
     igBegin("Engine Options", NULL, 0);
 
     igText("Press backquote (`/~) to toggle editor");
+
+    igInputInt("Framerate Limit", &engineSettings->frameRateLimit, 1, 10, 0);
+    igInputInt("Tickrate Limit", &engineSettings->tickRateLimit, 1, 10, 0);
+    // TODO: option to save engine settings
 
     igCheckbox("Demo Window", &eec->showDemoWindow);
     if (eec->showDemoWindow) {

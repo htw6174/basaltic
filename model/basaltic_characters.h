@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "htw_core.h"
-#include "htw_geomap.h" // NOTE: only needed for GridCoord def; should be in seperate smaller header?
-//#include "basaltic_logic.h"
+#include "htw_geomap.h"
 
 typedef enum bc_GenderBitflags {
     BC_GENDER_NEITHER = 0x0,
@@ -27,7 +26,7 @@ typedef enum bc_CharacterSize {
 
 typedef u32 bc_CharacterId;
 
-typedef struct bc_CharacterPrimaryStats {
+typedef struct {
     // mind
     u16 instinct;
     u16 reason;
@@ -40,7 +39,7 @@ typedef struct bc_CharacterPrimaryStats {
 } bc_CharacterPrimaryStats;
 
 // NOTE: these stats should be treated as bonuses, and will normally be 0 regardless of primary stats
-typedef struct bc_CharacterSecondaryStats {
+typedef struct {
     // mind
     // instinct
     s16 evasion;
@@ -72,25 +71,25 @@ typedef struct bc_CharacterSecondaryStats {
     s16 scholarship;
 } bc_CharacterSecondaryStats;
 
-typedef struct bc_CharacterAttributes {
+typedef struct {
     bc_GenderBitflags gender;
     bc_CharacterSize size;
 } bc_CharacterAttributes;
 
-typedef struct bc_CharacterSkills {
+typedef struct {
     // TODO: maybe have a limit on number of learned skills; use small uint for skill id + level
     u16 skill1;
     u16 skill2;
 } bc_CharacterSkills;
 
-typedef struct bc_CharacterState {
+typedef struct {
     htw_geo_GridCoord worldCoord;
     htw_geo_GridCoord destinationCoord;
     s32 currentHitPoints;
     s32 currentStamina;
 } bc_CharacterState;
 
-typedef struct bc_Character {
+typedef struct {
     bc_CharacterId id;
     bool isControlledByPlayer; // TODO: could be useful to keep track of more info here, like faction/player ID for multiplayer
     bc_CharacterState currentState;
@@ -100,9 +99,17 @@ typedef struct bc_Character {
     bc_CharacterSkills skills;
 } bc_Character;
 
+typedef struct {
+    size_t poolSize;
+    bc_Character *characters;
+    htw_SpatialStorage *spatialStorage;
+} bc_CharacterPool;
+
+bc_CharacterPool *bc_createCharacterPool(size_t poolSize);
 bc_Character bc_createRandomCharacter();
 bool bc_setCharacterDestination(bc_Character *subject, htw_geo_GridCoord destinationCoord);
-bool bc_setCharacterPosition(bc_Character *subject, htw_geo_GridCoord newCoord);
+void bc_placeTestCharacters(bc_CharacterPool *characterPool, u32 maxX, u32 maxY);
+
 /**
  * @brief Returns true if the character moved, false otherwise
  *
@@ -110,5 +117,6 @@ bool bc_setCharacterPosition(bc_Character *subject, htw_geo_GridCoord newCoord);
  * @return bool
  */
 bool bc_doCharacterMove(bc_Character *subject);
+void bc_moveCharacters(bc_CharacterPool *characterPool);
 
 #endif // BASALTIC_CHARACTERS_H_INCLUDED

@@ -73,7 +73,10 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             igText("Seed string: %s", world->seedString);
             igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell", ui->hoveredCellIndex);
-            coordInspector("Cell Position", htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, ui->hoveredChunkIndex, ui->hoveredCellIndex));
+            htw_geo_GridCoord hoveredCellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            coordInspector("Hovered cell coordinates", hoveredCellCoord);
+            htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, ui->selectedChunkIndex, ui->selectedCellIndex);
+            coordInspector("Selected cell coordinates", selectedCellCoord);
 
             coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
 
@@ -113,10 +116,26 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
                     if (ui->activeCharacter != NULL) {
                         ui->activeCharacter->isControlledByPlayer = false;
                     }
-                    u32 randCharacterIndex = htw_randRange(world->characterPoolSize);
-                    ui->activeCharacter = &world->characters[randCharacterIndex];
+                    u32 randCharacterIndex = htw_randRange(world->characterPool->poolSize);
+                    ui->activeCharacter = &world->characterPool->characters[randCharacterIndex];
                     ui->activeCharacter->isControlledByPlayer = true;
                     bc_snapCameraToCharacter(ui, ui->activeCharacter);
+                }
+
+                u32 characterCountHere = htw_geo_spatialItemCountAt(world->characterPool->spatialStorage, selectedCellCoord);
+                igValue_Uint("Characters here", characterCountHere);
+                if (igButton("Take control of first character here", (ImVec2){0, 0})) {
+                    // check for characters at selected cell
+                    if (characterCountHere > 0) {
+                        if (ui->activeCharacter != NULL) {
+                            ui->activeCharacter->isControlledByPlayer = false;
+                        }
+                        u32 characterIndex = htw_geo_spatialFirstIndex(world->characterPool->spatialStorage, selectedCellCoord);
+
+                        ui->activeCharacter = &world->characterPool->characters[characterIndex];
+                        ui->activeCharacter->isControlledByPlayer = true;
+                        bc_snapCameraToCharacter(ui, ui->activeCharacter);
+                    }
                 }
 
                 if (ui->activeCharacter != NULL) {

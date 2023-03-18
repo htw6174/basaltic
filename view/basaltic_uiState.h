@@ -47,6 +47,7 @@ typedef struct {
     bc_Mouse mouse;
     u32 hoveredChunkIndex;
     u32 hoveredCellIndex;
+    u32 selectedChunkIndex;
     u32 selectedCellIndex;
     // character control
     bc_Character *activeCharacter;

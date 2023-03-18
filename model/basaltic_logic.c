@@ -38,7 +38,7 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
     newWorld->surfaceMap = htw_geo_createChunkMap(bc_chunkSize, chunkCountX, chunkCountY, sizeof(bc_CellData));
 
-    newWorld->characterPoolSize = CHARACTER_POOL_SIZE;
+    newWorld->characterPool = bc_createCharacterPool(CHARACTER_POOL_SIZE);
     return newWorld;
 }
 
@@ -98,13 +98,7 @@ int bc_initializeWorldState(bc_WorldState *world) {
     }
 
     // Populate world
-    world->characters = malloc(sizeof(bc_Character) * world->characterPoolSize);
-    for (int i = 0; i < world->characterPoolSize; i++) {
-        // generate random character TODO
-        bc_Character *newCharacter = &world->characters[i];
-        *newCharacter = bc_createRandomCharacter();
-        newCharacter->currentState.destinationCoord = newCharacter->currentState.worldCoord = (htw_geo_GridCoord){htw_randRange(world->surfaceMap->mapWidth), htw_randRange(world->surfaceMap->mapHeight)};
-    }
+    bc_placeTestCharacters(world->characterPool, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
 
     return 0;
 }
@@ -232,22 +226,11 @@ static void updateVegetation(bc_CellData *cellData) {
 }
 
 static void updateCharacters(bc_WorldState *world) {
-    u32 characterCount = world->characterPoolSize;
-
-    for (u32 i = 0; i < characterCount; i++) {
-        bc_Character *subject = &world->characters[i];
-
-        if (bc_doCharacterMove(subject)) {
-            // character moved this turn
-        } else {
-            // rest
-            // TODO: make rest it's own action which is defaulted to for player controlled characters when no other action is taken
-            subject->currentState.currentStamina += 5;
-        }
-        if (subject->isControlledByPlayer) {
-            revealMap(world, subject);
-        }
-    }
+    bc_moveCharacters(world->characterPool);
+    // // TODO: figure out a better model for doing things where the world needs to be edited based on character actions
+    // if (character->isControlledByPlayer) {
+    //     revealMap(world, character);
+    // }
 }
 
 static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {

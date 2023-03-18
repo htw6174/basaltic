@@ -166,7 +166,7 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
         bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
         for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
-            bc_Character *character = &world->characters[i];
+            bc_Character *character = &world->characterPool->characters[i];
             htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
             u32 chunkIndex, cellIndex;
             htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &chunkIndex, &cellIndex);

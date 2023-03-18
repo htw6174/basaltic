@@ -122,7 +122,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
 
         if (editorEngineContext.isActive) {
             bc_beginEditor();
-            bc_drawEditor(&editorEngineContext, wc, superInfo);
+            bc_drawEditor(&editorEngineContext, wc, superInfo, sc.engineConfig);
             bc_view_drawEditor(sc.superInterface, ec, vc, visibleModelData, sc.inputBuffer);
             bc_endEditor(&editorEngineContext);
         }

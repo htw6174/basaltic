@@ -25,8 +25,7 @@ typedef struct {
     // Geography
     htw_ChunkMap *surfaceMap;
     // Characters
-    u32 characterPoolSize;
-    bc_Character *characters;
+    bc_CharacterPool *characterPool;
 } bc_WorldState;
 
 static bc_CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
@@ -39,6 +38,7 @@ static bc_CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u3
     return &cell[cellIndex];
 }
 
+// TODO: move this to htw_geomap
 static u32 bc_getChunkIndexByWorldPosition(bc_WorldState *world, float worldX, float worldY) {
     // reverse hex grid coordinate skewing
     float deskewedY = (1.0 / sqrt(0.75)) * worldY;
