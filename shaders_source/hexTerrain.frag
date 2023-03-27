@@ -13,11 +13,10 @@ precision mediump float;
 #define LIGHT1_SPECULAR 1.0
 #define LIGHT1_DIFFUSE 1.0
 
-// Distance where fog starts to fade in
-#define FOG_MIN 48.0
 // Distance where only fog is visible
-#define FOG_MAX 64.0
-#define FOG_COLOR vec3(0.1, 0.1, 0.2)
+const float fogEndDistance = 64.0 + 16.0; // Ideal for 3x3 chunk world with visibility radius 2; TODO pass chunk visibility radius in as a uniform
+// Distance where fog starts to fade in
+const float fogStartDistance = fogEndDistance - 16.0;
 
 const vec3 cliffColor = vec3(0.3, 0.2, 0.1);
 
@@ -57,7 +56,7 @@ float phong(vec3 normal, vec3 lightDir) {
 
 float fog() {
 	float worldDistance = distance(in_pos, WindowInfo.cameraFocalPoint);
-	return smoothstep(FOG_MIN, FOG_MAX, worldDistance);
+	return smoothstep(fogStartDistance, fogEndDistance, worldDistance);
 }
 
 void main()
@@ -82,7 +81,8 @@ void main()
 	//litColor = WindowInfo.cameraFocalPoint / 64.0;
 
 	//litColor = mix(litColor, FOG_COLOR, fog()); // TODO: why not just use 1-fog for alpha?
-	out_color = vec4(litColor, in_color.a); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
+	float fogfade = mix(in_color.a, 0.0, fog());
+	out_color = vec4(litColor, fogfade); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
 	//out_color = vec4(in_color, 1.0);
 	//out_color = vec4(normal, 1.0);
 }

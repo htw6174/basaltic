@@ -55,6 +55,9 @@ typedef struct {
 
     bc_Camera camera;
 
+    // TEST
+    bool drawSystems;
+
     htw_PipelineHandle defaultPipeline;
 
     vec3 wrapInstancePositions[4];

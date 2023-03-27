@@ -26,6 +26,10 @@ extern ECS_TAG_DECLARE(PlayerVision);
 extern ECS_TAG_DECLARE(BehaviorWander);
 extern ECS_TAG_DECLARE(BehaviorDescend);
 
+// TEST: simple animal ecosystem behaviors
+extern ECS_TAG_DECLARE(BehaviorGrazer);
+extern ECS_TAG_DECLARE(BehaviorPredator);
+
 void bc_defineComponents(ecs_world_t *world);
 
 #endif // BASALTIC_COMPONENTS_H_INCLUDED

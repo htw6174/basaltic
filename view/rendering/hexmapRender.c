@@ -540,7 +540,7 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunk
     }
 }
 
-void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, vec3 *instancePositions) {
+void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain) {
     htw_bindPipeline(vkContext, hexmap->pipeline);
 
     static mat4x4 modelMatrix;
@@ -553,14 +553,8 @@ void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_R
         vec3 chunkPos = {{chunkX, chunkY, 0.0}};
 
         htw_bindDescriptorSet(vkContext, hexmap->pipeline, hexmap->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-        // Draw once for each 'wrap instance', to allow for seemless world wrapping
-        // TODO: also try acheiving this with instanced rendering or drawing only the instance that would be closest to the camera focus
-        for (int i = 0; i < 4; i++) {
-            vec3 copyPos = vec3Add(chunkPos, instancePositions[i]);
-            mat4x4SetTranslation(modelMatrix, copyPos);
-            htw_setModelTransform(vkContext, hexmap->pipeline, modelMatrix);
-            htw_drawPipeline(vkContext, hexmap->pipeline, &hexmap->chunkMesh.meshBufferSet, HTW_DRAW_TYPE_INDEXED);
-        }
+        mat4x4SetTranslation(modelMatrix, chunkPos);
+        htw_drawPipelineX4(vkContext, hexmap->pipeline, &hexmap->chunkMesh.meshBufferSet, HTW_DRAW_TYPE_INDEXED, (float*)modelMatrix);
     }
 }
 

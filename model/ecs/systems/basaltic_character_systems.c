@@ -11,6 +11,10 @@ void characterCreated(ecs_iter_t *it);
 void characterMoved(ecs_iter_t *it);
 void characterDestroyed(ecs_iter_t *it);
 
+// TEST: simple ecosystem behaviors
+void behaviorGraze(ecs_iter_t *it);
+void behaviorPredate(ecs_iter_t *it);
+
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t count) {
     const bc_TerrainMap *tm = ecs_get(world, terrainMap, bc_TerrainMap);
     u32 maxX = tm->chunkMap->mapWidth;
@@ -28,10 +32,14 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t cou
         //ecs_set(world, newCharacter, bc_GridPosition, coord);
         ecs_set(world, newCharacter, bc_GridPosition, {coord.x, coord.y});
         ecs_set(world, newCharacter, bc_GridDestination, {coord.x, coord.y});
-        ecs_add(world, newCharacter, BehaviorWander);
         // TEST
         if (i % 32 == 0) {
+            ecs_add(world, newCharacter, BehaviorPredator);
             ecs_add(world, newCharacter, PlayerVision);
+        } else if (i % 4 == 0) {
+            ecs_add(world, newCharacter, BehaviorGrazer);
+        } else {
+            ecs_add(world, newCharacter, BehaviorWander);
         }
     }
 }
@@ -157,6 +165,10 @@ void bc_registerCharacterSystems(ecs_world_t *world) {
     ECS_SYSTEM(world, bc_revealMap, EcsPostUpdate, [in] bc_GridPosition, [in] (IsOn, _), PlayerVision);
     //ECS_OBSERVER(world, characterMoved, EcsOnSet, bc_GridPosition, (IsOn, _));
     ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, bc_GridPosition, (IsOn, _));
+
+    // TEST ecosystem behaviors
+    ECS_SYSTEM(world, behaviorGraze, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorGrazer, !PlayerControlled);
+    ECS_SYSTEM(world, behaviorPredate, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorPredator, !PlayerControlled);
 }
 
 void characterCreated(ecs_iter_t *it) {
@@ -178,5 +190,102 @@ void characterDestroyed(ecs_iter_t *it) {
     const bc_TerrainMap *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), bc_TerrainMap);
     for (int i = 0; i < it->count; i++) {
         bc_terrainMapRemoveEntity(it->world, tm, it->entities[i], positions[i]);
+    }
+}
+
+void behaviorGraze(ecs_iter_t *it) {
+    bc_GridPosition *positions = ecs_field(it, bc_GridPosition, 1);
+    bc_GridDestination *destinations = ecs_field(it, bc_GridDestination, 2);
+    ecs_entity_t tmEnt = ecs_field_id(it, 3);
+    const bc_TerrainMap *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), bc_TerrainMap);
+    htw_ChunkMap *cm = tm->chunkMap;
+
+    for (int i = 0; i < it->count; i++) {
+
+        htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(positions[i]);
+        htw_geo_CubeCoord relativeCoord = {0, 0, 0};
+
+        // get number of cells to check based on character's attributes
+        u32 sightRange = 2;
+        u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
+
+        // track best candidate
+        s32 bestVegetation = 0;
+        htw_geo_CubeCoord bestDirection = {0, 0, 0};
+
+        for (int c = 0; c < cellsInSightRange; c++) {
+            // Result coordinate is not confined to chunkmap, but converting to chunk and cell will also wrap input coords
+            htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
+            htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
+            u32 chunkIndex, cellIndex;
+            htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
+            bc_CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+
+            // Consume some of current cell vegetation
+            if (c == 0) {
+                cell->vegetation -= cell->vegetation * 0.1;
+            }
+
+            // Get cell data, find best vegetation
+            if (cell->vegetation > bestVegetation) {
+                bestVegetation = cell->vegetation;
+                bestDirection = relativeCoord;
+            }
+
+            // TODO: check for predators, move in opposite direction and break if found
+
+            htw_geo_getNextHexSpiralCoord(&relativeCoord);
+        }
+
+        // Apply best direction found
+        destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
+    }
+}
+
+void behaviorPredate(ecs_iter_t *it) {
+    bc_GridPosition *positions = ecs_field(it, bc_GridPosition, 1);
+    bc_GridDestination *destinations = ecs_field(it, bc_GridDestination, 2);
+    ecs_entity_t tmEnt = ecs_field_id(it, 3);
+    const bc_TerrainMap *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), bc_TerrainMap);
+    htw_ChunkMap *cm = tm->chunkMap;
+
+    for (int i = 0; i < it->count; i++) {
+
+        htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(positions[i]);
+        htw_geo_CubeCoord relativeCoord = {0, 0, 0};
+
+        // get number of cells to check based on character's attributes
+        u32 sightRange = 3;
+        u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
+
+        bool inPersuit = false;
+
+        for (int c = 0; c < cellsInSightRange; c++) {
+            htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
+            htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
+            worldCoord = htw_geo_wrapGridCoordOnChunkMap(cm, worldCoord);
+
+            // Get root entity at cell, find any Grazers, break if found
+            khint_t k = kh_get(GridMap, tm->gridMap, worldCoord);
+            if (k != kh_end(tm->gridMap)) {
+                // Descend tree TODO
+                // for now, only pick out lone grazers (stragglers)
+                ecs_entity_t root = kh_val(tm->gridMap, k);
+                if (ecs_is_valid(it->world, root)) {
+                    if (ecs_has(it->world, root, BehaviorGrazer)) {
+                        // Apply destination TODO normalize so it only moves one space at a time
+                        destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(relativeCoord));
+                        inPersuit = true;
+                        break;
+                    }
+                }
+            }
+
+            htw_geo_getNextHexSpiralCoord(&relativeCoord);
+        }
+        if (!inPersuit) {
+            // move randomly
+            destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[htw_randRange(HEX_DIRECTION_COUNT)]);
+        }
     }
 }

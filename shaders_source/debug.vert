@@ -45,7 +45,7 @@ void main()
     vec3 vert = octahedronPositions[octahedronIndicies[gl_VertexIndex]];
     vec2 xy = in_position.xy + vert.xy;
     float z = (in_position.z * WorldInfo.gridToWorld.z) + (vert.z * in_size);
-    gl_Position = MPV.pv * vec4(xy, z, 1.0) * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
+    gl_Position = MPV.pv * MPV.m * vec4(xy, z, 1.0) * vec4(1.0, -1.0, 1.0, 1.0); // flip y so it draws correctly for now; transform matricies should do this automatically later
 
     out_color = in_color;
 }

@@ -24,6 +24,9 @@ ECS_TAG_DECLARE(PlayerVision);
 ECS_TAG_DECLARE(BehaviorWander);
 ECS_TAG_DECLARE(BehaviorDescend);
 
+ECS_TAG_DECLARE(BehaviorGrazer);
+ECS_TAG_DECLARE(BehaviorPredator);
+
 void bc_defineComponents(ecs_world_t *world) {
 
     /* Terrain */
@@ -44,4 +47,7 @@ void bc_defineComponents(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, PlayerVision);
     ECS_TAG_DEFINE(world, BehaviorWander);
     ECS_TAG_DEFINE(world, BehaviorDescend);
+
+    ECS_TAG_DEFINE(world, BehaviorGrazer);
+    ECS_TAG_DEFINE(world, BehaviorPredator);
 }

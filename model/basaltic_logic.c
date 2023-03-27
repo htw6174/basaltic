@@ -196,7 +196,6 @@ static void doWorldStep(bc_WorldState *world) {
     SDL_SemWait(world->lock);
     ecs_progress(world->ecsWorld, 1.0);
     SDL_SemPost(world->lock);
-    //ecs_run_pipeline(world->ecsWorld, ecs_get_pipeline(world->ecsWorld), 1.0);
 
     // ecs_world_t *stage = ecs_get_stage(world->ecsWorld, 0);
     // ecs_iter_t it = ecs_query_iter(stage, world->systems);

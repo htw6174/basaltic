@@ -99,6 +99,8 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
         .visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL,
     };
 
+    rc->drawSystems = true;
+
     return rc;
 }
 
@@ -162,6 +164,8 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
 
     if (world != NULL) {
         updateWorldInfoBuffer(rc, world);
+        htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
+
         // determine the indicies of chunks closest to the camera
         htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
@@ -169,19 +173,20 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, cameraX, cameraY);
         bc_updateTerrainVisibleChunks(rc->vkContext, cm, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
-
-        // Wait with a timeout to prevent framerate from dropping/stalling
-        // FIXME: if model thread tick rate is too high, it monopolizes the semaphore and doesn't allow the view thread to access ecs data. Any way to have the model thread 'give up control' every once in a while, without manually pausing it?
-        if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
-            // Only safe to iterate queries while the world is in readonly mode, or has exclusive access from one thread
-            drawCharacterDebug(rc, world);
-            SDL_SemPost(world->lock);
-        }
-
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
-        htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
-        bc_drawHexmapTerrain(rc->vkContext, cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
-        bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
+        bc_drawHexmapTerrain(rc->vkContext, cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain);
+
+        if (rc->drawSystems) {
+            // Wait with a timeout to prevent framerate from dropping or locking entirely
+            // FIXME: if model thread tick rate is too high, it monopolizes the semaphore and doesn't allow the view thread to access ecs data. Any way to have the model thread 'give up control' every once in a while, without manually pausing it?
+            if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+                // Only safe to iterate queries while the world is in readonly mode, or has exclusive access from one thread
+                // TODO: inspector reflection for systems, option to disable them individually, turn draw functions into systems
+                drawCharacterDebug(rc, world);
+                SDL_SemPost(world->lock);
+            }
+            bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
+        }
     }
 }
 
@@ -198,6 +203,7 @@ void bc_setRenderWorldWrap(bc_RenderContext *rc, u32 worldWidth, u32 worldHeight
     rc->wrapInstancePositions[1] = (vec3){{x01, y01, 0.0}};
     rc->wrapInstancePositions[2] = (vec3){{x10, y10, 0.0}};
     rc->wrapInstancePositions[3] = (vec3){{x11, y11, 0.0}};
+    htw_setModelTranslationInstances(rc->vkContext, (float*)rc->wrapInstancePositions);
 }
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
@@ -242,9 +248,17 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             s32 elevation = bc_getCellByIndex(cm, chunkIndex, cellIndex)->height;
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
-            vec4 color = {{0.0, 0.0, 1.0, 0.5}};
+
+            // TEST: colors. This is a mess
+            vec4 color = {{0.0, 0.0, 1.0, 0.5}}; // default blue
+            if (ecs_has(it.world, it.entities[e], BehaviorGrazer)) {
+                color = (vec4){{0.0, 1.0, 0.0, 0.5}}; // grazer is green
+            }
+            if (ecs_has(it.world, it.entities[e], BehaviorPredator)) {
+                color = (vec4){{1.0, 0.0, 0.0, 0.5}}; // predator is red
+            }
             if (ecs_has(it.world, it.entities[e], PlayerControlled)) {
-                color = (vec4){{0.0, 1.0, 0.0, 0.5}};
+                color = (vec4){{0.0, 1.0, 1.0, 0.5}}; // player is purple
             }
             bc_DebugInstanceData characterData = {
                 .color = color,
@@ -254,9 +268,9 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             instanceData[i] = characterData;
         }
     }
-    // TEST: dead character entities should show up as red
+    // TEST: dead character entities should show up as dark red
     for (; i < rc->internalRenderContext->debugContext->maxInstanceCount; i++) {
-        instanceData[i].color = (vec4){{1.0, 0.0, 0.0, 0.5}};
+        instanceData[i].color = (vec4){{0.5, 0.0, 0.0, 1.0}};
     }
     bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
 

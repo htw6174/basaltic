@@ -105,6 +105,8 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             }
             igSpacing();
 
+            igCheckbox("Draw entities", &vc->rc->drawSystems);
+
             /* Ensure the model isn't running before doing anything else */
             if (!bc_model_isRunning(model)) {
                 if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {

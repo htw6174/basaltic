@@ -73,8 +73,7 @@ void bc_drawDebugInstances(htw_VkContext *vkContext, bc_DebugRenderContext *rc) 
     static mat4x4 modelMatrix;
 
     mat4x4SetTranslation(modelMatrix, (vec3){{0.0, 0.0, 0.0}});
-    htw_setModelTransform(vkContext, rc->pipeline, modelMatrix);
     htw_bindPipeline(vkContext, rc->pipeline);
     htw_bindDescriptorSet(vkContext, rc->pipeline, rc->debugDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-    htw_drawPipeline(vkContext, rc->pipeline, &rc->instancedModel.meshBufferSet, HTW_DRAW_TYPE_INSTANCED);
+    htw_drawPipelineX4(vkContext, rc->pipeline, &rc->instancedModel.meshBufferSet, HTW_DRAW_TYPE_INSTANCED, (float*)modelMatrix);
 }
