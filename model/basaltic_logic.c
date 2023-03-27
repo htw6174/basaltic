@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <SDL2/SDL.h>
+#include <SDL2/SDL_mutex.h>
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
@@ -11,7 +11,11 @@
 #include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
 #include "basaltic_commandBuffer.h"
+#include "basaltic_components.h"
+#include "basaltic_terrain_systems.h"
+#include "basaltic_character_systems.h"
 #include "flecs.h"
+#include "khash.h"
 
 typedef struct {
     bc_CommandBuffer processingBuffer;
@@ -20,15 +24,10 @@ typedef struct {
 } LogicState;
 
 static void doWorldStep(bc_WorldState *world);
-static void doMonthStep(bc_WorldState *world);
 
-static void updateVegetation(bc_CellData *cellData);
-
-static void updateCharacters(bc_WorldState *world);
-
-static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit);
-static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove);
-static void revealMap(bc_WorldState *world, bc_Character* character);
+static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit);
+static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove);
+static void revealMap(ecs_world_t *world, htw_ChunkMap *cm, ecs_entity_t character);
 
 bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
     bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
@@ -37,76 +36,69 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     newWorld->seed = xxh_hash(0, BC_MAX_SEED_LENGTH, (u8*)newWorld->seedString);
     newWorld->step = 0;
 
-    newWorld->surfaceMap = htw_geo_createChunkMap(bc_chunkSize, chunkCountX, chunkCountY, sizeof(bc_CellData));
-
+#ifdef FLECS_SANITIZE
+    printf("Initializing flecs in sanitizing mode. Expect a significant slowdown.\n");
+#endif
     newWorld->ecsWorld = ecs_init();
-    //newWorld->characterPool = bc_createCharacterPool(CHARACTER_POOL_SIZE);
+    //ecs_set_stage_count(newWorld->ecsWorld, 2);
+    //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
+    bc_defineComponents(newWorld->ecsWorld);
+#ifdef FLECS_REST
+    printf("Initializing flecs REST API\n");
+    ecs_singleton_set(newWorld->ecsWorld, EcsRest, {0});
+    //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
+    FlecsMonitorImport(newWorld->ecsWorld);
+    ecs_set_scope(newWorld->ecsWorld, 0);
+#endif
+
+    newWorld->baseTerrain = bc_createTerrain(newWorld->ecsWorld, chunkCountX, chunkCountY, CHARACTER_POOL_SIZE);
+
+    newWorld->lock = SDL_CreateSemaphore(1);
+
     return newWorld;
 }
 
 int bc_initializeWorldState(bc_WorldState *world) {
+
+    // ECS Systems
+    bc_registerTerrainSystems(world->ecsWorld);
+    bc_registerCharacterSystems(world->ecsWorld);
+
     // World generation
-    u32 width = bc_chunkSize;
-    u32 height = bc_chunkSize;
-    u32 cellsPerChunk = width * height;
-
-    bc_seedMountains(world->surfaceMap, 32, 128, 64);
-    //bc_growMountains(world->surfaceMap, 0.5);
-
-    for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
-        for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
-            bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
-
-            for (int i = 0; i < cellsPerChunk; i++) {
-                bc_CellData *cell = &cellData[i];
-                htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
-                float baseNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed, 8, 16);
-                float nutrientNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed + 1, 4, 16);
-                float rainNoise = htw_geo_simplex(world->surfaceMap, cellCoord, world->seed + 2, 4, 4);
-                s32 grad = remap_int(cellCoord.y, 0, world->surfaceMap->mapHeight, 0, 255);
-                s32 poleGrad1 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, 0}, 255, 0, world->surfaceMap->mapWidth * 0.67);
-                s32 poleGrad2 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){0, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
-                s32 poleGrad3 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, 0}, 255, 0, world->surfaceMap->mapWidth * 0.33);
-                s32 poleGrad4 = htw_geo_circularGradientByGridCoord(
-                    world->surfaceMap, cellCoord, (htw_geo_GridCoord){world->surfaceMap->mapWidth / 2, world->surfaceMap->mapHeight / 2}, 255, 0, world->surfaceMap->mapWidth * 0.33);
-                cell->height += baseNoise * 32;
-                cell->temperature = poleGrad1;
-                cell->nutrient = nutrientNoise * 32;
-                cell->rainfall = rainNoise * 32;
-                cell->visibility = 0;
-                cell->vegetation = 0;
-            }
-            // Max 128
-            //htw_geo_fillSimplex(chunk->heightMap, world->seed, 8, cellPosX, cellPosY, world->worldWidth, 4);
-
-            // Max of mapheight?
-            //htw_geo_fillGradient(chunk->temperatureMap, cellPosY, cellPosY + height);
-            //htw_geo_fillPerlin(chunk->temperatureMap, world->seed, 1, cellPosX, cellPosY, 0.05, worldCartesianWidth, worldCartesianHeight);
-            //htw_geo_fillSimplex(chunk->temperatureMap, world->seed + 1, 4, cellPosX, cellPosY, world->worldWidth, 4);
-            //htw_geo_fillCircularGradient(chunk->temperatureMap, (htw_geo_GridCoord){-cellPosX, -cellPosY}, 255, 0, world->worldWidth / 2);
-
-            // Max of mapheight?
-            //htw_geo_fillSimplex(chunk->nutrientMap, world->seed + 2, 4, cellPosX, cellPosY, world->worldWidth, 4);
-
-            // Max 255
-            //htw_geo_fillPerlin(chunk->rainfallMap, world->seed, 2, cellPosX, cellPosY, 0.1, worldCartesianWidth, worldCartesianHeight);
-            //htw_geo_fillSimplex(chunk->rainfallMap, world->seed + 3, 6, cellPosX, cellPosY, world->worldWidth, 4);
-
-            //htw_geo_fillChecker(chunk->visibilityMap, 0, 1, 4);
-        }
-    }
+    bc_generateTerrain(world->ecsWorld, world->baseTerrain, world->seed);
 
     // Populate world
-    bc_placeTestCharacters(world->ecsWorld, CHARACTER_POOL_SIZE, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
+    bc_createCharacters(world->ecsWorld, world->baseTerrain, CHARACTER_POOL_SIZE);
+
+    // ECS Queries (may be slightly faster to create these after creating entities)
+    world->systems = ecs_query(world->ecsWorld, {
+        .filter.terms = {
+            {EcsSystem}
+        }
+    });
+    world->terrains = ecs_query(world->ecsWorld, {
+        .filter.terms = {
+            {ecs_id(bc_TerrainMap)}
+        }
+    });
+    world->characters = ecs_query(world->ecsWorld, {
+        .filter.terms = {
+            {ecs_id(bc_GridPosition)},
+            //{ecs_pair(IsOn, ecs_id(bc_TerrainMap))}
+        }
+    });
 
     return 0;
 }
 
 void bc_destroyWorldState(bc_WorldState *world) {
+    // Ownership for queries is passed to the application, should clean them up manually
+    // however, ecs_fini seems to take care of queries automatically
+    //ecs_query_fini(world->terrains);
+    //ecs_query_fini(world->characters);
     ecs_fini(world->ecsWorld);
+    SDL_SemWait(world->lock);
+    SDL_DestroySemaphore(world->lock);
     free(world->seedString);
     free(world);
 }
@@ -132,10 +124,10 @@ int bc_doLogicTick(bc_ModelData *model, bc_CommandBuffer inputBuffer) {
                         model->autoStep = false;
                         break;
                     case BC_COMMAND_TYPE_CHARACTER_MOVE:
-                        moveCharacter(model->world, &currentCommand->characterMoveCommand);
+                        moveCharacter(model->world->ecsWorld, &currentCommand->characterMoveCommand);
                         break;
                     case BC_COMMAND_TYPE_TERRAIN_EDIT:
-                        editMap(model->world, &currentCommand->terrainEditCommand);
+                        editMap(model->world->ecsWorld, &currentCommand->terrainEditCommand);
                         break;
                     default:
                         fprintf(stderr, "ERROR: invalid command type %i", currentCommand->commandType);
@@ -165,15 +157,16 @@ static void worldStepStressTest(bc_WorldState *world) {
 
     // Stress TEST: do something with every tile, every frame
     // on an 8x8 chunk world, this is 262k updates
-    u32 chunkCount = world->surfaceMap->chunkCountX * world->surfaceMap->chunkCountY;
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+    u32 chunkCount = cm->chunkCountX * cm->chunkCountY;
     u32 cellsPerChunk = bc_chunkSize * bc_chunkSize;
     for (int c = 0; c < chunkCount; c++) {
-        bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
+        bc_CellData *cellData = cm->chunks[c].cellData;
         for (int i = 0; i < cellsPerChunk; i++) {
             s32 currentValue = cellData[i].height;
             // With worldCoord lookup: ~60 tps
             // Without worldCoord lookup: ~140 tps
-            htw_geo_GridCoord worldCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, c, i);
+            htw_geo_GridCoord worldCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
 
             // running this block drops tps to *6*
             // Not unexpected considering all the conversions, lookups across chunk boundaries, and everything being unoptimized
@@ -183,7 +176,7 @@ static void worldStepStressTest(bc_WorldState *world) {
             for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
                 htw_geo_CubeCoord cubeNeighbor = htw_geo_addCubeCoords(cubeHere, htw_geo_cubeDirections[d]);
                 htw_geo_GridCoord gridNeighbor = htw_geo_cubeToGridCoord(cubeNeighbor);
-                neighborAverage += ((bc_CellData*)htw_geo_getCell(world->surfaceMap, gridNeighbor))->height;
+                neighborAverage += ((bc_CellData*)htw_geo_getCell(cm, gridNeighbor))->height;
             }
             neighborAverage /= HEX_DIRECTION_COUNT;
             s32 erosion = lerp_int(currentValue, neighborAverage, 0.2);
@@ -199,100 +192,53 @@ static void doWorldStep(bc_WorldState *world) {
     // TODO: all the rest
     //worldStepStressTest(world);
 
-    updateCharacters(world);
+    // Waiting here gives the view thread a chance to safely read & render world data
+    SDL_SemWait(world->lock);
+    ecs_progress(world->ecsWorld, 1.0);
+    SDL_SemPost(world->lock);
+    //ecs_run_pipeline(world->ecsWorld, ecs_get_pipeline(world->ecsWorld), 1.0);
 
-    // TEST: should only do this every months worth of steps
-    doMonthStep(world);
+    // ecs_world_t *stage = ecs_get_stage(world->ecsWorld, 0);
+    // ecs_iter_t it = ecs_query_iter(stage, world->systems);
+    // while (ecs_query_next(&it)) {
+    //     for (int i = 0; i < it.count; i++) {
+    //         ecs_run(stage, it.entities[i], 1.0, NULL);
+    //     }
+    // }
+    // // TODO: only end readonly mode (flush the buffer and make ecs storage changes) if no other threads are currently reading from the world
+    // ecs_readonly_end(world->ecsWorld);
+    // ecs_readonly_begin(world->ecsWorld);
 
     world->step++;
 }
 
-static void doMonthStep(bc_WorldState *world) {
-    for (int c = 0, y = 0; y < world->surfaceMap->chunkCountY; y++) {
-        for (int x = 0; x < world->surfaceMap->chunkCountX; x++, c++) {
-            bc_CellData *cellData = world->surfaceMap->chunks[c].cellData;
-
-            for (int i = 0; i < world->surfaceMap->cellsPerChunk; i++) {
-                updateVegetation(&cellData[i]);
-            }
-        }
-    }
-}
-
-static void updateVegetation(bc_CellData *cellData) {
-    if (cellData->nutrient > cellData->vegetation) {
-        cellData->vegetation++;
-        cellData->nutrient -= cellData->vegetation;
-    } else {
-        cellData->nutrient += cellData->rainfall;
-    }
-}
-
-static void updateCharacters(bc_WorldState *world) {
-    //bc_moveCharacters(world->characterPool);
-    // // TODO: figure out a better model for doing things where the world needs to be edited based on character actions
-    // if (character->isControlledByPlayer) {
-    //     revealMap(world, character);
-    // }
-}
-
-static void editMap(bc_WorldState *world, bc_TerrainEditCommand *terrainEdit) {
+static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit) {
     // TODO: handle brush modes, sizes
-    bc_CellData *cell = world->surfaceMap->chunks[terrainEdit->chunkIndex].cellData;
+    htw_ChunkMap *cm = ecs_get(world, terrainEdit->terrain, bc_TerrainMap)->chunkMap;
+    bc_CellData *cell = cm->chunks[terrainEdit->chunkIndex].cellData;
     cell = &cell[terrainEdit->cellIndex];
     cell->height += terrainEdit->value;
 }
 
-static void moveCharacter(bc_WorldState *world, bc_CharacterMoveCommand *characterMove) {
-    // TODO: schedule move for next step instead of executing immediately
-    htw_geo_GridCoord destCoord = htw_geo_chunkAndCellToGridCoordinates(world->surfaceMap, characterMove->chunkIndex, characterMove->cellIndex);
-    bc_setCharacterDestination(characterMove->subject, destCoord);
-}
+static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove) {
+    htw_ChunkMap *cm = ecs_get(world, characterMove->terrain, bc_TerrainMap)->chunkMap;
+    htw_geo_GridCoord destCoord = htw_geo_chunkAndCellToGridCoordinates(cm, characterMove->chunkIndex, characterMove->cellIndex);
 
-// FIXME: why is the revealed area wrong when it crosses the horizontal world wrap boundary?
-// TODO: should take a specific chunkmap instead of entire world state
-// Reveal an area of map around the target character's position according to their sight radius
-static void revealMap(bc_WorldState *world, bc_Character* character) {
-    // TODO: factor in terrain height, character size, and attributes e.g. isFlying
-    // get character's current cell information
-    htw_geo_GridCoord characterCoord = character->currentState.worldCoord;
-    u32 charChunkIndex, charCellIndex;
-    htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &charChunkIndex, &charCellIndex);
-    s32 characterElevation = bc_getCellByIndex(world->surfaceMap, charChunkIndex, charCellIndex)->height;
-
-    htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(characterCoord);
-    htw_geo_CubeCoord relativeCoord = {0, 0, 0};
-
-    // get number of cells to check based on character's attributes
-    u32 sightRange = 6;
-    u32 detailRange = sightRange - 1;
-    u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
-    u32 cellsInDetailRange = htw_geo_getHexArea(detailRange);
-
-    // TODO: because of the outward spiral cell iteration used here, it may be possible to keep track of cell attributes that affect visibility and apply them additively to more distant cells (would probably only make sense to do this in the same direction; would have to come up with a way to determine if a cell is 'behind' another), such as forests or high elevations blocking lower areas
-    for (int c = 0; c < cellsInSightRange; c++) {
-        htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
-        htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
-        u32 chunkIndex, cellIndex;
-        htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, worldCoord, &chunkIndex, &cellIndex);
-        bc_CellData *cell = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex);
-
-        bc_TerrainVisibilityBitFlags cellVisibility = 0;
-        // restrict sight by distance
-        // NOTE: this only works because of the outward spiral iteration pattern. Should use cube coordinate distance instead for better reliability
-        if (c < cellsInDetailRange) {
-            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY | BC_TERRAIN_VISIBILITY_COLOR;
-        } else {
-            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
+    // TEST: handle this with filters instead of specific entity
+    ecs_filter_t *pcFilter = ecs_filter(world, {
+        .terms = {
+            {ecs_id(bc_GridDestination)},
+            {ecs_pair(IsOn, EcsAny)},
+            {PlayerControlled}
         }
-        // restrict sight by relative elevation
-        s32 elevation = cell->height;
-        if (elevation > characterElevation + 1) { // TODO: instead of constant +1, derive from character attributes
-            cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
+    });
+    ecs_iter_t it = ecs_filter_iter(world, pcFilter);
+    while (ecs_filter_next(&it)) {
+        bc_GridDestination *destinations = ecs_field(&it, bc_GridDestination, 1);
+        for (int i = 0; i < it.count; i++) {
+            destinations[i] = destCoord;
         }
-
-        cell->visibility |= cellVisibility;
-
-        htw_geo_getNextHexSpiralCoord(&relativeCoord);
     }
+
+    //bc_setCharacterDestination(world, characterMove->subject, destCoord);
 }

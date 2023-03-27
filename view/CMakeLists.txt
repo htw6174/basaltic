@@ -12,6 +12,7 @@ add_subdirectory(rendering)
 find_package(SDL2 REQUIRED)
 find_package(Freetype REQUIRED)
 
-target_include_directories(basaltic_view PRIVATE .. ../htw-libs ../include ../model ${SDL2_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIR_ft2build} ${FREETYPE_INCLUDE_DIR_freetype2})
+# TODO: any way to avoid including model/ecs explicitly?
+target_include_directories(basaltic_view PRIVATE .. ../htw-libs ../include ../model ../model/ecs ${SDL2_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIR_ft2build} ${FREETYPE_INCLUDE_DIR_freetype2})
 
 # NOTE: no need to link libraries in this cmake file, because linking is already done in the root CMakeLists.txt

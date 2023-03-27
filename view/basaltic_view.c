@@ -37,10 +37,12 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ViewContext* vc, bc_ModelDa
 
 void bc_view_onModelStart(bc_ViewContext *vc, bc_ModelData *model) {
     bc_WorldState *world = model->world;
-    bc_SetCameraWrapLimits(vc->ui, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
+    bc_setModelEcsWorld(vc->ui, model->world->ecsWorld);
+    bc_setFocusedTerrain(vc->ui, model->world->baseTerrain);
     bc_updateRenderContextWithWorldParams(vc->rc, model->world);
 }
 
 void bc_view_onModelStop(bc_ViewContext *vc) {
     // TODO: reset uiState that references world data
+    bc_setModelEcsWorld(vc->ui, NULL);
 }

@@ -6,12 +6,13 @@
 #include "basaltic_interaction.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_logic.h"
-#include "basaltic_characters.h"
+#include "basaltic_components.h"
 
+static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
 static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex);
-static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellIndex, s32 value);
-static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex);
+static void editMap(bc_CommandBuffer commandBuffer, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex, s32 value);
+static void moveCharacter(bc_CommandBuffer commandBuffer, ecs_entity_t e, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex);
 static void advanceStep(bc_CommandBuffer commandBuffer);
 
 // TODO: add seperate input handling for each interfaceMode setting
@@ -20,7 +21,7 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
         if (e->button.button == SDL_BUTTON_LEFT) {
             selectCell(ui, ui->hoveredChunkIndex, ui->hoveredCellIndex);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
-            moveCharacter(commandBuffer, ui->activeCharacter, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            moveCharacter(commandBuffer, ui->activeCharacter, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex);
             advanceStep(commandBuffer);
             //editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
         }
@@ -37,10 +38,10 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
                 ui->activeLayer = ui->activeLayer ^ 1; // invert
                 break;
             case SDLK_UP:
-                editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                editMap(commandBuffer, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
                 break;
             case SDLK_DOWN:
-                editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+                editMap(commandBuffer, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
                 break;
             case SDLK_SPACE:
                 advanceStep(commandBuffer);
@@ -80,10 +81,32 @@ void bc_processInputState(bc_UiState *ui, bc_CommandBuffer commandBuffer, bool u
     translateCamera(ui, xMovement, yMovement);
 }
 
-void bc_snapCameraToCharacter(bc_UiState *ui, bc_Character *subject) {
-    if (subject == NULL) return;
-    htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
-    htw_geo_getHexCellPositionSkewed(characterCoord, &ui->cameraX, &ui->cameraY);
+void bc_setModelEcsWorld(bc_UiState *ui, ecs_world_t *world) {
+    ui->world = world;
+}
+
+void bc_setFocusedTerrain(bc_UiState *ui, ecs_entity_t terrain) {
+    ui->focusedTerrain = terrain;
+    if (ui->world != NULL) {
+        htw_ChunkMap *cm = ecs_get(ui->world, terrain, bc_TerrainMap)->chunkMap;
+        setCameraWrapLimits(ui, cm->mapWidth, cm->mapHeight);
+    }
+}
+
+static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY) {
+    ui->cameraWrapX = worldGridSizeX / 2;
+    ui->cameraWrapY = worldGridSizeY / 2;
+}
+
+void bc_focusCameraOnCell(bc_UiState *ui, htw_geo_GridCoord cellCoord) {
+    htw_geo_getHexCellPositionSkewed(cellCoord, &ui->cameraX, &ui->cameraY);
+}
+
+void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
+    // TODO: make this work with ecs. Should fix the other todo as well
+    //if (subject == NULL) return;
+    //htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
+    //bc_focusCameraOnCell(ui, characterCoord);
     ui->cameraDistance = 5;
     // TODO: would like to set camera height also, but that requires inspecting world data as well. Maybe setup a general purpose height adjust in bc_window
 }
@@ -130,11 +153,12 @@ static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex) {
     ui->selectedCellIndex = cellIndex;
 }
 
-static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellIndex, s32 value) {
+static void editMap(bc_CommandBuffer commandBuffer, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex, s32 value) {
     bc_TerrainEditCommand editCommand = {
         .editType = BC_MAP_EDIT_ADD,
         .brushSize = 1,
         .value = value,
+        .terrain = terrain,
         .chunkIndex = chunkIndex,
         .cellIndex = cellIndex
     };
@@ -145,10 +169,11 @@ static void editMap(bc_CommandBuffer commandBuffer, u32 chunkIndex, u32 cellInde
     bc_pushCommandToBuffer(commandBuffer, &inputCommand, sizeof(inputCommand));
 }
 
-static void moveCharacter(bc_CommandBuffer commandBuffer, bc_Character *character, u32 chunkIndex, u32 cellIndex) {
-    if (character == NULL) return;
+static void moveCharacter(bc_CommandBuffer commandBuffer, ecs_entity_t e, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex) {
+    //if (e == 0) return;
     bc_CharacterMoveCommand moveCommand = {
-        .subject = character,
+        .subject = e,
+        .terrain = terrain,
         .chunkIndex = chunkIndex,
         .cellIndex = cellIndex
     };

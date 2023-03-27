@@ -4,8 +4,9 @@ Libraries used in, but not distributed with, this project:
 [Freetype](https://freetype.org/)
 
 Libraries redistributed with this project:
-[stb libs by Sean Barrett](https://github.com/nothings/stb)
+[stb_image_write by Sean Barrett](https://github.com/nothings/stb)
 [ccVector by Job Talle](https://github.com/jobtalle/ccVector)
+[khash by Attractive Chaos](https://github.com/attractivechaos/klib)
 [flecs by Sander Mertens](https://github.com/SanderMertens/flecs)
 
 Licenses are in the 'licenses/' directory or included in corresponding source files

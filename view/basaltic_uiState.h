@@ -3,7 +3,7 @@
 
 #include "htw_core.h"
 #include "basaltic_defs.h"
-#include "basaltic_characters.h"
+#include "flecs.h"
 
 typedef enum bc_CameraMode {
     BC_CAMERA_MODE_ORTHOGRAPHIC = 0,
@@ -49,12 +49,14 @@ typedef struct {
     u32 hoveredCellIndex;
     u32 selectedChunkIndex;
     u32 selectedCellIndex;
+    // ecs
+    ecs_world_t *world;
     // character control
-    bc_Character *activeCharacter;
+    ecs_entity_t focusedTerrain;
+    ecs_entity_t activeCharacter;
     // menus
 } bc_UiState;
 
 bc_UiState *bc_createUiState();
-void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 
 #endif // BASALTIC_UISTATE_H_INCLUDED

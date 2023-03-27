@@ -5,6 +5,7 @@ cmake_policy(SET CMP0076 NEW)
 project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
+#add_compile_definitions($<$<CONFIG:Debug>:FLECS_SANITIZE>)
 
 add_executable(basaltic main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c)
 

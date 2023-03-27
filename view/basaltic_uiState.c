@@ -22,15 +22,13 @@ bc_UiState* bc_createUiState() {
         .mouse = {0},
         .hoveredCellIndex = 0,
         .selectedCellIndex = 0,
+        // ecs
+        .world = NULL,
         // character control
-        .activeCharacter = NULL,
+        .focusedTerrain = 0,
+        .activeCharacter = 0,
         // menus
     };
     return ui;
-}
-
-void bc_SetCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY) {
-    ui->cameraWrapX = worldGridSizeX / 2;
-    ui->cameraWrapY = worldGridSizeY / 2;
 }
 

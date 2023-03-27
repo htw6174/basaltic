@@ -1,10 +1,11 @@
-
+#include <SDL2/SDL_mutex.h>
 #include "htw_core.h"
 #include "htw_vulkan.h"
 #include "ccVector.h"
 #include "basaltic_window.h"
 #include "basaltic_render.h"
 #include "basaltic_logic.h"
+#include "basaltic_components.h"
 #include "hexmapRender.h"
 #include "debugRender.h"
 #include "htw_geomap.h"
@@ -103,16 +104,9 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
 
 void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *world) {
     if (world != NULL) {
-        bc_setRenderWorldWrap(rc, world->surfaceMap->mapWidth, world->surfaceMap->mapHeight);
+        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+        bc_setRenderWorldWrap(rc, cm->mapWidth, cm->mapHeight);
         updateWorldInfoBuffer(rc, world);
-
-        // ECS Queries
-        rc->characterQuery = ecs_query(world->ecsWorld, {
-            .filter.terms = {
-                {ecs_id(bc_GridPosition_c)}
-            }
-
-        });
     }
 }
 
@@ -167,17 +161,26 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
     htw_bindDescriptorSet(rc->vkContext, rc->defaultPipeline, rc->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
     if (world != NULL) {
+        updateWorldInfoBuffer(rc, world);
         // determine the indicies of chunks closest to the camera
+        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
         float cameraY = rc->windowInfo.cameraFocalPoint.y;
-        u32 centerChunk = bc_getChunkIndexByWorldPosition(world, cameraX, cameraY);
-        bc_updateTerrainVisibleChunks(rc->vkContext, world->surfaceMap, rc->internalRenderContext->surfaceTerrain, centerChunk);
+        u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, cameraX, cameraY);
+        bc_updateTerrainVisibleChunks(rc->vkContext, cm, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
-        drawCharacterDebug(rc, world);
+
+        // Wait with a timeout to prevent framerate from dropping/stalling
+        // FIXME: if model thread tick rate is too high, it monopolizes the semaphore and doesn't allow the view thread to access ecs data. Any way to have the model thread 'give up control' every once in a while, without manually pausing it?
+        if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+            // Only safe to iterate queries while the world is in readonly mode, or has exclusive access from one thread
+            drawCharacterDebug(rc, world);
+            SDL_SemPost(world->lock);
+        }
 
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
         htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
-        bc_drawHexmapTerrain(rc->vkContext, world->surfaceMap, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
+        bc_drawHexmapTerrain(rc->vkContext, cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, rc->wrapInstancePositions);
         bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
     }
 }
@@ -209,7 +212,7 @@ static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s
 
 static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     // TODO: update parts of this per simulation tick
-    rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
+    //rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
     htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
 }
@@ -219,29 +222,41 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
     bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
     bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
 
-    ecs_iter_t it = ecs_query_iter(world->ecsWorld, rc->characterQuery);
+    // TEST: should get terrainMap from entity relationship instead
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+
+    ecs_iter_t it = ecs_query_iter(world->ecsWorld, world->characters);
     u32 i = 0; // To track mesh instance index
     // Outer loop: traverses different tables that match the query
     while (ecs_query_next(&it)) {
-        bc_GridPosition_c *positions = ecs_field(&it, bc_GridPosition_c, 1);
+        bc_GridPosition *positions = ecs_field(&it, bc_GridPosition, 1);
+        if (i >= rc->internalRenderContext->debugContext->maxInstanceCount) {
+            ecs_iter_fini(&it);
+            break;
+        }
         // Inner loop: entities within a table
         for (int e = 0; e < it.count; e++, i++) {
-            if (i >= rc->internalRenderContext->debugContext->maxInstanceCount) {
-                break;
-            }
-            htw_geo_GridCoord characterCoord = positions[e].position;
+            htw_geo_GridCoord characterCoord = positions[e];
             u32 chunkIndex, cellIndex;
-            htw_geo_gridCoordinateToChunkAndCellIndex(world->surfaceMap, characterCoord, &chunkIndex, &cellIndex);
-            s32 elevation = bc_getCellByIndex(world->surfaceMap, chunkIndex, cellIndex)->height;
+            htw_geo_gridCoordinateToChunkAndCellIndex(cm, characterCoord, &chunkIndex, &cellIndex);
+            s32 elevation = bc_getCellByIndex(cm, chunkIndex, cellIndex)->height;
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
+            vec4 color = {{0.0, 0.0, 1.0, 0.5}};
+            if (ecs_has(it.world, it.entities[e], PlayerControlled)) {
+                color = (vec4){{0.0, 1.0, 0.0, 0.5}};
+            }
             bc_DebugInstanceData characterData = {
-                .color = (vec4){{0.0, 0.0, 1.0, 0.5}},
+                .color = color,
                 .position = (vec3){{posX, posY, elevation}},
                 .size = 1.0
             };
             instanceData[i] = characterData;
         }
+    }
+    // TEST: dead character entities should show up as red
+    for (; i < rc->internalRenderContext->debugContext->maxInstanceCount; i++) {
+        instanceData[i].color = (vec4){{1.0, 0.0, 0.0, 0.5}};
     }
     bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
 

@@ -43,4 +43,8 @@ int bc_model_start(void *in);
 
 void bc_model_cleanup(bc_ModelData *stoppedThreadModelData);
 
+static bool bc_model_isRunning(bc_ModelData *model) {
+    return model->advanceSingleStep || model->autoStep;
+}
+
 #endif // BASALTIC_MODEL_H_INCLUDED
