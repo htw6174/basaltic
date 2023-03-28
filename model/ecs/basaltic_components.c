@@ -50,4 +50,7 @@ void bc_defineComponents(ecs_world_t *world) {
 
     ECS_TAG_DEFINE(world, BehaviorGrazer);
     ECS_TAG_DEFINE(world, BehaviorPredator);
+
+    // TODO: figure out how to apply this correctly
+    //ecs_add_pair(world, PlayerControlled, EcsIsA, PlayerVision);
 }

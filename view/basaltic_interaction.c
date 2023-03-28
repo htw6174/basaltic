@@ -14,6 +14,8 @@ static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex);
 static void editMap(bc_CommandBuffer commandBuffer, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex, s32 value);
 static void moveCharacter(bc_CommandBuffer commandBuffer, ecs_entity_t e, ecs_entity_t terrain, u32 chunkIndex, u32 cellIndex);
 static void advanceStep(bc_CommandBuffer commandBuffer);
+static void playStep(bc_CommandBuffer commandBuffer);
+static void pauseStep(bc_CommandBuffer commandBuffer);
 
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
@@ -29,7 +31,8 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
     if (useKeyboard && e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
             case SDLK_p:
-                ui->cameraMode = ui->cameraMode ^ 1; // invert
+                //ui->cameraMode = ui->cameraMode ^ 1; // invert
+                playStep(commandBuffer);
                 break;
             case SDLK_c:
                 bc_snapCameraToCharacter(ui, ui->activeCharacter);
@@ -45,6 +48,7 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
                 break;
             case SDLK_SPACE:
                 advanceStep(commandBuffer);
+                pauseStep(commandBuffer);
                 break;
         }
     }
@@ -187,6 +191,20 @@ static void moveCharacter(bc_CommandBuffer commandBuffer, ecs_entity_t e, ecs_en
 static void advanceStep(bc_CommandBuffer commandBuffer) {
     bc_WorldCommand stepCommand = {
         .commandType = BC_COMMAND_TYPE_STEP_ADVANCE,
+    };
+    bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
+}
+
+static void playStep(bc_CommandBuffer commandBuffer) {
+    bc_WorldCommand stepCommand = {
+        .commandType = BC_COMMAND_TYPE_STEP_PLAY,
+    };
+    bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
+}
+
+static void pauseStep(bc_CommandBuffer commandBuffer) {
+    bc_WorldCommand stepCommand = {
+        .commandType = BC_COMMAND_TYPE_STEP_PAUSE,
     };
     bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
 }

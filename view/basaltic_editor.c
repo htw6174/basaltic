@@ -204,6 +204,7 @@ void possessEntity(ecs_world_t *world, ecs_entity_t target) {
             }
         }
         ecs_add(world, target, PlayerControlled);
+        ecs_add(world, target, PlayerVision);
         ecs_defer_end(world);
 
         // TODO: do this outside possessEntity

@@ -35,11 +35,11 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t cou
         // TEST
         if (i % 32 == 0) {
             ecs_add(world, newCharacter, BehaviorPredator);
-            ecs_add(world, newCharacter, PlayerVision);
         } else if (i % 4 == 0) {
             ecs_add(world, newCharacter, BehaviorGrazer);
+            //ecs_add(world, newCharacter, PlayerVision);
         } else {
-            ecs_add(world, newCharacter, BehaviorWander);
+            ecs_add(world, newCharacter, BehaviorGrazer);
         }
     }
 }
@@ -161,7 +161,20 @@ void bc_revealMap(ecs_iter_t *it) {
 void bc_registerCharacterSystems(ecs_world_t *world) {
     ECS_SYSTEM(world, bc_setWandererDestinations, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorWander, !PlayerControlled);
     ECS_SYSTEM(world, bc_setDescenderDestinations, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorDescend, !PlayerControlled);
-    ECS_SYSTEM(world, bc_moveCharacters, EcsOnUpdate, [out] bc_GridPosition, [in] bc_GridDestination, [in] (IsOn, _));
+    //ECS_SYSTEM(world, bc_moveCharacters, EcsOnUpdate, [out] bc_GridPosition, [in] bc_GridDestination, [in] (IsOn, _));
+    ecs_entity_t ecs_id(bc_moveCharacters) = ecs_system(world, {
+        .entity = ecs_entity(world, {
+            .name = "bc_moveCharacters",
+            .add = { ecs_dependson(EcsOnUpdate) }
+        }),
+        .query.filter.terms = {
+            { .id = ecs_id(bc_GridPosition), .inout = EcsOut },
+            { .id = ecs_id(bc_GridDestination), .inout = EcsIn },
+            { .id = ecs_pair(IsOn, EcsAny), .inout = EcsIn },
+        },
+        .callback = bc_moveCharacters,
+        .no_readonly = true // disable readonly mode for this system
+    });
     ECS_SYSTEM(world, bc_revealMap, EcsPostUpdate, [in] bc_GridPosition, [in] (IsOn, _), PlayerVision);
     //ECS_OBSERVER(world, characterMoved, EcsOnSet, bc_GridPosition, (IsOn, _));
     ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, bc_GridPosition, (IsOn, _));
@@ -273,8 +286,8 @@ void behaviorPredate(ecs_iter_t *it) {
                 ecs_entity_t root = kh_val(tm->gridMap, k);
                 if (ecs_is_valid(it->world, root)) {
                     if (ecs_has(it->world, root, BehaviorGrazer)) {
-                        // Apply destination TODO normalize so it only moves one space at a time
-                        destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(relativeCoord));
+                        // Apply destination
+                        destinations[i] = worldCoord;
                         inPersuit = true;
                         break;
                     }

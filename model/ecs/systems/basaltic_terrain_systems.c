@@ -50,7 +50,7 @@ void bc_generateTerrain(ecs_world_t *world, ecs_entity_t terrain, u32 seed) {
                 cell->nutrient = nutrientNoise * 32;
                 cell->rainfall = rainNoise * 32;
                 cell->visibility = 0;
-                cell->vegetation = 0;
+                cell->vegetation = nutrientNoise * 32;
             }
         }
     }
@@ -73,7 +73,9 @@ void bc_terrainMapAddEntity(ecs_world_t *world, const bc_TerrainMap *tm, ecs_ent
             } else {
                 // Make new cell root, add both as child
                 // FIXME: if 2 entities move onto the same cell in one update, 2 cellroots get created
+                ecs_defer_suspend(world);
                 ecs_entity_t newRoot = ecs_new(world, CellRoot);
+                ecs_defer_resume(world);
                 //ecs_set_name(world, newRoot, ""); // TODO: use pos to create unique name
                 ecs_add_pair(world, existing, EcsChildOf, newRoot);
                 ecs_add_pair(world, e, EcsChildOf, newRoot);
