@@ -11,4 +11,6 @@ find_package(SDL2 REQUIRED)
 target_include_directories(basaltic_model PUBLIC ../htw-libs ../include ecs ${SDL2_INCLUDE_DIRS})
 add_subdirectory(ecs)
 
-#target_link_libraries(${SDL2_LIBRARIES})
+if(WIN32)
+    target_link_libraries(basaltic_model PRIVATE htw ws2_32 ${SDL2_LIBRARIES})
+endif()

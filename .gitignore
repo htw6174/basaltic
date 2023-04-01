@@ -1,9 +1,11 @@
 build/
 bin/
 bin_debug/
+cmake-build*/
 shaders_bin/
 output/
 assets/
+.idea/
 .kdev4/
 .cache/
 *.kdev4
