@@ -18,8 +18,6 @@ precision mediump float;
 
 #include "uniforms.h"
 
-#define TAU 6.28319f
-
 layout(push_constant) uniform mvp {
     mat4 pv;
     mat4 m;

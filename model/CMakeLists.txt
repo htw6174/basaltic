@@ -6,7 +6,9 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
 add_library(basaltic_model basaltic_model.c basaltic_logic.c basaltic_worldGen.c)
 
-target_include_directories(basaltic_model PUBLIC ../htw-libs ../include . ecs)
+find_package(SDL2 REQUIRED)
+
+target_include_directories(basaltic_model PUBLIC ../htw-libs ../include ecs ${SDL2_INCLUDE_DIRS})
 add_subdirectory(ecs)
 
-# NOTE: no need to link libraries in this cmake file, because linking is already done in the root CMakeLists.txt
+#target_link_libraries(${SDL2_LIBRARIES})

@@ -26,6 +26,7 @@ void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world);
 void possessEntity(ecs_world_t *world, ecs_entity_t target);
 
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
+void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
 void characterInspector(ecs_world_t *world, ecs_entity_t e);
 // Returns number of entities in hierarchy, including the root
@@ -83,6 +84,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             igValue_Uint("World seed", world->seed);
             igValue_Uint("Logic step", world->step);
             // TODO: convert step to date and time (1 step/hour)
+            dateTimeInspector(world->step);
 
             //coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
             //igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
@@ -153,6 +155,7 @@ void worldInspector(bc_UiState *ui, bc_WorldState *world) {
         igValue_Int("Temperature", hoveredCell->temperature);
         igValue_Int("Nutrients", hoveredCell->nutrient);
         igValue_Int("Rainfall", hoveredCell->rainfall);
+        igValue_Int("Vegetation", hoveredCell->vegetation);
     }
 
     //igCheckbox("Draw debug markers", &graphics->showCharacterDebug);
@@ -221,6 +224,15 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit) {
     if (oldState != toggledState) {
         *bitmask = *bitmask ^ toggleBit;
     }
+}
+
+void dateTimeInspector(u64 step) {
+    u64 year = step / (24 * 30 * 12);
+    u64 month = ((step / (24 * 30)) % 12) + 1;
+    u64 day = ((step / 24) % 30) + 1;
+    u64 hour = step % 24;
+
+    igText("%i/%i/%i Hour %i", year, month, day, hour);
 }
 
 void coordInspector(const char *label, htw_geo_GridCoord coord) {

@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
     vec3 gridToWorld;
     float totalWidth;
-    s32 timeOfDay;
+    u32 timeOfDay;
     s32 seaLevel;
     u32 visibilityOverrideBits;
 } bc_WorldInfo;

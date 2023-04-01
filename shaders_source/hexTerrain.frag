@@ -13,6 +13,20 @@ precision mediump float;
 #define LIGHT1_SPECULAR 1.0
 #define LIGHT1_DIFFUSE 1.0
 
+struct cosGradParams {
+    vec3 bias;
+    vec3 amp;
+    vec3 freq;
+    vec3 phase;
+};
+
+cosGradParams daylightGrad = cosGradParams(
+    vec3(0.5, 0.5, 0.6),
+    vec3(0.5, 0.5, 0.4),
+    vec3(1.0, 1.0, 1.0),
+    vec3(0.4, 0.5, 0.6)
+);
+
 // Distance where only fog is visible
 const float fogEndDistance = 64.0 + 16.0; // Ideal for 3x3 chunk world with visibility radius 2; TODO pass chunk visibility radius in as a uniform
 // Distance where fog starts to fade in
@@ -42,6 +56,10 @@ layout(location = 0) out vec4 out_color;
 // vec3 randColor(float seed) {
 // 	return vec3(rand(seed), rand(seed + 13.0), rand(seed + 37.0));
 // }
+
+vec3 cosGrad(float t, cosGradParams params) {
+    return params.bias + params.amp * cos(6.28318 * (params.freq * t + params.phase));
+}
 
 float phong(vec3 normal, vec3 lightDir) {
 	float ambient = REFLECTION * LIGHT_AMBIENT;
@@ -73,7 +91,10 @@ void main()
 	}
 	float cliff = 1.0 - normal.z;
 	vec3 surfaceColor = mix(in_color.rgb, cliffColor, cliff * cliff);
+
+	float dayLight = cos(WorldInfo.time * TAU / 24.0);
 	vec3 litColor = surfaceColor * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	//litColor *= cosGrad(WorldInfo.time / 24.0, daylightGrad);
 	litColor = gl_FrontFacing ? litColor : vec3(0.0, 0.0, 0.0);
 
 	//vec2 mouseNormalized = mousePos / WindowInfo.windowSize;

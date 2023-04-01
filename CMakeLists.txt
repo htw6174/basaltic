@@ -33,13 +33,14 @@ add_custom_command(TARGET basaltic PRE_BUILD COMMENT "Compiling shaders..." COMM
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
 # .cmake files under /usr/lib/cmake can be located this way to load variables
 find_package(SDL2 REQUIRED)
+find_package(Vulkan REQUIRED)
 
 add_subdirectory(htw-libs)
 add_subdirectory(model)
 add_subdirectory(view)
 
 # SDL2_INCLUDE_DIRS and SDL2_LIBRARIES are defined in /usr/lib/cmake/SDL2/SDL2Config.cmake (included with most SDL installations)
-target_include_directories(basaltic PRIVATE include/ htw-libs/ model/ view/ cimgui/ ${SDL2_INCLUDE_DIRS})
+target_include_directories(basaltic PRIVATE include/ htw-libs/ model/ view/ cimgui/ ${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
 
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
 #target_link_libraries(basaltic PUBLIC -lm ${PROJECT_SOURCE_DIR}/htw-libs/$<$<CONFIG:Debug>:build>$<$<CONFIG:Release>:release>/libhtw.so ${SDL2_LIBRARIES} ${Vulkan_LIBRARIES} "${PROJECT_SOURCE_DIR}/cimgui/cimgui.so" "${PROJECT_SOURCE_DIR}/cimgui/libcimgui_sdl.so")

@@ -237,6 +237,9 @@ void behaviorGraze(ecs_iter_t *it) {
             // Consume some of current cell vegetation
             if (c == 0) {
                 cell->vegetation -= cell->vegetation * 0.1;
+                if (cell->vegetation > 40) {
+                    break;
+                }
             }
 
             // Get cell data, find best vegetation

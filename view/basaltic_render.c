@@ -220,6 +220,7 @@ static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     // TODO: update parts of this per simulation tick
     //rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
+    rc->worldInfo.timeOfDay = world->step % 24;
     htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
 }
 

@@ -1,6 +1,9 @@
 // structs here must match the corresponding structs in kingdom_window.h
 // everything here can be used in both the vertex and fragment stages
 
+const float PI = 3.14159f;
+const float TAU = 6.28319f;
+
 layout(std140, set = 0, binding = 0) uniform windowInfo {
 	vec2 windowSize;
 	vec2 mousePosition;
@@ -11,7 +14,7 @@ layout(std140, set = 0, binding = 0) uniform windowInfo {
 layout(std140, set = 0, binding = 2) uniform worldInfo {
 	vec3 gridToWorld; // Conversion factors from orthogonal grid coordinates to scaled hex cell coordinates. NOTE: Only .z used currently
     float totalWidth;
-    int timeOfDay;
+    uint time;
     // season info, weather, etc.
 	int seaLevel;
 	// debug options
