@@ -78,8 +78,10 @@ set_target_properties(basaltic htw basaltic_model basaltic_view
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
         )
 
-add_custom_command(TARGET basaltic POST_BUILD
+if(WIN32)
+    add_custom_command(TARGET basaltic POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> ${IMGUI_LIB} ${CMAKE_BINARY_DIR}/bin)
+endif()
 
 # install
 install(TARGETS basaltic RUNTIME DESTINATION bin LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
