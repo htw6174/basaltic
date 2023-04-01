@@ -14,7 +14,11 @@ bc_StartupSettings parseArgs(int argc, char *argv[]);
 
 bc_StartupSettings parseArgs(int argc, char *argv[]) {
     // get arg option limits
+#ifdef _WIN32
+    size_t maxPathLength = PATH_MAX;
+#else
     size_t maxPathLength = pathconf(".", _PC_PATH_MAX);
+#endif
     size_t maxStartModelArgCount = 256;
     // default settings
     bc_StartupSettings settings = {
@@ -84,7 +88,9 @@ int main(int argc, char *argv[])
 
     // TODO: any reason to manage SDL here, instead of in basaltic_super?
     printf("Initizlizing SDL...\n");
-    SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO);
+    if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) != 0) {
+        printf("Error initializing SDL: %s\n", SDL_GetError());
+    }
 
     bc_startEngine(settings);
 

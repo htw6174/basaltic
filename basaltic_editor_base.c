@@ -10,7 +10,7 @@
 #define CIMGUI_USE_VULKAN
 #define CIMGUI_USE_SDL
 #include "cimgui/cimgui.h"
-#include"cimgui/cimgui_impl.h"
+#include "cimgui/cimgui_impl.h"
 
 bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this

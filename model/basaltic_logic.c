@@ -43,12 +43,14 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     //ecs_set_stage_count(newWorld->ecsWorld, 2);
     //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
     bc_defineComponents(newWorld->ecsWorld);
+#ifndef _WIN32
 #ifdef FLECS_REST
     printf("Initializing flecs REST API\n");
     ecs_singleton_set(newWorld->ecsWorld, EcsRest, {0});
     //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
     FlecsMonitorImport(newWorld->ecsWorld);
     ecs_set_scope(newWorld->ecsWorld, 0);
+#endif
 #endif
 
     newWorld->baseTerrain = bc_createTerrain(newWorld->ecsWorld, chunkCountX, chunkCountY, CHARACTER_POOL_SIZE);
