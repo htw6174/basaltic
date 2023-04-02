@@ -16,6 +16,7 @@ void behaviorGraze(ecs_iter_t *it);
 void behaviorPredate(ecs_iter_t *it);
 
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t count) {
+    ecs_defer_begin(world);
     const bc_TerrainMap *tm = ecs_get(world, terrainMap, bc_TerrainMap);
     u32 maxX = tm->chunkMap->mapWidth;
     u32 maxY = tm->chunkMap->mapHeight;
@@ -42,6 +43,7 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t cou
             ecs_add(world, newCharacter, BehaviorGrazer);
         }
     }
+    ecs_defer_end(world);
 }
 
 void bc_setCharacterDestination(ecs_world_t *world, ecs_entity_t e, htw_geo_GridCoord dest) {

@@ -53,7 +53,7 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 #endif
 #endif
 
-    newWorld->baseTerrain = bc_createTerrain(newWorld->ecsWorld, chunkCountX, chunkCountY, CHARACTER_POOL_SIZE);
+    newWorld->baseTerrain = bc_createTerrain(newWorld->ecsWorld, chunkCountX, chunkCountY, BC_MAX_CHARACTERS);
 
     newWorld->lock = SDL_CreateSemaphore(1);
 
@@ -70,9 +70,9 @@ int bc_initializeWorldState(bc_WorldState *world) {
     bc_generateTerrain(world->ecsWorld, world->baseTerrain, world->seed);
 
     // Populate world
-    ecs_defer_begin(world->ecsWorld);
-    bc_createCharacters(world->ecsWorld, world->baseTerrain, CHARACTER_POOL_SIZE);
-    ecs_defer_end(world->ecsWorld);
+    // ecs_defer_begin(world->ecsWorld);
+    // bc_createCharacters(world->ecsWorld, world->baseTerrain, BC_MAX_CHARACTERS);
+    // ecs_defer_end(world->ecsWorld);
 
     // ECS Queries (may be slightly faster to create these after creating entities)
     world->systems = ecs_query(world->ecsWorld, {
@@ -129,6 +129,9 @@ int bc_doLogicTick(bc_ModelData *model, bc_CommandBuffer inputBuffer) {
                         break;
                     case BC_COMMAND_TYPE_CHARACTER_MOVE:
                         moveCharacter(model->world->ecsWorld, &currentCommand->characterMoveCommand);
+                        break;
+                    case BC_COMMAND_TYPE_CHARACTER_SPAWN:
+                        bc_createCharacters(model->world->ecsWorld, model->world->baseTerrain, currentCommand->characterSpawnCommand.count);
                         break;
                     case BC_COMMAND_TYPE_TERRAIN_EDIT:
                         editMap(model->world->ecsWorld, &currentCommand->terrainEditCommand);

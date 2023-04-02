@@ -59,7 +59,7 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
         //initTextGraphics(graphics);
         prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
         prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
-        prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
+        prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout, BC_MAX_CHARACTERS);
         //initDebugGraphics(graphics);
     }
     htw_finalizeBufferPool(vkContext, rc->bufferPool);
@@ -274,6 +274,8 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
         instanceData[i].color = (vec4){{0.5, 0.0, 0.0, 1.0}};
     }
     bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
+    // TODO: what a mess!
+    rc->internalRenderContext->debugContext->instancedModel.meshBufferSet.instanceCount = i;
 
     // for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
     //     bc_Character *character = &world->characterPool->characters[i];

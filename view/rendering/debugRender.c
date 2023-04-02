@@ -4,8 +4,7 @@
 #include "basaltic_model.h"
 #include "ccVector.h"
 
-bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout) {
-    u32 maxInstanceCount = 1024; // TODO: needs to be set by world's total character count?
+bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout, u32 maxInstances) {
 
     htw_ShaderInputInfo colorInfo = {
         .size = sizeof(((bc_DebugInstanceData*)0)->color),
@@ -36,10 +35,10 @@ bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw
     htw_DescriptorSetLayout debugPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, debugObjectLayout};
     htw_PipelineHandle pipeline = htw_createPipeline(vkContext, debugPipelineLayouts, shaderSet);
 
-    size_t instanceDataSize = sizeof(bc_DebugInstanceData) * maxInstanceCount;
+    size_t instanceDataSize = sizeof(bc_DebugInstanceData) * maxInstances;
     htw_MeshBufferSet model = {
         .vertexCount = 24,
-        .instanceCount = maxInstanceCount,
+        .instanceCount = maxInstances,
         .instanceBuffer = htw_createBuffer(vkContext, bufferPool, instanceDataSize, HTW_BUFFER_USAGE_VERTEX)
     };
 
@@ -51,7 +50,7 @@ bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw
 
     bc_DebugRenderContext *newRenderContext = calloc(1, sizeof(bc_DebugRenderContext));
     *newRenderContext = (bc_DebugRenderContext){
-        .maxInstanceCount = maxInstanceCount,
+        .maxInstanceCount = maxInstances,
         .pipeline = pipeline,
         .debugLayout = debugObjectLayout,
         .debugDescriptorSet = htw_allocateDescriptor(vkContext, debugObjectLayout),

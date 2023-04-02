@@ -20,7 +20,7 @@ typedef struct {
     bc_Mesh instancedModel;
 } bc_DebugRenderContext;
 
-bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout);
+bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout, u32 maxInstances);
 bc_DebugInstanceData *bc_createDebugInstancePool(htw_VkContext *vkContext, size_t poolItemsCount);
 void bc_updateDebugModel(htw_VkContext *vkContext, bc_DebugRenderContext *rc);
 void bc_drawDebugInstances(htw_VkContext *vkContext, bc_DebugRenderContext *rc);

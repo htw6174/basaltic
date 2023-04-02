@@ -6,11 +6,11 @@
 #include "basaltic_worldState.h"
 #include "basaltic_commandBuffer.h"
 
-// TODO: constant or world creation parameter?
-#define CHARACTER_POOL_SIZE 1024
+static const u32 BC_MAX_CHARACTERS = 10000;
 
 typedef enum bc_CommandType {
     BC_COMMAND_TYPE_CHARACTER_MOVE,
+    BC_COMMAND_TYPE_CHARACTER_SPAWN,
     BC_COMMAND_TYPE_TERRAIN_EDIT,
     BC_COMMAND_TYPE_STEP_ADVANCE,
     BC_COMMAND_TYPE_STEP_PLAY,
@@ -38,6 +38,10 @@ typedef struct {
     u32 cellIndex;
 } bc_CharacterMoveCommand;
 
+typedef struct {
+    u32 count;
+} bc_CharacterSpawnCommand;
+
 
 // NOTE: because command data is copied into a different memory block exclusive to the logic thread and read asynchroniously, it should contain no pointers to view-side data. Pointers to model-side data should be fine. Now that most model data is contained in an ECS, use ECS entity IDs instead. Treat each command like a network data packet. If it needs to include variable length data, it should be appended to the end of the command with sizes+offsets in the struct to define it
 typedef struct {
@@ -45,6 +49,7 @@ typedef struct {
     union {
         bc_TerrainEditCommand terrainEditCommand;
         bc_CharacterMoveCommand characterMoveCommand;
+        bc_CharacterSpawnCommand characterSpawnCommand;
     };
 } bc_WorldCommand;
 
