@@ -14,6 +14,7 @@
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_components.h"
+#include "systems/basaltic_character_systems.h"
 #include "flecs.h"
 #include "khash.h"
 
@@ -109,20 +110,6 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
 
             igCheckbox("Draw entities", &vc->rc->drawSystems);
 
-            // TODO: because this should only be run inside the worldinspector when this thread has exclusive access to the ECS world, should be possible to directly call ecs methods instead of passing through my command buffer
-            // In fact, this should be true for non-editor tasks as well, as long as they only touch the ECS. Should make implementing player actions much simpler.
-            static int spawnCount = 100;
-            igInputInt("Spawn Count", &spawnCount, 1, 100, 0);
-            if (igButton("Spawn grazers", (ImVec2){0, 0})) {
-                bc_WorldCommand spawnCommand = {
-                    .commandType = BC_COMMAND_TYPE_CHARACTER_SPAWN,
-                    .characterSpawnCommand = {
-                        .count = spawnCount
-                    }
-                };
-                bc_pushCommandToBuffer(inputBuffer, &spawnCommand, sizeof(spawnCommand));
-            }
-
             /* Ensure the model isn't running before doing anything else */
             if (!bc_model_isRunning(model)) {
                 if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
@@ -180,6 +167,13 @@ void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world) {
     const bc_TerrainMap *tm = ecs_get(world->ecsWorld, ui->focusedTerrain, bc_TerrainMap);
     htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(tm->chunkMap, ui->selectedChunkIndex, ui->selectedCellIndex);
     if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
+
+        // In fact, this should be true for non-editor tasks as well, as long as they only touch the ECS. Should make implementing player actions much simpler.
+        static int spawnCount = 100;
+        igInputInt("Spawn Count", &spawnCount, 1, 100, 0);
+        if (igButton("Spawn grazers", (ImVec2){0, 0})) {
+            bc_createCharacters(world->ecsWorld, ui->focusedTerrain, spawnCount);
+        }
 
         if (igButton("Take control of random character", (ImVec2){0, 0})) {
             ecs_iter_t it = ecs_query_iter(world->ecsWorld, world->characters);

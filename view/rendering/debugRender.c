@@ -44,7 +44,7 @@ bc_DebugRenderContext *bc_createDebugRenderContext(htw_VkContext *vkContext, htw
 
     bc_Mesh instancedModel = {
         .meshBufferSet = model,
-        .instanceData = malloc(instanceDataSize),
+        .instanceData = calloc(1, instanceDataSize),
         .instanceDataSize = instanceDataSize
     };
 

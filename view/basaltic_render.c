@@ -242,7 +242,7 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             break;
         }
         // Inner loop: entities within a table
-        for (int e = 0; e < it.count; e++, i++) {
+        for (int e = 0; e < it.count && i < rc->internalRenderContext->debugContext->maxInstanceCount; e++, i++) {
             htw_geo_GridCoord characterCoord = positions[e];
             u32 chunkIndex, cellIndex;
             htw_geo_gridCoordinateToChunkAndCellIndex(cm, characterCoord, &chunkIndex, &cellIndex);
@@ -269,13 +269,9 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             instanceData[i] = characterData;
         }
     }
-    // TEST: dead character entities should show up as dark red
-    for (; i < rc->internalRenderContext->debugContext->maxInstanceCount; i++) {
-        instanceData[i].color = (vec4){{0.5, 0.0, 0.0, 1.0}};
-    }
     bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
-    // TODO: what a mess!
-    rc->internalRenderContext->debugContext->instancedModel.meshBufferSet.instanceCount = i;
+    // Cap rendered instances to current character count
+    characterDebugModel->meshBufferSet.instanceCount = i;
 
     // for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
     //     bc_Character *character = &world->characterPool->characters[i];
