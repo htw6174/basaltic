@@ -19,6 +19,7 @@ typedef enum bc_CommandType {
 typedef enum bc_MapEditType {
     BC_MAP_EDIT_SET,
     BC_MAP_EDIT_ADD,
+    BC_MAP_EDIT_MOUNTAIN,
 } bc_MapEditType;
 
 typedef struct {

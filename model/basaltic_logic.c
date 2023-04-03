@@ -218,7 +218,15 @@ static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit) {
     htw_ChunkMap *cm = ecs_get(world, terrainEdit->terrain, bc_TerrainMap)->chunkMap;
     bc_CellData *cell = cm->chunks[terrainEdit->chunkIndex].cellData;
     cell = &cell[terrainEdit->cellIndex];
-    cell->height += terrainEdit->value;
+    switch (terrainEdit->editType) {
+        case BC_MAP_EDIT_MOUNTAIN:
+            htw_geo_GridCoord coord = htw_geo_chunkAndCellToGridCoordinates(cm, terrainEdit->chunkIndex, terrainEdit->cellIndex);
+            bc_wobbleLine(cm, coord, 128, 64);
+            break;
+        case BC_MAP_EDIT_ADD:
+            cell->height += terrainEdit->value;
+            break;
+    }
 }
 
 static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove) {

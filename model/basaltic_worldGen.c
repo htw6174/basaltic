@@ -10,7 +10,9 @@ void bc_elevationBrush(htw_ChunkMap *chunkMap, htw_geo_GridCoord pos, s32 value,
     for (int i = 0; i < area; i++) {
         //u32 dist = htw_geo_hexMagnitude(relative);
         float dist = htw_geo_hexCartesianDistance(chunkMap, (htw_geo_GridCoord){0, 0}, htw_geo_cubeToGridCoord(relative));
-        s32 valueHere = value - (value * (dist / radius));
+        float curve = 1.0 - (1.0 * (dist / radius));
+        curve *= curve;
+        s32 valueHere = curve * value;// + htw_randRange(3);
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(start, relative);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         bc_CellData *cellData = htw_geo_getCell(chunkMap, worldCoord);
@@ -29,8 +31,11 @@ void bc_wobbleLine(htw_ChunkMap *chunkMap, htw_geo_GridCoord startPos, u32 lineL
         //cellData->height = valueHere;
         bc_elevationBrush(chunkMap, cellPos, valueHere, valueHere / 3);
         htw_geo_GridCoord nextDir = htw_geo_hexGridDirections[nextDirIndex];
-        cellPos = htw_geo_addGridCoords(cellPos, nextDir);
-        nextDirIndex = (nextDirIndex + htw_randRange(3) - 1) % HEX_DIRECTION_COUNT; // only pick from adjacent directions (-1, 0, or 1 relative to last direction)
+        cellPos = htw_geo_addGridCoords(cellPos, nextDir);// htw_geo_mulGridCoords(nextDir, 2));
+        if (htw_randRange(2)){
+            nextDirIndex = (nextDirIndex + htw_randRange(3) - 1) % HEX_DIRECTION_COUNT; // only pick from adjacent directions (-1, 0, or 1 relative to last direction)
+
+        }
     }
 }
 

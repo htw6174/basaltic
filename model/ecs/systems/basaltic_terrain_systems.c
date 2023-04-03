@@ -23,7 +23,8 @@ void bc_generateTerrain(ecs_world_t *world, ecs_entity_t terrain, u32 seed) {
     u32 height = bc_chunkSize;
     u32 cellsPerChunk = width * height;
 
-    bc_seedMountains(cm, 32, 128, 64);
+    u32 mountainsPerCell = 4;
+    bc_seedMountains(cm, mountainsPerCell * cm->chunkCountX * cm->chunkCountY, 128, 64);
     //bc_growMountains(cm, 0.5);
 
     for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
