@@ -4,11 +4,16 @@
 const float PI = 3.14159f;
 const float TAU = 6.28319f;
 
+// REMINDER: don't use vec3 with std140 interface blocks
 layout(std140, set = 0, binding = 0) uniform windowInfo {
 	vec2 windowSize;
 	vec2 mousePosition;
-	vec3 cameraPosition;
-	vec3 cameraFocalPoint;
+	vec4 cameraPosition;
+	vec4 cameraFocalPoint;
+	// Postprocessing, should probably be in a different uniform
+	float visibilityRadius;
+	float fogExtinction;
+	float fogInscattering;
 } WindowInfo;
 
 layout(std140, set = 0, binding = 2) uniform worldInfo {

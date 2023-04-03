@@ -58,7 +58,7 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     {
         //initTextGraphics(graphics);
         prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
-        prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool);
+        prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool, prc->renderableHexmap, 2);
         prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout, BC_MAX_CHARACTERS);
         //initDebugGraphics(graphics);
     }
@@ -81,8 +81,15 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
         htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
 
         //updateTextDescriptors(graphics);
-        bc_updateHexmapDescriptors(rc->vkContext, prc->renderableHexmap, prc->surfaceTerrain);
+        bc_updateHexmapDescriptors(rc->vkContext, prc->surfaceTerrain);
     }
+
+    // window info defaults
+    rc->windowInfo = (bc_WindowInfo){
+        .visibilityRadius = 3 * 32,
+        .fogExtinction = 0.005,
+        .fogInscattering = 0.0001
+    };
 
     // initialize highlighted cell
     rc->feedbackInfo = (bc_FeedbackInfo){
@@ -99,9 +106,16 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
         .visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL,
     };
 
-    rc->drawSystems = true;
+    rc->chunkVisibilityRadius = 3;
+
+    rc->drawSystems = false;
 
     return rc;
+}
+
+void bc_setWorldRenderScale(bc_RenderContext *rc, vec3 worldScale) {
+    rc->worldInfo.gridToWorld = worldScale;
+    //bc_setRenderWorldWrap(rc, 0, 0);
 }
 
 void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *world) {
@@ -199,20 +213,19 @@ void bc_setRenderWorldWrap(bc_RenderContext *rc, u32 worldWidth, u32 worldHeight
     float y10 = y00;
     float y01 = 0.0;
     float y11 = 0.0;
-    rc->wrapInstancePositions[0] = (vec3){{x00, y00, 0.0}};
-    rc->wrapInstancePositions[1] = (vec3){{x01, y01, 0.0}};
-    rc->wrapInstancePositions[2] = (vec3){{x10, y10, 0.0}};
-    rc->wrapInstancePositions[3] = (vec3){{x11, y11, 0.0}};
+    rc->wrapInstancePositions[0] = vec3MultiplyVector((vec3){{x00, y00, 0.0}}, rc->worldInfo.gridToWorld);
+    rc->wrapInstancePositions[1] = vec3MultiplyVector((vec3){{x01, y01, 0.0}}, rc->worldInfo.gridToWorld);
+    rc->wrapInstancePositions[2] = vec3MultiplyVector((vec3){{x10, y10, 0.0}}, rc->worldInfo.gridToWorld);
+    rc->wrapInstancePositions[3] = vec3MultiplyVector((vec3){{x11, y11, 0.0}}, rc->worldInfo.gridToWorld);
     htw_setModelTranslationInstances(rc->vkContext, (float*)rc->wrapInstancePositions);
 }
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
-    rc->windowInfo = (bc_WindowInfo){
-        .windowSize = (vec2){{wc->width, wc->height}},
-        .mousePosition = (vec2){{mouseX, mouseY}},
-        .cameraPosition = cameraPosition,
-        .cameraFocalPoint = cameraFocalPoint
-    };
+    bc_WindowInfo *windowInfo = &rc->windowInfo;
+    windowInfo->windowSize = (vec2){{wc->width, wc->height}};
+    windowInfo->mousePosition = (vec2){{mouseX, mouseY}};
+    windowInfo->cameraPosition = cameraPosition;
+    windowInfo->cameraFocalPoint = cameraFocalPoint;
     htw_writeBuffer(rc->vkContext, rc->windowInfoBuffer, &rc->windowInfo, sizeof(bc_WindowInfo));
 }
 

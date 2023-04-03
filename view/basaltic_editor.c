@@ -30,6 +30,7 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
 void characterInspector(ecs_world_t *world, ecs_entity_t e);
+void entityInspector(ecs_world_t *world, ecs_entity_t e);
 // Returns number of entities in hierarchy, including the root
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node);
 
@@ -86,6 +87,13 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             igValue_Uint("Logic step", world->step);
             // TODO: convert step to date and time (1 step/hour)
             dateTimeInspector(world->step);
+            igSpacing();
+
+            if(igSliderInt("(in half chunks)##renderDistance", &vc->rc->chunkVisibilityRadius, 1, 16, "View Distance: %u", 0)) {
+                vc->rc->windowInfo.visibilityRadius = vc->rc->chunkVisibilityRadius * 32.0;
+            }
+            igInputFloat("Fog Extinction", &vc->rc->windowInfo.fogExtinction, 0.001, 0.01, "%f", 0);
+            igInputFloat("Fog Inscattering", &vc->rc->windowInfo.fogInscattering, 0.0001, 0.001, "%f", 0);
 
             //coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
             //igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
@@ -108,7 +116,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             }
             igSpacing();
 
-            igCheckbox("Draw entities", &vc->rc->drawSystems);
+            igCheckbox("Draw entity markers", &vc->rc->drawSystems);
 
             /* Ensure the model isn't running before doing anything else */
             if (!bc_model_isRunning(model)) {
@@ -274,10 +282,23 @@ void characterInspector(ecs_world_t *world, ecs_entity_t e) {
     }
 }
 
+void entityInspector(ecs_world_t *world, ecs_entity_t e) {
+    igValue_Uint("Entity ID", e);
+    igSameLine(0, -1);
+    if (igButton("Take control", (ImVec2){0, 0})) {
+        possessEntity(world, e);
+    }
+    igText("Entity Type: ");
+    // TODO: need to free this after use? Try freeing immediately, see if there are any issues
+    char* typeStr = ecs_type_str(world, ecs_get_type(world, e));
+    igTextWrapped(typeStr);
+    ecs_os_free(typeStr);
+}
+
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node) {
     u32 count = 1;
     if (igTreeNodeEx_Str(ecs_get_fullpath(world, node), ImGuiTreeNodeFlags_DefaultOpen)) {
-        characterInspector(world, node);
+        entityInspector(world, node);
         ecs_iter_t children = ecs_children(world, node);
         while (ecs_children_next(&children)) {
             for (int i = 0; i < children.count; i++) {

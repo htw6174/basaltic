@@ -8,11 +8,6 @@
 #include "basaltic_mesh.h"
 #include "basaltic_worldState.h"
 
-// Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
-// TODO: allow vision distance to be changed at runtime
-#define MAX_VISIBLE_CHUNK_DISTANCE 2
-#define VISIBLE_CHUNK_AREA_DIAMETER ((MAX_VISIBLE_CHUNK_DISTANCE * 2) - 1)
-#define MAX_VISIBLE_CHUNKS (VISIBLE_CHUNK_AREA_DIAMETER * VISIBLE_CHUNK_AREA_DIAMETER)
 
 typedef struct {
     vec3 position;
@@ -44,26 +39,29 @@ typedef struct {
     uint32_t subdivisions; // TODO: unused
     htw_PipelineHandle pipeline;
     htw_DescriptorSetLayout chunkObjectLayout;
-    htw_DescriptorSet *chunkObjectDescriptorSets;
     bc_Mesh chunkMesh;
 } bc_RenderableHexmap;
 
 // Buffer data for an entire terrain layer, and tracking for what chunk data needs to be loaded each frame
 typedef struct {
-    // length MAX_VISIBLE_CHUNKS arrays that are compared to determine what chunks to reload each frame, and where to place them
+    // Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
+    u32 renderedChunkRadius;
+    u32 renderedChunkCount;
+    // length renderedChunkCount arrays that are compared to determine what chunks to reload each frame, and where to place them
     s32 *closestChunks;
     s32 *loadedChunks;
     size_t terrainBufferSize;
     bc_TerrainBufferData *terrainBufferData;
+    htw_DescriptorSet *chunkObjectDescriptorSets;
     htw_SplitBuffer terrainBuffer; // split into multiple logical buffers used to describe each terrain chunk
 } bc_HexmapTerrain;
 
 bc_RenderableHexmap *bc_createRenderableHexmap(htw_VkContext *vkContext, htw_BufferPool bufferPool, htw_DescriptorSetLayout perFrameLayout, htw_DescriptorSetLayout perPassLayout);
-bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool);
+bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool, bc_RenderableHexmap *hexmap, u32 visibilityRadius);
 
 // TODO: do these need to be seperate methods from other setup?
 void bc_writeTerrainBuffers(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap);
-void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);
+void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_HexmapTerrain *terrain);
 
 void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 centerChunk);
 void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain);

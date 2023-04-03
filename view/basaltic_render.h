@@ -20,6 +20,9 @@ typedef struct {
     // only xyz used, but needs to be vec4 for shader uniform buffer alignment
     vec4 cameraPosition;
     vec4 cameraFocalPoint;
+    float visibilityRadius;
+    float fogExtinction;
+    float fogInscattering;
 } bc_WindowInfo;
 
 typedef struct {
@@ -53,6 +56,8 @@ typedef struct {
     htw_Buffer feedbackInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
     htw_Buffer worldInfoBuffer;
 
+    u32 chunkVisibilityRadius;
+
     bc_Camera camera;
 
     // TEST
@@ -67,6 +72,7 @@ typedef struct {
 
 bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc);
 
+void bc_setWorldRenderScale(bc_RenderContext *rc, vec3 worldScale);
 void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *world);
 void bc_updateRenderContextWithUiState(bc_RenderContext *rc, bc_WindowContext *wc, bc_UiState *ui);
 

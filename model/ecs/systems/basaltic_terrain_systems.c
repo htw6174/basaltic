@@ -48,9 +48,9 @@ void bc_generateTerrain(ecs_world_t *world, ecs_entity_t terrain, u32 seed) {
                 cell->height += baseNoise * 32;
                 cell->temperature = poleGrad1;
                 cell->nutrient = nutrientNoise * 32;
-                cell->rainfall = rainNoise * 32;
+                cell->rainfall = rainNoise * 64;
                 cell->visibility = 0;
-                cell->vegetation = nutrientNoise * 32;
+                cell->vegetation = nutrientNoise * 128;
             }
         }
     }

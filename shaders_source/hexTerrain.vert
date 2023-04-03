@@ -93,7 +93,8 @@ void main()
 
     elevation = max(elevation, WorldInfo.seaLevel);
 
-    vec4 localPosition = vec4(in_position + vec3(0, 0, elevation * WorldInfo.gridToWorld.z), 1.0);
+    vec3 unscaledPosition = in_position + vec3(0.0, 0.0, elevation);
+    vec4 localPosition = vec4(unscaledPosition * WorldInfo.gridToWorld, 1.0);
     vec4 worldPosition = MVP.m * localPosition;
     // warp position for a false horizon
     //worldPosition = cylinderWarp(worldPosition);
@@ -106,7 +107,7 @@ void main()
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
     //out_color = cosGrad(paletteIndex / 255.0);
     vec3 paletteSample = vec3(cellData.temperature / 255.0, cellData.vegetation / 255.0, cellData.rainfall / 255.0); // TODO: sample from palette textures
-    paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.0, 0.0, 1.0 - waterDepth) : paletteSample;
+    paletteSample = elevation == WorldInfo.seaLevel ? vec3(0.1, 0.2, 0.8 - waterDepth) : paletteSample;
     vec3 cellColor = bool(visibilityBits & visibilityBitColor) ? paletteSample : vec3(0.3, 0.3, 0.3);
     float a = bool(visibilityBits & visibilityBitGeometry) ? 1.0 : 0.0;
 

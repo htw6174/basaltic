@@ -15,7 +15,7 @@
 // software, either in source code form or as a compiled binary, for any purpose,   //
 //               commercial or non - commercial, and by any means.                  //
 //__________________________________________________________________________________//
-// Modified by Hardy Whitney - add orthographic projection matrix method
+// Modified by Hardy Whitney - add orthographic projection matrix method, add componentwise vector multiply
 
 #ifndef CC_VECTOR
 #define CC_VECTOR
@@ -71,6 +71,7 @@ typedef float ccvType;
 #define CCV_FUNC_VEC_ADD(dim)             CAT2(CCV_VEC_TYPENAME(dim), Add)
 #define CCV_FUNC_VEC_SUBTRACT(dim)        CAT2(CCV_VEC_TYPENAME(dim), Subtract)
 #define CCV_FUNC_VEC_MULTIPLY(dim)        CAT2(CCV_VEC_TYPENAME(dim), Multiply)
+#define CCV_FUNC_VEC_MULTIPLY_VEC(dim)    CAT2(CCV_VEC_TYPENAME(dim), MultiplyVector)
 #define CCV_FUNC_VEC_DOTPRODUCT(dim)      CAT2(CCV_VEC_TYPENAME(dim), DotProduct)
 #define CCV_FUNC_VEC_LENGTH(dim)          CAT2(CCV_VEC_TYPENAME(dim), Length)
 #define CCV_FUNC_VEC_NORMALIZE(dim)       CAT2(CCV_VEC_TYPENAME(dim), Normalize)
@@ -177,12 +178,21 @@ typedef float ccvType;
 		return v; \
 	}
 
+#define CCV_DEFINE_VEC_MULTIPLY_VEC(dim) \
+	static inline CCV_VEC_TYPENAME(dim) CCV_FUNC_VEC_MULTIPLY_VEC(dim)(const CCV_VEC_TYPENAME(dim) a, const CCV_VEC_TYPENAME(dim) b) { \
+		CCV_VEC_TYPENAME(dim) v; \
+		unsigned int i; \
+		for(i = 0; i < dim; ++i) \
+			v.v[i] = a.v[i] * b.v[i]; \
+		return v; \
+	}
+
 #define CCV_DEFINE_VEC_MULTIPLY(dim) \
 	static inline CCV_VEC_TYPENAME(dim) CCV_FUNC_VEC_MULTIPLY(dim)(CCV_VEC_TYPENAME(dim) v, const ccvType n) { \
 		unsigned int i; \
 		for(i = 0; i < dim; ++i) \
 			v.v[i] *= n; \
-		return v; \
+			return v; \
 	}
 
 #define CCV_DEFINE_VEC_DOTPRODUCT(dim) \
@@ -358,6 +368,7 @@ typedef float ccvType;
 	CCV_DEFINE_VEC_ADD(dim) \
 	CCV_DEFINE_VEC_SUBTRACT(dim) \
 	CCV_DEFINE_VEC_MULTIPLY(dim) \
+	CCV_DEFINE_VEC_MULTIPLY_VEC(dim) \
 	CCV_DEFINE_VEC_DOTPRODUCT(dim) \
 	CCV_DEFINE_VEC_LENGTH(dim) \
 	CCV_DEFINE_VEC_NORMALIZE(dim) \

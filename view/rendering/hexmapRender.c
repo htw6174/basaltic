@@ -18,13 +18,21 @@ bc_RenderableHexmap *bc_createRenderableHexmap(htw_VkContext *vkContext, htw_Buf
     return newHexmap;
 }
 
-bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool) {
+bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPool bufferPool, bc_RenderableHexmap *hexmap, u32 visibilityRadius) {
     bc_HexmapTerrain *newTerrain = calloc(1, sizeof(bc_HexmapTerrain));
-    newTerrain->closestChunks = calloc(1, sizeof(u32) * MAX_VISIBLE_CHUNKS);
-    newTerrain->loadedChunks = calloc(1, sizeof(u32) * MAX_VISIBLE_CHUNKS);
-    for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    newTerrain->renderedChunkRadius = visibilityRadius;
+    u32 visibilityDiameter = (visibilityRadius * 2) - 1;
+    u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
+    newTerrain->renderedChunkCount = renderedChunkCount;
+    newTerrain->closestChunks = calloc(renderedChunkCount, sizeof(u32));
+    newTerrain->loadedChunks = calloc(renderedChunkCount, sizeof(u32));
+    for (int i = 0; i < renderedChunkCount; i++) {
         newTerrain->loadedChunks[i] = -1;
     }
+
+    // create descriptor set for each chunk, to swap between during each frame
+    newTerrain->chunkObjectDescriptorSets = malloc(sizeof(htw_DescriptorSet) * renderedChunkCount);
+    htw_allocateDescriptors(vkContext, hexmap->chunkObjectLayout, renderedChunkCount, newTerrain->chunkObjectDescriptorSets);
 
     // best way to handle using multiple sub-buffers and binding a different one each draw call?
     // Options:
@@ -36,8 +44,8 @@ bc_HexmapTerrain *bc_createHexmapTerrain(htw_VkContext *vkContext, htw_BufferPoo
     // Chunk data includes the chunk index out front
     newTerrain->terrainBufferSize = offsetof(bc_TerrainBufferData, chunkData) + (sizeof(bc_CellData) * bufferCellCount);
 
-    newTerrain->terrainBufferData = malloc(newTerrain->terrainBufferSize * MAX_VISIBLE_CHUNKS);
-    newTerrain->terrainBuffer = htw_createSplitBuffer(vkContext, bufferPool, newTerrain->terrainBufferSize, MAX_VISIBLE_CHUNKS, HTW_BUFFER_USAGE_STORAGE);
+    newTerrain->terrainBufferData = malloc(newTerrain->terrainBufferSize * renderedChunkCount);
+    newTerrain->terrainBuffer = htw_createSplitBuffer(vkContext, bufferPool, newTerrain->terrainBufferSize, renderedChunkCount, HTW_BUFFER_USAGE_STORAGE);
 
     return newTerrain;
 }
@@ -84,10 +92,6 @@ static void createHexmapMesh(htw_VkContext *vkContext, bc_RenderableHexmap *hexm
     hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(vkContext);
     htw_DescriptorSetLayout terrainPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, hexmap->chunkObjectLayout};
     hexmap->pipeline = htw_createPipeline(vkContext, terrainPipelineLayouts, shaderInfo);
-
-    // create descriptor set for each chunk, to swap between during each frame
-    hexmap->chunkObjectDescriptorSets = malloc(sizeof(htw_DescriptorSet) * MAX_VISIBLE_CHUNKS);
-    htw_allocateDescriptors(vkContext, hexmap->chunkObjectLayout, MAX_VISIBLE_CHUNKS, hexmap->chunkObjectDescriptorSets);
 
     // determine required size for vertex and triangle buffers
     const u32 width = bc_chunkSize;
@@ -441,8 +445,8 @@ void bc_writeTerrainBuffers(htw_VkContext *vkContext, bc_RenderableHexmap *hexma
     htw_writeBuffer(vkContext, chunkMesh.meshBufferSet.indexBuffer, chunkMesh.indexData, chunkMesh.indexDataSize);
 }
 
-void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain) {
-    htw_updateTerrainObjectDescriptors(vkContext, hexmap->chunkObjectDescriptorSets, terrain->terrainBuffer);
+void bc_updateHexmapDescriptors(htw_VkContext *vkContext, bc_HexmapTerrain *terrain) {
+    htw_updateTerrainObjectDescriptors(vkContext, terrain->chunkObjectDescriptorSets, terrain->terrainBuffer);
 }
 
 void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 centerChunk) {
@@ -459,10 +463,14 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunk
     // closestChunks.chunkIndex[] = b
     // loadedChunks.chunkIndex[] = a
     // NOTE: there *has* to be a better way to do this, feels very messy right now.
+
     s32 *closestChunks = terrain->closestChunks;
     s32 *loadedChunks = terrain->loadedChunks;
-    for (int c = 0, y = 1 - MAX_VISIBLE_CHUNK_DISTANCE; y < MAX_VISIBLE_CHUNK_DISTANCE; y++) {
-        for (int x = 1 - MAX_VISIBLE_CHUNK_DISTANCE; x < MAX_VISIBLE_CHUNK_DISTANCE; x++, c++) {
+
+    s32 minChunkOffset = 1 - (s32)terrain->renderedChunkRadius;
+    s32 maxChunkOffset = (s32)terrain->renderedChunkRadius;
+    for (int c = 0, y = minChunkOffset; y < maxChunkOffset; y++) {
+        for (int x = minChunkOffset; x < maxChunkOffset; x++, c++) {
             closestChunks[c] = htw_geo_getChunkIndexAtOffset(chunkMap, centerChunk, (htw_geo_GridCoord){x, y});
         }
     }
@@ -480,10 +488,10 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunk
     // printf("\n");
 
     // compare closest chunks to currently loaded chunks
-    for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
+    for (int i = 0; i < terrain->renderedChunkCount; i++) {
         s32 loadedTarget = loadedChunks[i];
         u8 foundMatch = 0;
-        for (int k = 0; k < MAX_VISIBLE_CHUNKS; k++) {
+        for (int k = 0; k < terrain->renderedChunkCount; k++) {
             u32 requiredTarget = closestChunks[k];
             if (requiredTarget != -1 && loadedTarget == requiredTarget) {
                 // found a position in a that already contains an element of b
@@ -513,7 +521,7 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunk
 
     // move all positive values from b into negative values of a
     u32 ia = 0, ib = 0;
-    while (ia < MAX_VISIBLE_CHUNKS) {
+    while (ia < terrain->renderedChunkCount) {
         if (loadedChunks[ia] == -1) {
             // find next positive value in b
             while (1) {
@@ -534,7 +542,7 @@ void bc_updateTerrainVisibleChunks(htw_VkContext *vkContext, htw_ChunkMap *chunk
     // }
     // printf("\n\n");
 
-    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
+    for (int c = 0; c < terrain->renderedChunkCount; c++) {
         // TODO: only update chunk if freshly visible or has pending updates
         updateHexmapDataBuffer(vkContext, chunkMap, terrain, loadedChunks[c], c);
     }
@@ -546,13 +554,13 @@ void bc_drawHexmapTerrain(htw_VkContext *vkContext, htw_ChunkMap *chunkMap, bc_R
     static mat4x4 modelMatrix;
 
     // draw full terrain mesh
-    for (int c = 0; c < MAX_VISIBLE_CHUNKS; c++) {
+    for (int c = 0; c < terrain->renderedChunkCount; c++) {
         u32 chunkIndex = terrain->loadedChunks[c];
         static float chunkX, chunkY;
         htw_geo_getChunkRootPosition(chunkMap, chunkIndex, &chunkX, &chunkY);
         vec3 chunkPos = {{chunkX, chunkY, 0.0}};
 
-        htw_bindDescriptorSet(vkContext, hexmap->pipeline, hexmap->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
+        htw_bindDescriptorSet(vkContext, hexmap->pipeline, terrain->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
         mat4x4SetTranslation(modelMatrix, chunkPos);
         htw_drawPipelineX4(vkContext, hexmap->pipeline, &hexmap->chunkMesh.meshBufferSet, HTW_DRAW_TYPE_INDEXED, (float*)modelMatrix);
     }
