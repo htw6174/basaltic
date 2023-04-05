@@ -125,7 +125,7 @@ void main()
 	//litColor = vec3(mouseNormalized, 1.0 - (mouseDist / 10.0));
 	//litColor = WindowInfo.cameraFocalPoint / 64.0;
 
-	out_color = vec4(litColor, visibleArea(WindowInfo.visibilityRadius, 16.0)); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
+	out_color = vec4(litColor, in_color.a * visibleArea(WindowInfo.visibilityRadius, 16.0)); // TODO: consider another use for geometry visibility if chunks drawn later aren't blended properly
 	//out_color = vec4(in_color, 1.0);
 	//out_color = vec4(normal, 1.0);
 }

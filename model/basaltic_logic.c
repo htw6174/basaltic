@@ -70,7 +70,7 @@ int bc_initializeWorldState(bc_WorldState *world) {
     bc_generateTerrain(world->ecsWorld, world->baseTerrain, world->seed);
 
     // Populate world
-    bc_createCharacters(world->ecsWorld, world->baseTerrain, 1000);
+    bc_createCharacters(world->ecsWorld, world->baseTerrain, 1);
 
     // ECS Queries (may be slightly faster to create these after creating entities)
     world->systems = ecs_query(world->ecsWorld, {

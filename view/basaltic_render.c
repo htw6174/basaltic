@@ -87,8 +87,8 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     // window info defaults
     rc->windowInfo = (bc_WindowInfo){
         .visibilityRadius = 3 * 32,
-        .fogExtinction = 0.005,
-        .fogInscattering = 0.0001
+        .fogExtinction = 0.003,
+        .fogInscattering = 0.0015
     };
 
     // initialize highlighted cell

@@ -36,9 +36,9 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t cou
         // TEST
         if (i % 32 == 0) {
             ecs_add(world, newCharacter, BehaviorPredator);
+            ecs_add(world, newCharacter, PlayerVision);
         } else if (i % 4 == 0) {
             ecs_add(world, newCharacter, BehaviorGrazer);
-            //ecs_add(world, newCharacter, PlayerVision);
         } else {
             ecs_add(world, newCharacter, BehaviorGrazer);
         }
