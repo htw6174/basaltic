@@ -2,11 +2,11 @@
 #define BASALTIC_RENDER_H_INCLUDED
 
 #include "htw_core.h"
-#include "htw_vulkan.h"
 #include "ccVector.h"
 #include "basaltic_window.h"
 #include "basaltic_uiState.h"
 #include "basaltic_logic.h"
+#include "sokol_gfx.h"
 #include "flecs.h"
 
 typedef struct {
@@ -41,20 +41,19 @@ typedef struct {
 typedef struct private_bc_RenderContext *bc_InternalRenderContext;
 
 typedef struct {
-    htw_VkContext *vkContext;
-    htw_BufferPool bufferPool;
-
-    htw_DescriptorSetLayout perFrameLayout;
-    htw_DescriptorSet perFrameDescriptorSet;
-    htw_DescriptorSetLayout perPassLayout;
-    htw_DescriptorSet perPassDescriptorSet;
+    // htw_DescriptorSetLayout perFrameLayout;
+    // htw_DescriptorSet perFrameDescriptorSet;
+    // htw_DescriptorSetLayout perPassLayout;
+    // htw_DescriptorSet perPassDescriptorSet;
+    sg_shader_uniform_block_desc perFrameUniformsVert; // MV&P matricies
+    sg_shader_uniform_block_desc perFrameUniformsFrag; // Mouse and camera position
 
     bc_WindowInfo windowInfo;
     bc_FeedbackInfo feedbackInfo;
     bc_WorldInfo worldInfo;
-    htw_Buffer windowInfoBuffer;
-    htw_Buffer feedbackInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
-    htw_Buffer worldInfoBuffer;
+    sg_shader_uniform_block_desc windowInfoBuffer;
+    sg_shader_uniform_block_desc feedbackInfoBuffer; // Storage buffer written to by the fragment shader to find which cell the mouse is over
+    sg_shader_uniform_block_desc worldInfoBuffer;
 
     u32 chunkVisibilityRadius;
 
@@ -63,7 +62,7 @@ typedef struct {
     // TEST
     bool drawSystems;
 
-    htw_PipelineHandle defaultPipeline;
+    sg_pipeline defaultPipeline;
 
     vec3 wrapInstancePositions[4];
 

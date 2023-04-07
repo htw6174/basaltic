@@ -1,47 +1,25 @@
 
 #include <stdbool.h>
 #include "htw_core.h"
-#include "htw_vulkan.h"
 #include "basaltic_editor_base.h"
 #include "basaltic_super.h"
 #include "basaltic_view.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_USE_VULKAN
+#define CIMGUI_USE_OPENGL3
 #define CIMGUI_USE_SDL
 #include "cimgui/cimgui.h"
 #include "cimgui/cimgui_impl.h"
 
-bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkContext) {
+bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc) {
     // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
     // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
-    ImGui_ImplSDL2_InitForVulkan(vkContext->window);
-    ImGui_ImplVulkan_InitInfo init_info = {
-        .Instance = vkContext->instance,
-        .PhysicalDevice = vkContext->gpu,
-        .Device = vkContext->device,
-        .QueueFamily = vkContext->graphicsQueueIndex,
-        .Queue = vkContext->queue,
-        .PipelineCache = VK_NULL_HANDLE,
-        .DescriptorPool = vkContext->descriptorPool,
-        .Subpass = 0,
-        .MinImageCount = 2,
-        .ImageCount = vkContext->swapchainImageCount,
-        .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
-        .Allocator = NULL,
-        .CheckVkResultFn = NULL
-    };
-    ImGui_ImplVulkan_Init(&init_info, vkContext->renderPass);
-
-    htw_beginOneTimeCommands(vkContext);
-    ImGui_ImplVulkan_CreateFontsTexture(vkContext->oneTimeBuffer);
-    htw_endOneTimeCommands(vkContext);
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
+    ImGui_ImplSDL2_InitForOpenGL(wc->window, wc->glContext);
+    ImGui_ImplOpenGL3_Init("#version 130");
 
     bc_EditorEngineContext newEditor = {
         .isActive = isActiveAtStart,
-        .vkContext = vkContext,
         .showDemoWindow = false,
         .maxFrameDuration = 0,
         .maxStepsPerSecond = 0,
@@ -53,14 +31,13 @@ bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, htw_VkContext *vkCont
 }
 
 void bc_destroyEditor(bc_EditorEngineContext *eec) {
-    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     igDestroyContext(NULL);
 }
 
 void bc_resizeEditor(bc_EditorEngineContext *eec) {
-    // TODO: is this actually needed? Maybe also set global imgui scale?
-    ImGui_ImplVulkan_SetMinImageCount(eec->vkContext->swapchainImageCount);
+    // TODO
 }
 
 bool bc_editorWantCaptureMouse(bc_EditorEngineContext *eec) {
@@ -84,18 +61,18 @@ void bc_handleEditorInputEvents(bc_EditorEngineContext *eec, SDL_Event *e) {
 }
 
 void bc_beginEditor() {
-    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     igNewFrame();
 }
 
-void bc_endEditor(bc_EditorEngineContext *eec) {
+void bc_endEditor() {
     igRender();
     ImDrawData* drawData = igGetDrawData();
-    ImGui_ImplVulkan_RenderDrawData(drawData, eec->vkContext->swapchainImages[eec->vkContext->currentImageIndex].commandBuffer, NULL);
+    ImGui_ImplOpenGL3_RenderDrawData(drawData);
 }
 
-void bc_drawEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo, bc_EngineSettings *engineSettings) {
+void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo, bc_EngineSettings *engineSettings) {
     igBegin("Engine Options", NULL, 0);
 
     igText("Press backquote (`/~) to toggle editor");

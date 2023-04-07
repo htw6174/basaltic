@@ -6,22 +6,9 @@ project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 #add_compile_definitions($<$<CONFIG:Debug>:FLECS_SANITIZE>)
+#add_compile_definitions("CIMGUI_USE_OPENGL3")
 
 add_executable(basaltic WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c)
-
-# TODO: not needed right now, but should eventually find a way to only compile a single shader source if .spv is outdated
-# Create a custom target to compile shader source files to SPIR-V
-add_subdirectory(shaders_source)
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/shaders_bin")
-add_custom_target(shaders ALL
-        COMMENT "Compiling shaders: ${SHADERS_SOURCE}"
-        DEPENDS ${SHADERS_SOURCE}
-        WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/shaders_bin
-        COMMAND glslc -c ${SHADERS_SOURCE}
-        VERBATIM
-        )
-# Make sure the shaders target is always built before the main executable
-add_dependencies(basaltic shaders)
 
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
 # .cmake files under /usr/lib/cmake can be located this way to load variables

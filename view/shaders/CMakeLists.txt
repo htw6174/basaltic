@@ -4,6 +4,7 @@
 file(GLOB SHADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.vert ${CMAKE_CURRENT_SOURCE_DIR}/*.frag)
 
 set(SHADER_SOURCE_FILES)
+list(APPEND SHADER_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/uniforms.h)
 foreach(SHADER_FILE ${SHADER_FILES})
     # May be useful in the future for compiling shaders one at a time
 #    get_filename_component(SHADER_FILE_NAME ${SHADER_FILE} NAME)

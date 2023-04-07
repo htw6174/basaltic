@@ -2,10 +2,9 @@
 #define BASALTIC_MESH_H_INCLUDED
 
 #include "htw_core.h"
-#include "htw_vulkan.h"
 
 typedef struct {
-    htw_MeshBufferSet meshBufferSet;
+    //htw_MeshBufferSet meshBufferSet;
     void *vertexData;
     void *indexData;
     void *instanceData;

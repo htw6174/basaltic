@@ -1,30 +1,44 @@
-
-#include "htw_core.h"
-#include "htw_vulkan.h"
 #include "basaltic_window.h"
+#include "htw_core.h"
+#include "SDL2/SDL.h"
 
-static htw_VkContext *createWindow(u32 width, u32 height);
+static SDL_Window *createWindow(u32 width, u32 height);
 
 bc_WindowContext *bc_createWindow(u32 width, u32 height) {
     bc_WindowContext *wc = malloc(sizeof(bc_WindowContext));
     wc->width = width;
     wc->height = height;
-    wc->vkContext = createWindow(width, height);
+    wc->window = createWindow(width, height);
     wc->frame = 0;
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GLContext glc = SDL_GL_CreateContext(wc->window);
+    if (glc == NULL) {
+        printf("Failed to create GL Context: %s\n", SDL_GetError());
+    }
+    if (SDL_GL_MakeCurrent(wc->window, glc) != 0) {
+        printf("Failed to activate GL Context: %s\n", SDL_GetError());
+    }
+    wc->glContext = glc;
 
     return wc;
 }
 
-void bc_destroyGraphics(bc_WindowContext *wc) {
-    htw_destroyVkContext(wc->vkContext);
+void bc_destroyWindow(bc_WindowContext *wc) {
+    SDL_GL_DeleteContext(wc->glContext);
+    SDL_DestroyWindow(wc->window);
 }
 
 void bc_changeScreenSize(bc_WindowContext *wc, u32 width, u32 height) {
     // TODO
 }
 
-htw_VkContext *createWindow(u32 width, u32 height) {
-    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, HTW_VK_WINDOW_FLAGS);
-    htw_VkContext *context = htw_createVkContext(sdlWindow);
-    return context;
+SDL_Window *createWindow(u32 width, u32 height) {
+    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+    if (sdlWindow == NULL) {
+        printf("Failed to create SDL window: %s\n", SDL_GetError());
+    }
+    return sdlWindow;
 }

@@ -1,12 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdbool.h>
-#include <time.h>
 #include <limits.h>
 #include <unistd.h>
-#include <SDL2/SDL.h>
-#include "basaltic_defs.h"
 #include "basaltic_super.h"
 #include "htw_core.h"
 
@@ -86,15 +82,7 @@ int main(int argc, char *argv[])
     bc_StartupSettings settings = parseArgs(argc, argv);
     chdir(settings.dataDirectory);
 
-    // TODO: any reason to manage SDL here, instead of in basaltic_super?
-    printf("Initizlizing SDL...\n");
-    if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) != 0) {
-        printf("Error initializing SDL: %s\n", SDL_GetError());
-    }
-
     bc_startEngine(settings);
-
-    SDL_Quit();
 
     return 0;
 }

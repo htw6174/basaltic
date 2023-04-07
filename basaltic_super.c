@@ -6,9 +6,7 @@
 #include "basaltic_model.h"
 #include "basaltic_view.h"
 #include "basaltic_super_window.h"
-#include "basaltic_interaction.h"
 #include "basaltic_editor_base.h"
-#include "basaltic_editor.h"
 
 static bc_SuperInfo *superInfo = NULL;
 
@@ -44,6 +42,11 @@ bool isModelRunning(bc_ProcessState modelThreadState, SDL_Thread *modelThread);
 
 int bc_startEngine(bc_StartupSettings startSettings) {
 
+    printf("Initizlizing SDL...\n");
+    if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) != 0) {
+        printf("Error initializing SDL: %s\n", SDL_GetError());
+    }
+
     SuperContext sc = {
         .engineConfig = loadEngineConfig("path does nothing right now!"),
         .superInterface = calloc(1, sizeof(*sc.superInterface)),
@@ -70,13 +73,15 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     u32 frameInterval = 1000 / sc.engineConfig->frameRateLimit;
 
     bc_WindowContext *wc = bc_createWindow(1280, 720);
-    bc_EditorEngineContext editorEngineContext = bc_initEditor(startSettings.enableEditor, wc->vkContext);
+    // TODO: rework imgui editor to use openGL backend from sokol
+    bc_EditorEngineContext editorEngineContext = bc_initEditor(startSettings.enableEditor, wc);
 
-    bc_ViewContext *vc = bc_view_setup(wc);
-    bc_EditorContext *ec = bc_view_setupEditor();
+    bc_view_setup(wc);
+    bc_view_setupEditor(); // TODO: roll this into general view setup, or have an option to build without the editor
 
     bool isModelPassedToView = false;
-    bc_ModelData *visibleModelData = NULL;
+    // TODO: consider rearchitecting this to support multiple model instances running simultainously, allow view to see any/all of them
+    bc_ModelData *md = NULL;
 
     // launch game according to startupMode
     switch (startSettings.startupMode) {
@@ -99,8 +104,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         Uint64 startTime = wc->milliSeconds = SDL_GetTicks64();
 
         if (sc.isModelDataReady == true && isModelPassedToView == false) {
-            visibleModelData = sc.modelData;
-            bc_view_onModelStart(vc, visibleModelData);
+            md = sc.modelData;
+            bc_view_onModelStart(md);
             isModelPassedToView = true;
         }
 
@@ -112,19 +117,19 @@ int bc_startEngine(bc_StartupSettings startSettings) {
                 requestProcessStop(&sc.appState, &sc.modelThreadState);
             }
             bc_handleEditorInputEvents(&editorEngineContext, &e);
-            bc_view_onInputEvent(vc, sc.inputBuffer, &e, passthroughMouse, passthroughKeyboard);
+            bc_view_onInputEvent(sc.inputBuffer, &e, passthroughMouse, passthroughKeyboard);
         }
 
-        bc_view_processInputState(vc, sc.inputBuffer, passthroughMouse, passthroughKeyboard);
+        bc_view_processInputState(sc.inputBuffer, passthroughMouse, passthroughKeyboard);
 
         beginFrame(wc);
-        bc_view_drawFrame(sc.superInterface, vc, visibleModelData, wc, sc.inputBuffer);
+        bc_view_drawFrame(sc.superInterface, md, wc, sc.inputBuffer);
 
         if (editorEngineContext.isActive) {
             bc_beginEditor();
-            bc_drawEditor(&editorEngineContext, wc, superInfo, sc.engineConfig);
-            bc_view_drawEditor(sc.superInterface, ec, vc, visibleModelData, sc.inputBuffer);
-            bc_endEditor(&editorEngineContext);
+            bc_drawBaseEditor(&editorEngineContext, wc, superInfo, sc.engineConfig);
+            bc_view_drawEditor(sc.superInterface, md, sc.inputBuffer);
+            bc_endEditor();
         }
 
         endFrame(wc);
@@ -154,8 +159,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         // if model loop has ended, wait for thread to stop and free resources
         if (sc.modelThread != NULL && sc.modelThreadState == BC_PROCESS_STATE_STOPPED) {
             isModelPassedToView = false;
-            visibleModelData = NULL;
-            bc_view_onModelStop(vc);
+            md = NULL;
+            bc_view_onModelStop();
             // TODO: any reason not to reset isModelDataReady here, instead of in the model thread?
             stopModel(&sc.modelThread, &sc.modelData);
         }
@@ -179,7 +184,9 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     }
 
     bc_destroyEditor(&editorEngineContext);
-    bc_destroyGraphics(wc);
+    bc_destroyWindow(wc);
+
+    SDL_Quit();
 
     return 0;
 }
@@ -195,11 +202,12 @@ bc_EngineSettings *loadEngineConfig(char *path) {
 }
 
 void beginFrame(bc_WindowContext *wc) {
-    htw_beginFrame(wc->vkContext);
+    bc_view_beginFrame(wc);
 }
 
 void endFrame(bc_WindowContext *wc) {
-    htw_endFrame(wc->vkContext);
+    bc_view_endFrame(wc);
+    SDL_GL_SwapWindow(wc->window);
 }
 
 void startModel(SuperContext *sc) {

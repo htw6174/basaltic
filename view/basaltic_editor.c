@@ -6,7 +6,6 @@
 #include "basaltic_view.h"
 #include "basaltic_editor.h"
 #include "basaltic_defs.h"
-#include "basaltic_super.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
 #include "basaltic_render.h"
@@ -16,11 +15,12 @@
 #include "basaltic_components.h"
 #include "systems/basaltic_character_systems.h"
 #include "flecs.h"
-#include "khash.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "cimgui/cimgui.h"
-#include"cimgui/cimgui_impl.h"
+#include "cimgui.h"
+#include "cimgui_impl.h"
+
+static bc_EditorContext ec;
 
 void worldInspector(bc_UiState *ui, bc_WorldState *world);
 void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world);
@@ -34,38 +34,41 @@ void entityInspector(ecs_world_t *world, ecs_entity_t e);
 // Returns number of entities in hierarchy, including the root
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node);
 
-bc_EditorContext* bc_view_setupEditor() {
-    bc_EditorContext *newEditor = malloc(sizeof(bc_EditorContext));
-    *newEditor = (bc_EditorContext){
+void bc_setupEditor(void) {
+    ec = (bc_EditorContext){
         .isWorldGenerated = false,
         .worldChunkWidth = 3,
         .worldChunkHeight = 3,
     };
-
-    return newEditor;
 }
 
-void bc_view_teardownEditor(bc_EditorContext* ec) {
-    free(ec);
+void bc_teardownEditor(void) {
+    // TODO: nothing?
 }
 
 // TODO: untangle and replace everything to do with bc_GraphicsState
-void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_ViewContext *vc, bc_ModelData *model, bc_CommandBuffer inputBuffer)
+void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, bc_RenderContext *rc, bc_UiState *ui)
 {
-    bc_UiState *ui = vc->ui;
-
     igBegin("Options", NULL, 0);
 
-    igSliderInt("(in chunks)##chunkWidth", &ec->worldChunkWidth, 1, 16, "Width: %u", 0);
-    igSliderInt("(in chunks)##chunkHeight", &ec->worldChunkHeight, 1, 16, "Height: %u", 0);
+    igSliderInt("(in chunks)##chunkWidth", &ec.worldChunkWidth, 1, 16, "Width: %u", 0);
+    igSliderInt("(in chunks)##chunkHeight", &ec.worldChunkHeight, 1, 16, "Height: %u", 0);
     igText("World generation seed:");
-    igInputText("##seedInput", ec->newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+    igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+
+    igText("Camera Position");
+    igValue_Float("x", ui->cameraX, "%.3f");
+    igSameLine(0, -1);
+    igValue_Float("y", ui->cameraY, "%.3f");
+    igValue_Float("Camera Distance", ui->cameraDistance, "%.3f");
+    igValue_Float("Camera Pitch", ui->cameraPitch, "%.3f");
+    igValue_Float("Camera Yaw", ui->cameraYaw, "%.3f");
 
     if (igButton("Generate world", (ImVec2){0, 0})) {
         bc_ModelSetupSettings newSetupSettings = {
-            .width = ec->worldChunkWidth,
-            .height = ec->worldChunkHeight,
-            .seed = ec->newGameSeed
+            .width = ec.worldChunkWidth,
+            .height = ec.worldChunkHeight,
+            .seed = ec.newGameSeed
         };
 
         si->modelSettings = newSetupSettings;
@@ -89,15 +92,15 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             dateTimeInspector(world->step);
             igSpacing();
 
-            if(igSliderInt("(in half chunks)##renderDistance", &vc->rc->chunkVisibilityRadius, 1, 16, "View Distance: %u", 0)) {
-                vc->rc->windowInfo.visibilityRadius = vc->rc->chunkVisibilityRadius * 32.0;
+            if(igSliderInt("(in half chunks)##renderDistance", &rc->chunkVisibilityRadius, 1, 16, "View Distance: %u", 0)) {
+                rc->windowInfo.visibilityRadius = rc->chunkVisibilityRadius * 32.0;
             }
-            igInputFloat("Fog Extinction", &vc->rc->windowInfo.fogExtinction, 0.001, 0.01, "%f", 0);
-            igInputFloat("Fog Inscattering", &vc->rc->windowInfo.fogInscattering, 0.0001, 0.001, "%f", 0);
+            igInputFloat("Fog Extinction", &rc->windowInfo.fogExtinction, 0.001, 0.01, "%f", 0);
+            igInputFloat("Fog Inscattering", &rc->windowInfo.fogInscattering, 0.0001, 0.001, "%f", 0);
 
-            //coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
-            //igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
-            //igValue_Uint("Hovered cell", ui->hoveredCellIndex);
+            coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
+            igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
+            igValue_Uint("Hovered cell", ui->hoveredCellIndex);
             igSpacing();
 
             bc_WorldCommand reusedCommand = {0};
@@ -116,7 +119,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
             }
             igSpacing();
 
-            igCheckbox("Draw entity markers", &vc->rc->drawSystems);
+            igCheckbox("Draw entity markers", &rc->drawSystems);
 
             /* Ensure the model isn't running before doing anything else */
             if (!bc_model_isRunning(model)) {
@@ -128,7 +131,7 @@ void bc_view_drawEditor(bc_SupervisorInterface *si, bc_EditorContext *ec, bc_Vie
         }
     }
 
-    bc_WorldInfo *worldInfo = &vc->rc->worldInfo;
+    bc_WorldInfo *worldInfo = &rc->worldInfo;
     if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
         igSliderInt("Time of day", &worldInfo->timeOfDay, 0, 255, "%i", 0);
         igSliderInt("Sea level", &worldInfo->seaLevel, 0, 128, "%i", 0);

@@ -1,3 +1,6 @@
 [submodule "htw-libs"]
 	path = htw-libs
 	url = https://github.com/htw6174/htw-libs.git
+[submodule "sokol"]
+	path = sokol
+	url = https://github.com/floooh/sokol.git

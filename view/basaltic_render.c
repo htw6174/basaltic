@@ -1,26 +1,26 @@
 #include <SDL2/SDL_mutex.h>
 #include "htw_core.h"
-#include "htw_vulkan.h"
 #include "ccVector.h"
 #include "basaltic_window.h"
 #include "basaltic_render.h"
+#include "basaltic_uniforms.h"
 #include "basaltic_logic.h"
 #include "basaltic_components.h"
 #include "hexmapRender.h"
 #include "debugRender.h"
 #include "htw_geomap.h"
+#include "sokol_gfx.h"
 #include "flecs.h"
-
-typedef struct {
-    mat4x4 pv;
-    mat4x4 m;
-} PushConstantData;
 
 // TODO: roll this into the parent struct, now that I don't have to worry about circular includes?
 typedef struct private_bc_RenderContext {
     bc_RenderableHexmap *renderableHexmap;
     bc_HexmapTerrain *surfaceTerrain;
     bc_DebugRenderContext *debugContext;
+
+    // TEST: triangle data
+    sg_pipeline testPipeline;
+    sg_bindings testBinding;
 } private_bc_RenderContext;
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint);
@@ -35,53 +35,61 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     private_bc_RenderContext *prc = calloc(1, sizeof(private_bc_RenderContext));
     rc->internalRenderContext = prc;
 
-    htw_VkContext *vkContext = wc->vkContext;
-    rc->vkContext = vkContext;
-
-    rc->bufferPool = htw_createBufferPool(vkContext, 100, HTW_BUFFER_POOL_TYPE_DIRECT);
-
     // create per frame descriptor buffers
-    rc->windowInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
-    rc->feedbackInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
-    rc->worldInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
+    // rc->windowInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
+    // rc->feedbackInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);
+    // rc->worldInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_WorldInfo), HTW_BUFFER_USAGE_UNIFORM);
+    sg_shader_uniform_block_desc windowBufferDesc = {
+        .size = sizeof(bc_WindowInfo),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {}
+    };
+    rc->windowInfoBuffer = windowBufferDesc;
 
     // setup descriptor sets
-    rc->perFrameLayout = htw_createPerFrameSetLayout(vkContext);
-    rc->perFrameDescriptorSet = htw_allocateDescriptor(vkContext, rc->perFrameLayout);
-    rc->perPassLayout = htw_createPerPassSetLayout(vkContext);
-    rc->perPassDescriptorSet = htw_allocateDescriptor(vkContext, rc->perPassLayout);
+    // rc->perFrameLayout = htw_createPerFrameSetLayout(vkContext);
+    // rc->perFrameDescriptorSet = htw_allocateDescriptor(vkContext, rc->perFrameLayout);
+    // rc->perPassLayout = htw_createPerPassSetLayout(vkContext);
+    // rc->perPassDescriptorSet = htw_allocateDescriptor(vkContext, rc->perPassLayout);
 
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
-    createDefaultPipeline(rc);
+    //createDefaultPipeline(rc);
+
+    // Create uniform layouts
+    rc->perFrameUniformsVert = (sg_shader_uniform_block_desc) {
+        .size = sizeof(bc_mvp),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+            [1] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    };
+
+    rc->perFrameUniformsFrag = (sg_shader_uniform_block_desc) {
+        .size = sizeof(vec2),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
+        }
+    };
 
     // allocate device buffers to be written to later
     {
         //initTextGraphics(graphics);
-        prc->renderableHexmap = bc_createRenderableHexmap(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout);
-        prc->surfaceTerrain = bc_createHexmapTerrain(rc->vkContext, rc->bufferPool, prc->renderableHexmap, 2);
-        prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout, BC_MAX_CHARACTERS);
+        prc->renderableHexmap = bc_createRenderableHexmap(rc->perFrameUniformsVert, rc->perFrameUniformsFrag);
+        prc->surfaceTerrain = bc_createHexmapTerrain(prc->renderableHexmap, 2);
+        //prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout, BC_MAX_CHARACTERS);
         //initDebugGraphics(graphics);
     }
-    htw_finalizeBufferPool(vkContext, rc->bufferPool);
 
-    // write data from host into device memory buffers
-    {
-        // do any buffer updates that require a vkCommandBuffer e.g. image layout transitions
-        {
-            htw_beginOneTimeCommands(vkContext);
-            //writeTextBuffers(graphics);
-            htw_endOneTimeCommands(vkContext);
-        }
-
-        bc_writeTerrainBuffers(rc->vkContext, rc->internalRenderContext->renderableHexmap);
-    }
+    bc_writeTerrainBuffers(rc->internalRenderContext->renderableHexmap);
 
     // assign buffers to descriptor sets
     {
-        htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
+        //htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
 
         //updateTextDescriptors(graphics);
-        bc_updateHexmapDescriptors(rc->vkContext, prc->surfaceTerrain);
+        bc_updateHexmapDescriptors(prc->surfaceTerrain);
     }
 
     // window info defaults
@@ -109,6 +117,62 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     rc->chunkVisibilityRadius = 3;
 
     rc->drawSystems = false;
+
+    // TEST: triangle setup
+    {
+
+        /* a vertex buffer */
+        const float vertices[] = {
+            // positions            // colors
+            0.0f,  0.5f, 0.5f,     //1.0f, 0.0f, 0.0f, 1.0f,
+            0.5f, -0.5f, 0.5f,     //0.0f, 1.0f, 0.0f, 1.0f,
+            -0.5f, -0.5f, 0.5f,    // 0.0f, 0.0f, 1.0f, 1.0f
+        };
+        sg_buffer vbuf = sg_make_buffer(&(sg_buffer_desc){
+            .data = SG_RANGE(vertices)
+        });
+
+        const u32 indices[] = {
+            0, 1, 2
+        };
+        sg_buffer ibuf = sg_make_buffer(&(sg_buffer_desc){
+            .type = SG_BUFFERTYPE_INDEXBUFFER,
+            .data = SG_RANGE(indices)
+        });
+
+        char *vert = htw_load("view/shaders/hexTerrain.vert");
+        char *frag = htw_load("view/shaders/hexTerrain.frag");
+        /* a shader */
+        sg_shader shd = sg_make_shader(&(sg_shader_desc){
+            .vs.uniform_blocks[0] = rc->perFrameUniformsVert,
+            .vs.source = vert,
+            .fs.source = frag
+        });
+
+        /* a pipeline state object (default render states are fine for triangle) */
+        sg_pipeline pip = sg_make_pipeline(&(sg_pipeline_desc){
+            .shader = shd,
+            .index_type = SG_INDEXTYPE_UINT32,
+            .layout = {
+                .attrs = {
+                    [0].format=SG_VERTEXFORMAT_FLOAT3,
+                    //[1].format=SG_VERTEXFORMAT_FLOAT4
+                }
+            }
+        });
+
+        free(vert);
+        free(frag);
+
+        /* resource bindings */
+        sg_bindings bind = {
+            .vertex_buffers[0] = vbuf,
+            .index_buffer = ibuf
+        };
+
+        rc->internalRenderContext->testPipeline = pip;
+        rc->internalRenderContext->testBinding = bind;
+    }
 
     return rc;
 }
@@ -162,33 +226,49 @@ void bc_updateRenderContextWithUiState(bc_RenderContext *rc, bc_WindowContext *w
     }
 
     // update ui with feedback info from shaders
-    htw_retreiveBuffer(rc->vkContext, rc->feedbackInfoBuffer, &rc->feedbackInfo, sizeof(bc_FeedbackInfo));
+    //htw_retreiveBuffer(rc->vkContext, rc->feedbackInfoBuffer, &rc->feedbackInfo, sizeof(bc_FeedbackInfo));
     ui->hoveredChunkIndex = rc->feedbackInfo.chunkIndex;
     ui->hoveredCellIndex = rc->feedbackInfo.cellIndex;
 }
 
 void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
 
-    PushConstantData mvp;
+    bc_mvp mvp;
     mat4x4MultiplyMatrix(mvp.pv, rc->camera.view, rc->camera.projection);
     mat4x4Identity(mvp.m); // remember to reinitialize those matricies every frame
 
-    htw_bindDescriptorSet(rc->vkContext, rc->defaultPipeline, rc->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
-    htw_bindDescriptorSet(rc->vkContext, rc->defaultPipeline, rc->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
+    // TEST: draw triangle
+    {
+        sg_apply_pipeline(rc->internalRenderContext->testPipeline);
+        sg_apply_bindings(&rc->internalRenderContext->testBinding);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(mvp));
+        sg_draw(0, 3, 1);
+    }
+
+    // TEST: draw single chunk
+    {
+        // sg_apply_pipeline(rc->internalRenderContext->renderableHexmap->pipeline);
+        // sg_apply_bindings(&rc->internalRenderContext->renderableHexmap->bindings);
+        // sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(mvp));
+        // sg_draw(0, rc->internalRenderContext->renderableHexmap->indexCount, 1);
+    }
+
+    //htw_bindDescriptorSet(rc->vkContext, rc->defaultPipeline, rc->perFrameDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_FRAME);
+    //htw_bindDescriptorSet(rc->vkContext, rc->defaultPipeline, rc->perPassDescriptorSet, HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_PASS);
 
     if (world != NULL) {
         updateWorldInfoBuffer(rc, world);
-        htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
+        //htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
 
         // determine the indicies of chunks closest to the camera
         htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
         float cameraY = rc->windowInfo.cameraFocalPoint.y;
         u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, cameraX, cameraY);
-        bc_updateTerrainVisibleChunks(rc->vkContext, cm, rc->internalRenderContext->surfaceTerrain, centerChunk);
+        bc_updateTerrainVisibleChunks(cm, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
-        bc_drawHexmapTerrain(rc->vkContext, cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain);
+        bc_drawHexmapTerrain(cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, mvp, rc->windowInfo.mousePosition, &rc->feedbackInfo);
 
         if (rc->drawSystems) {
             // Wait with a timeout to prevent framerate from dropping or locking entirely
@@ -199,7 +279,7 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
                 drawCharacterDebug(rc, world);
                 SDL_SemPost(world->lock);
             }
-            bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
+            //bc_drawDebugInstances(rc->vkContext, rc->internalRenderContext->debugContext);
         }
     }
 }
@@ -217,7 +297,7 @@ void bc_setRenderWorldWrap(bc_RenderContext *rc, u32 worldWidth, u32 worldHeight
     rc->wrapInstancePositions[1] = vec3MultiplyVector((vec3){{x01, y01, 0.0}}, rc->worldInfo.gridToWorld);
     rc->wrapInstancePositions[2] = vec3MultiplyVector((vec3){{x10, y10, 0.0}}, rc->worldInfo.gridToWorld);
     rc->wrapInstancePositions[3] = vec3MultiplyVector((vec3){{x11, y11, 0.0}}, rc->worldInfo.gridToWorld);
-    htw_setModelTranslationInstances(rc->vkContext, (float*)rc->wrapInstancePositions);
+    //htw_setModelTranslationInstances(rc->vkContext, (float*)rc->wrapInstancePositions);
 }
 
 static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s32 mouseX, s32 mouseY, vec4 cameraPosition, vec4 cameraFocalPoint) {
@@ -226,7 +306,7 @@ static void updateWindowInfoBuffer(bc_RenderContext *rc, bc_WindowContext *wc, s
     windowInfo->mousePosition = (vec2){{mouseX, mouseY}};
     windowInfo->cameraPosition = cameraPosition;
     windowInfo->cameraFocalPoint = cameraFocalPoint;
-    htw_writeBuffer(rc->vkContext, rc->windowInfoBuffer, &rc->windowInfo, sizeof(bc_WindowInfo));
+    //htw_writeBuffer(rc->vkContext, rc->windowInfoBuffer, &rc->windowInfo, sizeof(bc_WindowInfo));
 }
 
 static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
@@ -234,13 +314,13 @@ static void updateWorldInfoBuffer(bc_RenderContext *rc, bc_WorldState *world) {
     //rc->worldInfo.totalWidth = world->surfaceMap->mapWidth;
     // NOTE/TODO: does it make sense to split this info into different buffers for constants and per-tick values?
     rc->worldInfo.timeOfDay = world->step % 24;
-    htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
+    //htw_writeBuffer(rc->vkContext, rc->worldInfoBuffer, &rc->worldInfo, sizeof(bc_WorldInfo));
 }
 
 static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
     // TODO: find a home for this logic. Maybe a character-specific renderer class.
-    bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
-    bc_DebugInstanceData *instanceData = characterDebugModel->instanceData;
+    //bc_Mesh *characterDebugModel = &rc->internalRenderContext->debugContext->instancedModel;
+    bc_DebugInstanceData *instanceData = rc->internalRenderContext->debugContext->instanceData;
 
     // TEST: should get terrainMap from entity relationship instead
     htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
@@ -282,9 +362,9 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             instanceData[i] = characterData;
         }
     }
-    bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
+    //bc_updateDebugModel(rc->vkContext, rc->internalRenderContext->debugContext);
     // Cap rendered instances to current character count
-    characterDebugModel->meshBufferSet.instanceCount = i;
+    //characterDebugModel->meshBufferSet.instanceCount = i;
 
     // for (int i = 0; i < characterDebugModel->meshBufferSet.instanceCount; i++) {
     //     bc_Character *character = &world->characterPool->characters[i];
@@ -293,23 +373,23 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
 }
 
 // NOTE/TODO: is it better to add more arguments to this kind of method, to make it clear what needs to be setup first? e.g. this needs the perFrame and perPass layouts created first
-static void createDefaultPipeline(bc_RenderContext *rc) {
-    htw_ShaderInputInfo positionInfo = {
-        .size = sizeof(vec3),
-        .offset = 0,
-        .inputType = HTW_VERTEX_TYPE_FLOAT
-    };
-    htw_ShaderInputInfo vertexInfos[] = {positionInfo};
-    htw_ShaderSet shaderSet = {
-        .vertexShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.vert.spv"), // TODO: default shader for simple meshes
-        .fragmentShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.frag.spv"),
-        .vertexInputStride = sizeof(vec3),
-        .vertexInputCount = 1,
-        .vertexInputInfos = vertexInfos,
-        .instanceInputCount = 0,
-    };
-
-    htw_DescriptorSetLayout defaultObjectLayout = htw_createPerObjectSetLayout(rc->vkContext);
-    htw_DescriptorSetLayout defaultPipelineLayouts[] = {rc->perFrameLayout, rc->perPassLayout, NULL, defaultObjectLayout};
-    rc->defaultPipeline = htw_createPipeline(rc->vkContext, defaultPipelineLayouts, shaderSet);
-}
+// static void createDefaultPipeline(bc_RenderContext *rc) {
+//     htw_ShaderInputInfo positionInfo = {
+//         .size = sizeof(vec3),
+//         .offset = 0,
+//         .inputType = HTW_VERTEX_TYPE_FLOAT
+//     };
+//     htw_ShaderInputInfo vertexInfos[] = {positionInfo};
+//     htw_ShaderSet shaderSet = {
+//         .vertexShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.vert.spv"), // TODO: default shader for simple meshes
+//         .fragmentShader = htw_loadShader(rc->vkContext, "shaders_bin/debug.frag.spv"),
+//         .vertexInputStride = sizeof(vec3),
+//         .vertexInputCount = 1,
+//         .vertexInputInfos = vertexInfos,
+//         .instanceInputCount = 0,
+//     };
+//
+//     htw_DescriptorSetLayout defaultObjectLayout = htw_createPerObjectSetLayout(rc->vkContext);
+//     htw_DescriptorSetLayout defaultPipelineLayouts[] = {rc->perFrameLayout, rc->perPassLayout, NULL, defaultObjectLayout};
+//     rc->defaultPipeline = htw_createPipeline(rc->vkContext, defaultPipelineLayouts, shaderSet);
+// }
