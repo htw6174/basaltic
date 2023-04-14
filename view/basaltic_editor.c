@@ -13,7 +13,8 @@
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_components.h"
-#include "systems/basaltic_character_systems.h"
+#include "components/basaltic_components_planes.h"
+#include "components/basaltic_components_actors.h"
 #include "flecs.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -29,7 +30,6 @@ void possessEntity(ecs_world_t *world, ecs_entity_t target);
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
-void characterInspector(ecs_world_t *world, ecs_entity_t e);
 void entityInspector(ecs_world_t *world, ecs_entity_t e);
 // Returns number of entities in hierarchy, including the root
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node);
@@ -152,16 +152,16 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 }
 
 void worldInspector(bc_UiState *ui, bc_WorldState *world) {
-    const bc_TerrainMap *tm = ecs_get(world->ecsWorld, ui->focusedTerrain, bc_TerrainMap);
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, ui->focusedTerrain, Plane)->chunkMap;
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Info", 0)) {
-        htw_geo_GridCoord hoveredCellCoord = htw_geo_chunkAndCellToGridCoordinates(tm->chunkMap, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+        htw_geo_GridCoord hoveredCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->hoveredChunkIndex, ui->hoveredCellIndex);
         coordInspector("Hovered cell coordinates", hoveredCellCoord);
-        htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(tm->chunkMap, ui->selectedChunkIndex, ui->selectedCellIndex);
+        htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->selectedChunkIndex, ui->selectedCellIndex);
         coordInspector("Selected cell coordinates", selectedCellCoord);
         igSpacing();
 
-        bc_CellData *hoveredCell = bc_getCellByIndex(tm->chunkMap, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+        bc_CellData *hoveredCell = bc_getCellByIndex(cm, ui->hoveredChunkIndex, ui->hoveredCellIndex);
         igText("Cell info:");
         igValue_Int("Height", hoveredCell->height);
         igValue_Int("Temperature", hoveredCell->temperature);
@@ -175,16 +175,9 @@ void worldInspector(bc_UiState *ui, bc_WorldState *world) {
 }
 
 void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world) {
-    const bc_TerrainMap *tm = ecs_get(world->ecsWorld, ui->focusedTerrain, bc_TerrainMap);
-    htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(tm->chunkMap, ui->selectedChunkIndex, ui->selectedCellIndex);
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, ui->focusedTerrain, Plane)->chunkMap;
+    htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->selectedChunkIndex, ui->selectedCellIndex);
     if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
-
-        // In fact, this should be true for non-editor tasks as well, as long as they only touch the ECS. Should make implementing player actions much simpler.
-        static int spawnCount = 100;
-        igInputInt("Spawn Count", &spawnCount, 1, 100, 0);
-        if (igButton("Spawn grazers", (ImVec2){0, 0})) {
-            bc_createCharacters(world->ecsWorld, ui->focusedTerrain, spawnCount);
-        }
 
         if (igButton("Take control of random character", (ImVec2){0, 0})) {
             ecs_iter_t it = ecs_query_iter(world->ecsWorld, world->characters);
@@ -194,11 +187,10 @@ void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world) {
         }
 
         u32 entityCountHere = 0;
-        khint_t khi = kh_get(GridMap, tm->gridMap, selectedCellCoord);
-        if (khi != kh_end(tm->gridMap)) {
-            ecs_entity_t root = kh_val(tm->gridMap, khi);
-            if (ecs_is_valid(world->ecsWorld, root)) {
-                entityCountHere += hierarchyInspector(world->ecsWorld, root);
+        ecs_entity_t selectedRoot = plane_GetRootEntity(world->ecsWorld, ui->focusedTerrain, selectedCellCoord);
+        if (selectedRoot != 0) {
+            if (ecs_is_valid(world->ecsWorld, selectedRoot)) {
+                entityCountHere += hierarchyInspector(world->ecsWorld, selectedRoot);
             }
         }
         igValue_Uint("Entities here", entityCountHere);
@@ -216,17 +208,17 @@ void possessEntity(ecs_world_t *world, ecs_entity_t target) {
     if (ecs_is_valid(world, target)) {
         ecs_filter_t *pcFilter = ecs_filter(world, {
             .terms = {
-                {PlayerControlled}
+                {ecs_pair(Ego, 0)}
             }
         });
         ecs_iter_t fit = ecs_filter_iter(world, pcFilter);
         ecs_defer_begin(world);
         while (ecs_filter_next(&fit)) {
             for (int i = 0; i < fit.count; i++) {
-                ecs_remove(world, fit.entities[i], PlayerControlled);
+                ecs_remove_pair(world, fit.entities[i], Ego, 0);
             }
         }
-        ecs_add(world, target, PlayerControlled);
+        ecs_add_pair(world, target, Ego, 0);
         ecs_add(world, target, PlayerVision);
         ecs_defer_end(world);
 
@@ -262,29 +254,6 @@ void coordInspector(const char *label, htw_geo_GridCoord coord) {
     igValue_Int("Y", coord.y);
 }
 
-void characterInspector(ecs_world_t *world, ecs_entity_t e) {
-    igValue_Uint("Entity ID", e);
-    igSameLine(0, -1);
-    if (igButton("Take control", (ImVec2){0, 0})) {
-        possessEntity(world, e);
-    }
-    igText("Entity Type: "); igSameLine(0, -1);
-    // TODO: need to free this after use? Try freeing immediately, see if there are any issues
-    char* typeStr = ecs_type_str(world, ecs_get_type(world, e));
-    igTextWrapped(typeStr);
-    ecs_os_free(typeStr);
-    //igValue_Int("Health", character->currentState.currentHitPoints);
-    if (ecs_has(world, e, bc_Stamina)) {
-        igValue_Int("Stamina", ecs_get(world, e, bc_Stamina)->currentStamina);
-    }
-    if (ecs_has(world, e, bc_GridPosition)) {
-        coordInspector("Current Position", *ecs_get(world, e, bc_GridPosition));
-    }
-    if (ecs_has(world, e, bc_GridDestination)) {
-        coordInspector("Target Position", *ecs_get(world, e, bc_GridDestination));
-    }
-}
-
 void entityInspector(ecs_world_t *world, ecs_entity_t e) {
     igValue_Uint("Entity ID", e);
     igSameLine(0, -1);
@@ -292,10 +261,11 @@ void entityInspector(ecs_world_t *world, ecs_entity_t e) {
         possessEntity(world, e);
     }
     igText("Entity Type: ");
-    // TODO: need to free this after use? Try freeing immediately, see if there are any issues
+    // NOTE: must be freed by the application
     char* typeStr = ecs_type_str(world, ecs_get_type(world, e));
     igTextWrapped(typeStr);
     ecs_os_free(typeStr);
+    // TODO: use reflection info to make inspector for components
 }
 
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node) {

@@ -4,6 +4,7 @@
 #include "basaltic_editor.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
+#include "flecs.h"
 
 #define SOKOL_IMPL
 #define SOKOL_GLCORE33
@@ -69,7 +70,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
 
 void bc_view_onModelStart(bc_ModelData *model) {
     bc_setModelEcsWorld(vc.ui, model->world->ecsWorld);
-    bc_setFocusedTerrain(vc.ui, model->world->baseTerrain);
+    bc_setFocusedTerrain(vc.ui, model->world->centralPlane);
     //bc_updateRenderContextWithWorldParams(vc->rc, model->world);
 }
 

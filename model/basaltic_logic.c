@@ -12,8 +12,8 @@
 #include "basaltic_worldGen.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_components.h"
-#include "basaltic_terrain_systems.h"
-#include "basaltic_character_systems.h"
+#include "components/basaltic_components_planes.h"
+#include "basaltic_systems.h"
 #include "flecs.h"
 #include "khash.h"
 
@@ -25,8 +25,6 @@ typedef struct {
 
 static void doWorldStep(bc_WorldState *world);
 
-static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit);
-static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove);
 static void revealMap(ecs_world_t *world, htw_ChunkMap *cm, ecs_entity_t character);
 
 bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
@@ -42,7 +40,8 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     newWorld->ecsWorld = ecs_init();
     //ecs_set_stage_count(newWorld->ecsWorld, 2);
     //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
-    bc_defineComponents(newWorld->ecsWorld);
+    ECS_IMPORT(newWorld->ecsWorld, BasalticComponents);
+    ECS_IMPORT(newWorld->ecsWorld, BasalticSystems);
 #ifndef _WIN32
 #ifdef FLECS_REST
     printf("Initializing flecs REST API\n");
@@ -53,7 +52,8 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 #endif
 #endif
 
-    newWorld->baseTerrain = bc_createTerrain(newWorld->ecsWorld, chunkCountX, chunkCountY, BC_MAX_CHARACTERS);
+    htw_ChunkMap *cm = bc_createTerrain(chunkCountX, chunkCountY);
+    newWorld->centralPlane = ecs_set(newWorld->ecsWorld, 0, Plane, {cm});
 
     newWorld->lock = SDL_CreateSemaphore(1);
 
@@ -62,15 +62,11 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
 int bc_initializeWorldState(bc_WorldState *world) {
 
-    // ECS Systems
-    bc_registerTerrainSystems(world->ecsWorld);
-    bc_registerCharacterSystems(world->ecsWorld);
-
     // World generation
-    bc_generateTerrain(world->ecsWorld, world->baseTerrain, world->seed);
+    bc_generateTerrain(ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap, world->seed);
 
     // Populate world
-    bc_createCharacters(world->ecsWorld, world->baseTerrain, 1);
+    //bc_createCharacters(world->ecsWorld, world->baseTerrain, 1);
 
     // ECS Queries (may be slightly faster to create these after creating entities)
     world->systems = ecs_query(world->ecsWorld, {
@@ -78,14 +74,14 @@ int bc_initializeWorldState(bc_WorldState *world) {
             {EcsSystem}
         }
     });
-    world->terrains = ecs_query(world->ecsWorld, {
+    world->planes = ecs_query(world->ecsWorld, {
         .filter.terms = {
-            {ecs_id(bc_TerrainMap)}
+            {ecs_id(Plane)}
         }
     });
     world->characters = ecs_query(world->ecsWorld, {
         .filter.terms = {
-            {ecs_id(bc_GridPosition)},
+            {ecs_id(Position)},
             //{ecs_pair(IsOn, ecs_id(bc_TerrainMap))}
         }
     });
@@ -125,12 +121,6 @@ int bc_doLogicTick(bc_ModelData *model, bc_CommandBuffer inputBuffer) {
                     case BC_COMMAND_TYPE_STEP_PAUSE:
                         model->autoStep = false;
                         break;
-                    case BC_COMMAND_TYPE_CHARACTER_MOVE:
-                        moveCharacter(model->world->ecsWorld, &currentCommand->characterMoveCommand);
-                        break;
-                    case BC_COMMAND_TYPE_TERRAIN_EDIT:
-                        editMap(model->world->ecsWorld, &currentCommand->terrainEditCommand);
-                        break;
                     default:
                         fprintf(stderr, "ERROR: invalid command type %i", currentCommand->commandType);
                         break;
@@ -159,7 +149,7 @@ static void worldStepStressTest(bc_WorldState *world) {
 
     // Stress TEST: do something with every tile, every frame
     // on an 8x8 chunk world, this is 262k updates
-    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
     u32 chunkCount = cm->chunkCountX * cm->chunkCountY;
     u32 cellsPerChunk = bc_chunkSize * bc_chunkSize;
     for (int c = 0; c < chunkCount; c++) {
@@ -213,9 +203,10 @@ static void doWorldStep(bc_WorldState *world) {
     world->step++;
 }
 
+/*
 static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit) {
     // TODO: handle brush modes, sizes
-    htw_ChunkMap *cm = ecs_get(world, terrainEdit->terrain, bc_TerrainMap)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world, terrainEdit->terrain, Plane)->chunkMap;
     bc_CellData *cell = cm->chunks[terrainEdit->chunkIndex].cellData;
     cell = &cell[terrainEdit->cellIndex];
     switch (terrainEdit->editType) {
@@ -230,7 +221,7 @@ static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit) {
 }
 
 static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove) {
-    htw_ChunkMap *cm = ecs_get(world, characterMove->terrain, bc_TerrainMap)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world, characterMove->terrain, Plane)->chunkMap;
     htw_geo_GridCoord destCoord = htw_geo_chunkAndCellToGridCoordinates(cm, characterMove->chunkIndex, characterMove->cellIndex);
 
     // TEST: handle this with filters instead of specific entity
@@ -250,4 +241,4 @@ static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *character
     }
 
     //bc_setCharacterDestination(world, characterMove->subject, destCoord);
-}
+}*/

@@ -1,5 +1,4 @@
 #include "basaltic_character_systems.h"
-#include "basaltic_terrain_systems.h"
 #include "basaltic_components.h"
 #include "basaltic_character.h"
 #include "htw_core.h"
@@ -15,6 +14,7 @@ void characterDestroyed(ecs_iter_t *it);
 void behaviorGraze(ecs_iter_t *it);
 void behaviorPredate(ecs_iter_t *it);
 
+// TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t terrainMap, size_t count) {
     ecs_defer_begin(world);
     const bc_TerrainMap *tm = ecs_get(world, terrainMap, bc_TerrainMap);
@@ -50,6 +50,7 @@ void bc_setCharacterDestination(ecs_world_t *world, ecs_entity_t e, htw_geo_Grid
     // TODO: movement range checking
     // TODO: stamina use vs current stamina checking
     // TODO: return should indicate if destination is valid/can be set
+    // NOTE: instead of having a simple function for something that can be easily handled with the reflection framework, make the TODO checks above into their own functions that the View can use, as well as systems that control character movement
     if (ecs_has(world, e, bc_GridDestination)) {
         ecs_set(world, e, bc_GridDestination, {dest.x, dest.y});
     }
@@ -160,7 +161,9 @@ void bc_revealMap(ecs_iter_t *it) {
     }
 }
 
-void bc_registerCharacterSystems(ecs_world_t *world) {
+void BasalticSystemsCharactersImport(ecs_world_t *world) {
+    ECS_MODULE(world, BasalticSystemsCharacters);
+
     ECS_SYSTEM(world, bc_setWandererDestinations, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorWander, !PlayerControlled);
     ECS_SYSTEM(world, bc_setDescenderDestinations, EcsPreUpdate, [in] bc_GridPosition, [out] bc_GridDestination, [in] (IsOn, _), BehaviorDescend, !PlayerControlled);
     //ECS_SYSTEM(world, bc_moveCharacters, EcsOnUpdate, [out] bc_GridPosition, [in] bc_GridDestination, [in] (IsOn, _));

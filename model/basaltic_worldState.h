@@ -43,8 +43,8 @@ typedef struct {
     ecs_world_t *readonlyWorld;
     ecs_query_t *systems;
     // Geography
-    ecs_entity_t baseTerrain;
-    ecs_query_t *terrains;
+    ecs_entity_t centralPlane;
+    ecs_query_t *planes;
     // Characters
     ecs_query_t *characters;
     // world access lock

@@ -1,56 +1,21 @@
-/*
- * TODO: code generation for this file. Should be possible to derive everything here from basaltic_components.h
- * Only the non-extern declarations and simple definitions are setup here
- */
 #include "basaltic_components.h"
 #include "flecs.h"
+#include "basaltic_phases.h"
+#include "components/basaltic_components_planes.h"
+#include "components/basaltic_components_actors.h"
 
-/* Terrain */
-ECS_COMPONENT_DECLARE(bc_TerrainMap);
-ECS_TAG_DECLARE(Surface);
-ECS_TAG_DECLARE(Subterranian);
-ECS_TAG_DECLARE(IsOn);
-
-ECS_TAG_DECLARE(CellRoot);
-
-/* Character */
-ECS_COMPONENT_DECLARE(bc_Stamina);
-
-ECS_COMPONENT_DECLARE(bc_GridPosition);
-ECS_COMPONENT_DECLARE(bc_GridDestination);
-
-ECS_TAG_DECLARE(PlayerControlled);
 ECS_TAG_DECLARE(PlayerVision);
-ECS_TAG_DECLARE(BehaviorWander);
-ECS_TAG_DECLARE(BehaviorDescend);
 
-ECS_TAG_DECLARE(BehaviorGrazer);
-ECS_TAG_DECLARE(BehaviorPredator);
+void BasalticComponentsImport(ecs_world_t *world) {
 
-void bc_defineComponents(ecs_world_t *world) {
+    ECS_MODULE(world, BasalticComponents);
 
-    /* Terrain */
-    ECS_COMPONENT_DEFINE(world, bc_TerrainMap);
-    ECS_TAG_DEFINE(world, Surface);
-    ECS_TAG_DEFINE(world, Subterranian);
-    ECS_TAG_DEFINE(world, IsOn);
+    ECS_IMPORT(world, BasalticPhases);
+    ECS_IMPORT(world, BasalticComponentsPlanes);
+    ECS_IMPORT(world, BasalticComponentsActors);
 
-    ECS_TAG_DEFINE(world, CellRoot);
-
-    /* Character */
-    ECS_COMPONENT_DEFINE(world, bc_Stamina);
-
-    ECS_COMPONENT_DEFINE(world, bc_GridPosition);
-    ECS_COMPONENT_DEFINE(world, bc_GridDestination);
-
-    ECS_TAG_DEFINE(world, PlayerControlled);
     ECS_TAG_DEFINE(world, PlayerVision);
-    ECS_TAG_DEFINE(world, BehaviorWander);
-    ECS_TAG_DEFINE(world, BehaviorDescend);
 
-    ECS_TAG_DEFINE(world, BehaviorGrazer);
-    ECS_TAG_DEFINE(world, BehaviorPredator);
-
-    // TODO: figure out how to apply this correctly
+    // NOTE: IsA is is only for prefab connections. Instead, I could create a player prefab, and apply or remove it when changing control
     //ecs_add_pair(world, PlayerControlled, EcsIsA, PlayerVision);
 }

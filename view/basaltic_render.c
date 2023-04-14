@@ -5,7 +5,7 @@
 #include "basaltic_render.h"
 #include "basaltic_uniforms.h"
 #include "basaltic_logic.h"
-#include "basaltic_components.h"
+#include "components/basaltic_components_planes.h"
 #include "hexmapRender.h"
 #include "debugRender.h"
 #include "htw_geomap.h"
@@ -184,7 +184,7 @@ void bc_setWorldRenderScale(bc_RenderContext *rc, vec3 worldScale) {
 
 void bc_updateRenderContextWithWorldParams(bc_RenderContext *rc, bc_WorldState *world) {
     if (world != NULL) {
-        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
         bc_setRenderWorldWrap(rc, cm->mapWidth, cm->mapHeight);
         updateWorldInfoBuffer(rc, world);
     }
@@ -261,7 +261,7 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         //htw_pushConstants(rc->vkContext, rc->defaultPipeline, &mvp);
 
         // determine the indicies of chunks closest to the camera
-        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+        htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
         float cameraX = rc->windowInfo.cameraFocalPoint.x;
         float cameraY = rc->windowInfo.cameraFocalPoint.y;
         u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, cameraX, cameraY);
@@ -323,13 +323,13 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
     bc_DebugInstanceData *instanceData = rc->internalRenderContext->debugContext->instanceData;
 
     // TEST: should get terrainMap from entity relationship instead
-    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->baseTerrain, bc_TerrainMap)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
 
     ecs_iter_t it = ecs_query_iter(world->ecsWorld, world->characters);
     u32 i = 0; // To track mesh instance index
     // Outer loop: traverses different tables that match the query
     while (ecs_query_next(&it)) {
-        bc_GridPosition *positions = ecs_field(&it, bc_GridPosition, 1);
+        Position *positions = ecs_field(&it, Position, 1);
         if (i >= rc->internalRenderContext->debugContext->maxInstanceCount) {
             ecs_iter_fini(&it);
             break;
@@ -343,17 +343,7 @@ static void drawCharacterDebug(bc_RenderContext *rc, bc_WorldState *world) {
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(characterCoord, &posX, &posY);
 
-            // TEST: colors. This is a mess
             vec4 color = {{0.0, 0.0, 1.0, 0.5}}; // default blue
-            if (ecs_has(it.world, it.entities[e], BehaviorGrazer)) {
-                color = (vec4){{0.0, 1.0, 0.0, 0.5}}; // grazer is green
-            }
-            if (ecs_has(it.world, it.entities[e], BehaviorPredator)) {
-                color = (vec4){{1.0, 0.0, 0.0, 0.5}}; // predator is red
-            }
-            if (ecs_has(it.world, it.entities[e], PlayerControlled)) {
-                color = (vec4){{0.0, 1.0, 1.0, 0.5}}; // player is purple
-            }
             bc_DebugInstanceData characterData = {
                 .color = color,
                 .position = (vec3){{posX, posY, elevation}},
