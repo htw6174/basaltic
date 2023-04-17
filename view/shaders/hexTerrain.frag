@@ -18,12 +18,12 @@
 // NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
 
+uniform vec2 mousePosition;
+
 layout(std430, binding = 1) buffer feedbackBuffer {
 	uint hoveredChunk;
 	uint hoveredCell;
 } FeedbackBuffer;
-
-uniform vec2 mousePosition;
 
 //buffer uint hoveredCell;
 

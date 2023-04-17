@@ -16,6 +16,6 @@ void BasalticComponentsImport(ecs_world_t *world) {
 
     ECS_TAG_DEFINE(world, PlayerVision);
 
-    // NOTE: IsA is is only for prefab connections. Instead, I could create a player prefab, and apply or remove it when changing control
-    //ecs_add_pair(world, PlayerControlled, EcsIsA, PlayerVision);
+    // NOTE: the 'EcsWith' relationship makes adding the source component automatically add the target component
+    //ecs_add_pair(world, PlayerControlled, EcsWith, PlayerVision);
 }

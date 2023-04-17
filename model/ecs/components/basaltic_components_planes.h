@@ -8,7 +8,7 @@
 
 #undef ECS_META_IMPL
 #ifndef BASALTIC_PLANES_IMPL
-#define ECS_META_IMPL EXTERN
+#define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
 #endif
 
 #define HASH_MAP_DEFAULT_SIZE (1 << 16)

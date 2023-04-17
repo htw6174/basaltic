@@ -30,10 +30,10 @@ void BasalticComponentsPlanesImport(ecs_world_t *world) {
 
     ecs_struct(world, {
         .entity = ecs_id(Destination),
-               .members = {
-                   { .name = "x", .type = ecs_id(ecs_u32_t) },
-               { .name = "y", .type = ecs_id(ecs_u32_t) }
-               }
+        .members = {
+            { .name = "x", .type = ecs_id(ecs_u32_t) },
+            { .name = "y", .type = ecs_id(ecs_u32_t) }
+        }
     });
 
     khash_t(WorldMap) *gm = kh_init(WorldMap);

@@ -43,6 +43,7 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     ECS_IMPORT(newWorld->ecsWorld, BasalticComponents);
     ECS_IMPORT(newWorld->ecsWorld, BasalticSystems);
 #ifndef _WIN32
+// TODO: create a proper toggle for this in build settings
 #ifdef FLECS_REST
     printf("Initializing flecs REST API\n");
     ecs_singleton_set(newWorld->ecsWorld, EcsRest, {0});

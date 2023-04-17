@@ -55,14 +55,14 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     igSliderInt("(in chunks)##chunkHeight", &ec.worldChunkHeight, 1, 16, "Height: %u", 0);
     igText("World generation seed:");
     igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
-
+/*
     igText("Camera Position");
     igValue_Float("x", ui->cameraX, "%.3f");
     igSameLine(0, -1);
     igValue_Float("y", ui->cameraY, "%.3f");
     igValue_Float("Camera Distance", ui->cameraDistance, "%.3f");
     igValue_Float("Camera Pitch", ui->cameraPitch, "%.3f");
-    igValue_Float("Camera Yaw", ui->cameraYaw, "%.3f");
+    igValue_Float("Camera Yaw", ui->cameraYaw, "%.3f");*/
 
     if (igButton("Generate world", (ImVec2){0, 0})) {
         bc_ModelSetupSettings newSetupSettings = {
@@ -98,7 +98,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
             igInputFloat("Fog Extinction", &rc->windowInfo.fogExtinction, 0.001, 0.01, "%f", 0);
             igInputFloat("Fog Inscattering", &rc->windowInfo.fogInscattering, 0.0001, 0.001, "%f", 0);
 
-            coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
+            //coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
             igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell", ui->hoveredCellIndex);
             igSpacing();
@@ -152,7 +152,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 }
 
 void worldInspector(bc_UiState *ui, bc_WorldState *world) {
-    htw_ChunkMap *cm = ecs_get(world->ecsWorld, ui->focusedTerrain, Plane)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Info", 0)) {
         htw_geo_GridCoord hoveredCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->hoveredChunkIndex, ui->hoveredCellIndex);
@@ -175,7 +175,7 @@ void worldInspector(bc_UiState *ui, bc_WorldState *world) {
 }
 
 void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world) {
-    htw_ChunkMap *cm = ecs_get(world->ecsWorld, ui->focusedTerrain, Plane)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world->ecsWorld, world->centralPlane, Plane)->chunkMap;
     htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->selectedChunkIndex, ui->selectedCellIndex);
     if (igCollapsingHeader_TreeNodeFlags("Character Inspector", 0)) {
 
@@ -187,7 +187,7 @@ void ecsWorldInspector(bc_UiState *ui, bc_WorldState *world) {
         }
 
         u32 entityCountHere = 0;
-        ecs_entity_t selectedRoot = plane_GetRootEntity(world->ecsWorld, ui->focusedTerrain, selectedCellCoord);
+        ecs_entity_t selectedRoot = plane_GetRootEntity(world->ecsWorld, world->centralPlane, selectedCellCoord);
         if (selectedRoot != 0) {
             if (ecs_is_valid(world->ecsWorld, selectedRoot)) {
                 entityCountHere += hierarchyInspector(world->ecsWorld, selectedRoot);

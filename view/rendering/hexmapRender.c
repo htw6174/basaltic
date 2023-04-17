@@ -7,13 +7,14 @@
 #include "basaltic_logic.h"
 #include "basaltic_worldState.h"
 
-static void createHexmapMesh(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag);
+static void createHexmapPipeline(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag);
 static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
 static void setHexmapBufferFromCell(bc_CellData *cell, bc_TerrainCellData *target);
 
 bc_RenderableHexmap *bc_createRenderableHexmap(sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag) {
     bc_RenderableHexmap *newHexmap = calloc(1, sizeof(bc_RenderableHexmap));
-    createHexmapMesh(newHexmap, perFrameUniformsVert, perFrameUniformsFrag);
+    createHexmapPipeline(newHexmap, perFrameUniformsVert, perFrameUniformsFrag);
+    newHexmap->bindings = bc_createHexmapBindings(&newHexmap->indexCount);
     //createHexmapInstanceBuffers(rc, world);
     return newHexmap;
 }
@@ -50,47 +51,7 @@ bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderableHexmap *hexmap, u32 visibi
     return newTerrain;
 }
 
-/**
- * @brief Creates featureless hexagonal tile surface geometry, detail is added later by shaders
- *
- * @param terrain
- */
-static void createHexmapMesh(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag) {
-    /* Overview:
-     * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
-     * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
-     *
-     * hexagon edges are connected to each other by a grid of quads
-     *
-     * between 3 edge connection grids, in the corner joining 3 tiles, is a triangular area
-     * (also use subdivisions for edges and corners?)
-     *
-     * The mesh has one extra tri strip on the top and right sides, so that the gaps between chunks can be filled seamlessly
-     */
-
-    // create rendering pipeline
-    // htw_ShaderInputInfo positionInputInfo = {
-    //     .size = sizeof(((bc_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
-    //     .offset = offsetof(bc_HexmapVertexData, position),
-    //     .inputType = HTW_VERTEX_TYPE_FLOAT
-    // };
-    // htw_ShaderInputInfo cellInputInfo = {
-    //     .size = sizeof(((bc_HexmapVertexData*)0)->cellIndex),
-    //     .offset = offsetof(bc_HexmapVertexData, cellIndex),
-    //     .inputType = HTW_VERTEX_TYPE_UINT
-    // };
-    // htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
-    // htw_ShaderSet shaderInfo = {
-    //     .vertexShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.vert.spv"),
-    //     .fragmentShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.frag.spv"),
-    //     .vertexInputStride = sizeof(bc_HexmapVertexData),
-    //     .vertexInputCount = 2,
-    //     .vertexInputInfos = vertexInputInfos,
-    //     .instanceInputCount = 0,
-    // };
-
-    //hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(vkContext);
-    //htw_DescriptorSetLayout terrainPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, hexmap->chunkObjectLayout};
+static void createHexmapPipeline(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag) {
 
     // TEST: setup native GL buffer for shader writes
     hexmap->fbb = (bc_FeedbackBuffer){
@@ -136,6 +97,50 @@ static void createHexmapMesh(bc_RenderableHexmap *hexmap, sg_shader_uniform_bloc
         .cull_mode = SG_CULLMODE_NONE
     };
     hexmap->pipeline = sg_make_pipeline(&pd);
+}
+
+/**
+ * @brief Creates featureless hexagonal tile surface geometry, detail is added later by shaders
+ *
+ * @param terrain
+ */
+sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
+    /* Overview:
+     * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
+     * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
+     *
+     * hexagon edges are connected to each other by a grid of quads
+     *
+     * between 3 edge connection grids, in the corner joining 3 tiles, is a triangular area
+     * (also use subdivisions for edges and corners?)
+     *
+     * The mesh has one extra tri strip on the top and right sides, so that the gaps between chunks can be filled seamlessly
+     */
+
+    // create rendering pipeline
+    // htw_ShaderInputInfo positionInputInfo = {
+    //     .size = sizeof(((bc_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
+    //     .offset = offsetof(bc_HexmapVertexData, position),
+    //     .inputType = HTW_VERTEX_TYPE_FLOAT
+    // };
+    // htw_ShaderInputInfo cellInputInfo = {
+    //     .size = sizeof(((bc_HexmapVertexData*)0)->cellIndex),
+    //     .offset = offsetof(bc_HexmapVertexData, cellIndex),
+    //     .inputType = HTW_VERTEX_TYPE_UINT
+    // };
+    // htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
+    // htw_ShaderSet shaderInfo = {
+    //     .vertexShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.vert.spv"),
+    //     .fragmentShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.frag.spv"),
+    //     .vertexInputStride = sizeof(bc_HexmapVertexData),
+    //     .vertexInputCount = 2,
+    //     .vertexInputInfos = vertexInputInfos,
+    //     .instanceInputCount = 0,
+    // };
+
+    //hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(vkContext);
+    //htw_DescriptorSetLayout terrainPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, hexmap->chunkObjectLayout};
+
 
     // determine required size for vertex and triangle buffers
     const u32 width = bc_chunkSize;
@@ -160,22 +165,7 @@ static void createHexmapMesh(bc_RenderableHexmap *hexmap, sg_shader_uniform_bloc
     // assign model data
     size_t vertexDataSize = vertexSize * vertexCount;
     size_t indexDataSize = sizeof(u32) * triangleCount;
-    hexmap->indexCount = triangleCount;
-    // htw_MeshBufferSet modelData = {
-    //     .vertexBuffer = htw_createBuffer(vkContext, bufferPool, vertexDataSize, HTW_BUFFER_USAGE_VERTEX),
-    //     .indexBuffer = htw_createBuffer(vkContext, bufferPool, indexDataSize, HTW_BUFFER_USAGE_INDEX),
-    //     .vertexCount = vertexCount,
-    //     .indexCount = triangleCount,
-    //     .instanceCount = 0
-    // };
-    // bc_Mesh chunkMesh = {
-    //     .meshBufferSet = modelData,
-    //     .vertexData = malloc(vertexDataSize),
-    //     .vertexDataSize = vertexDataSize,
-    //     .indexData = malloc(indexDataSize),
-    //     .indexDataSize = indexDataSize
-    // };
-    // hexmap->chunkMesh = chunkMesh;
+    *out_elementCount = triangleCount;
 
     // hexagon model data
     static const float halfHeight = 0.433012701892;
@@ -537,7 +527,7 @@ static void createHexmapMesh(bc_RenderableHexmap *hexmap, sg_shader_uniform_bloc
     };
     sg_buffer ib = sg_make_buffer(&ibd);
 
-    hexmap->bindings = (sg_bindings){
+    return (sg_bindings){
         .vertex_buffers[0] = vb,
         .index_buffer = ib
     };

@@ -6,10 +6,11 @@
 #include "basaltic_interaction.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_logic.h"
+#include "basaltic_components_view.h"
 #include "components/basaltic_components_planes.h"
 
 static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
-static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement);
+static void translateCamera(ecs_world_t *world, Camera camDelta);
 static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex);
 static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
@@ -33,10 +34,7 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
                 playStep(commandBuffer);
                 break;
             case SDLK_c:
-                bc_snapCameraToCharacter(ui, ui->activeCharacter);
-                break;
-            case SDLK_v:
-                ui->activeLayer = ui->activeLayer ^ 1; // invert
+                //bc_snapCameraToCharacter(ui, ui->activeCharacter);
                 break;
             case SDLK_UP:
                 //editMap(commandBuffer, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
@@ -52,56 +50,50 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
     }
 }
 
-void bc_processInputState(bc_UiState *ui, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
+void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
     if (useMouse) {
         // get mouse state
-        Uint32 mouseStateMask = SDL_GetMouseState(&ui->mouse.x, &ui->mouse.y);
-        if (mouseStateMask & SDL_BUTTON_LMASK) ui->mouse.leftHeld += 1; // TODO: add frame time instead of constant
-        else ui->mouse.leftHeld = 0;
+        int x, y;
+        Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
+        ecs_singleton_set(world, Mouse, {x, y});
     }
 
     // camera
-    float xMovement = 0.0;
-    float yMovement = 0.0;
+    const Camera *cam = ecs_singleton_get(world, Camera);
+    const CameraSpeed *camSpeed = ecs_singleton_get(world, CameraSpeed);
+    Camera camDelta = {0};
     if (useKeyboard) {
         // handle continuous button presses
         const Uint8 *k = SDL_GetKeyboardState(NULL);
-        if (k[SDL_SCANCODE_A]) xMovement -= ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_D]) xMovement += ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_W]) yMovement += ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_S]) yMovement -= ui->cameraMovementSpeed * powf(ui->cameraDistance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_Q]) ui->cameraYaw -= ui->cameraRotationSpeed;
-        if (k[SDL_SCANCODE_E]) ui->cameraYaw += ui->cameraRotationSpeed;
-        if (k[SDL_SCANCODE_R]) ui->cameraPitch += ui->cameraRotationSpeed;
-        if (k[SDL_SCANCODE_F]) ui->cameraPitch -= ui->cameraRotationSpeed;
-        if (k[SDL_SCANCODE_T]) ui->cameraElevation += ui->cameraMovementSpeed;
-        if (k[SDL_SCANCODE_G]) ui->cameraElevation -= ui->cameraMovementSpeed;
-        if (k[SDL_SCANCODE_Z]) ui->cameraDistance += ui->cameraMovementSpeed;
-        if (k[SDL_SCANCODE_X]) ui->cameraDistance -= ui->cameraMovementSpeed;
+        if (k[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
+        if (k[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
+        if (k[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
+        if (k[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
+        if (k[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation;
+        if (k[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation;
+        if (k[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation;
+        if (k[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation;
+        if (k[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->movement;
+        if (k[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->movement;
+        if (k[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->movement;
+        if (k[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->movement;
     }
 
-    translateCamera(ui, xMovement, yMovement);
+    translateCamera(world, camDelta);
 }
 
-void bc_setModelEcsWorld(bc_UiState *ui, ecs_world_t *world) {
-    ui->world = world;
-}
-
-void bc_setFocusedTerrain(bc_UiState *ui, ecs_entity_t terrain) {
-    ui->focusedTerrain = terrain;
-    if (ui->world != NULL) {
-        htw_ChunkMap *cm = ecs_get(ui->world, terrain, Plane)->chunkMap;
-        setCameraWrapLimits(ui, cm->mapWidth, cm->mapHeight);
-    }
-}
-
-static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY) {
-    ui->cameraWrapX = worldGridSizeX / 2;
-    ui->cameraWrapY = worldGridSizeY / 2;
+void bc_setCameraWrapLimits(ecs_world_t *world) {
+    ecs_world_t *modelWorld = ecs_singleton_get(world, ModelWorld)->world;
+    ecs_entity_t focus = ecs_singleton_get(world, FocusPlane)->entity;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focus, Plane)->chunkMap;
+    ecs_singleton_set(world, CameraWrap, {
+        .x = cm->mapWidth / 2,
+        .y = cm->mapHeight / 2
+    });
 }
 
 void bc_focusCameraOnCell(bc_UiState *ui, htw_geo_GridCoord cellCoord) {
-    htw_geo_getHexCellPositionSkewed(cellCoord, &ui->cameraX, &ui->cameraY);
+    //htw_geo_getHexCellPositionSkewed(cellCoord, &ui->cameraX, &ui->cameraY);
 }
 
 void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
@@ -109,45 +101,54 @@ void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
     //if (subject == NULL) return;
     //htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
     //bc_focusCameraOnCell(ui, characterCoord);
-    ui->cameraDistance = 5;
     // TODO: would like to set camera height also, but that requires inspecting world data as well. Maybe setup a general purpose height adjust in bc_window
 }
 
-static void translateCamera(bc_UiState *ui, float xLocalMovement, float yLocalMovement) {
-    float yaw = ui->cameraYaw * DEG_TO_RAD;
+static void translateCamera(ecs_world_t *world, Camera camDelta) {
+    const Camera *cam = ecs_singleton_get(world, Camera);
+    const CameraWrap *wrap = ecs_singleton_get(world, CameraWrap);
+    float yaw = cam->yaw * DEG_TO_RAD;
     float sinYaw = sin(yaw);
     float cosYaw = cos(yaw);
-    float xGlobalMovement = (xLocalMovement * cosYaw) + (yLocalMovement * -sinYaw);
-    float yGlobalMovement = (yLocalMovement * cosYaw) + (xLocalMovement * sinYaw);
+    float xGlobalMovement = (camDelta.origin.x * cosYaw) + (camDelta.origin.y * -sinYaw);
+    float yGlobalMovement = (camDelta.origin.y * cosYaw) + (camDelta.origin.x * sinYaw);
 
-    ui->cameraX += xGlobalMovement;
-    ui->cameraY += yGlobalMovement;
+    float unwrappedX = cam->origin.x + xGlobalMovement;
+    float unwrappedY = cam->origin.y + yGlobalMovement;
+    float wrappedX = unwrappedX;
+    float wrappedY = unwrappedY;
 
     // Wrap camera if outsize wrap limit:
     // Convert camera cartesian coordinates to hex space (expands y)
     // Check against camera wrap bounds
     // If out of bounds: wrap in hex space, convert back to cartesian space, and assign back to camera
-    float cameraHexX = htw_geo_cartesianToHexPositionX(ui->cameraX, ui->cameraY);
-    float cameraHexY = htw_geo_cartesianToHexPositionY(ui->cameraY);
-    if (cameraHexX > ui->cameraWrapX) {
-        cameraHexX -= ui->cameraWrapX * 2;
-        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    } else if (cameraHexX < -ui->cameraWrapX) {
-        cameraHexX += ui->cameraWrapX * 2;
-        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    float cameraHexX = htw_geo_cartesianToHexPositionX(unwrappedX, unwrappedY);
+    float cameraHexY = htw_geo_cartesianToHexPositionY(unwrappedY);
+    if (cameraHexX > wrap->x) {
+        cameraHexX -= wrap->x * 2;
+        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    } else if (cameraHexX < -wrap->x) {
+        cameraHexX += wrap->x * 2;
+        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
     }
 
-    if (cameraHexY > ui->cameraWrapY) {
-        cameraHexY -= ui->cameraWrapY * 2;
-        ui->cameraY = htw_geo_hexToCartesianPositionY(cameraHexY);
+    if (cameraHexY > wrap->y) {
+        cameraHexY -= wrap->y * 2;
+        wrappedY = htw_geo_hexToCartesianPositionY(cameraHexY);
         // x position is dependent on y position when converting between hex and cartesian space, so also need to assign back to cameraX
-        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    } else if (cameraHexY < -ui->cameraWrapY) {
-        cameraHexY += ui->cameraWrapY * 2;
-        ui->cameraY = htw_geo_hexToCartesianPositionY(cameraHexY);
-        ui->cameraX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
+    } else if (cameraHexY < -wrap->y) {
+        cameraHexY += wrap->y * 2;
+        wrappedY = htw_geo_hexToCartesianPositionY(cameraHexY);
+        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
     }
 
+    ecs_singleton_set(world, Camera, {
+        .origin = {{wrappedX, wrappedY, cam->origin.z + camDelta.origin.z}},
+        .distance = cam->distance + camDelta.distance,
+        .pitch = cam->pitch + camDelta.pitch,
+        .yaw = cam->yaw + camDelta.yaw
+    });
 }
 
 static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex) {

@@ -4,9 +4,10 @@ project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-add_library(basaltic_view basaltic_view.c basaltic_render.c basaltic_interaction.c basaltic_editor.c basaltic_uiState.c)
+add_library(basaltic_view basaltic_view.c basaltic_interaction.c basaltic_editor.c basaltic_uiState.c)
 
-target_include_directories(basaltic_view PRIVATE include sokol rendering)
+target_include_directories(basaltic_view PRIVATE include sokol ecs rendering)
+add_subdirectory(ecs)
 add_subdirectory(rendering)
 
 add_subdirectory(shaders)

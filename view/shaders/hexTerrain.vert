@@ -9,6 +9,13 @@
 //     mat4 m;
 // } MVP;
 
+// uniform global {
+//     mat4 pv;
+// }
+// uniform local {
+//     mat4 m;
+// }
+
 uniform mat4 pv;
 uniform mat4 m;
 

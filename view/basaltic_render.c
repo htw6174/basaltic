@@ -55,41 +55,23 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     // setup model data, shaders, pipelines, buffers, and descriptor sets for rendered objects
     //createDefaultPipeline(rc);
 
-    // Create uniform layouts
-    rc->perFrameUniformsVert = (sg_shader_uniform_block_desc) {
-        .size = sizeof(bc_mvp),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
-            [1] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
-        }
-    };
-
-    rc->perFrameUniformsFrag = (sg_shader_uniform_block_desc) {
-        .size = sizeof(vec2),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
-        }
-    };
-
     // allocate device buffers to be written to later
     {
         //initTextGraphics(graphics);
-        prc->renderableHexmap = bc_createRenderableHexmap(rc->perFrameUniformsVert, rc->perFrameUniformsFrag);
-        prc->surfaceTerrain = bc_createHexmapTerrain(prc->renderableHexmap, 2);
+        //prc->renderableHexmap = bc_createRenderableHexmap(rc->perFrameUniformsVert, rc->perFrameUniformsFrag);
+        //prc->surfaceTerrain = bc_createHexmapTerrain(prc->renderableHexmap, 2);
         //prc->debugContext = bc_createDebugRenderContext(rc->vkContext, rc->bufferPool, rc->perFrameLayout, rc->perPassLayout, BC_MAX_CHARACTERS);
         //initDebugGraphics(graphics);
     }
 
-    bc_writeTerrainBuffers(rc->internalRenderContext->renderableHexmap);
+    //bc_writeTerrainBuffers(rc->internalRenderContext->renderableHexmap);
 
     // assign buffers to descriptor sets
     {
         //htw_updatePerFrameDescriptor(vkContext, rc->perFrameDescriptorSet, rc->windowInfoBuffer, rc->feedbackInfoBuffer, rc->worldInfoBuffer);
 
         //updateTextDescriptors(graphics);
-        bc_updateHexmapDescriptors(prc->surfaceTerrain);
+        //bc_updateHexmapDescriptors(prc->surfaceTerrain);
     }
 
     // window info defaults
@@ -117,62 +99,6 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     rc->chunkVisibilityRadius = 3;
 
     rc->drawSystems = false;
-
-    // TEST: triangle setup
-    {
-
-        /* a vertex buffer */
-        const float vertices[] = {
-            // positions            // colors
-            0.0f,  0.5f, 0.5f,     //1.0f, 0.0f, 0.0f, 1.0f,
-            0.5f, -0.5f, 0.5f,     //0.0f, 1.0f, 0.0f, 1.0f,
-            -0.5f, -0.5f, 0.5f,    // 0.0f, 0.0f, 1.0f, 1.0f
-        };
-        sg_buffer vbuf = sg_make_buffer(&(sg_buffer_desc){
-            .data = SG_RANGE(vertices)
-        });
-
-        const u32 indices[] = {
-            0, 1, 2
-        };
-        sg_buffer ibuf = sg_make_buffer(&(sg_buffer_desc){
-            .type = SG_BUFFERTYPE_INDEXBUFFER,
-            .data = SG_RANGE(indices)
-        });
-
-        char *vert = htw_load("view/shaders/hexTerrain.vert");
-        char *frag = htw_load("view/shaders/hexTerrain.frag");
-        /* a shader */
-        sg_shader shd = sg_make_shader(&(sg_shader_desc){
-            .vs.uniform_blocks[0] = rc->perFrameUniformsVert,
-            .vs.source = vert,
-            .fs.source = frag
-        });
-
-        /* a pipeline state object (default render states are fine for triangle) */
-        sg_pipeline pip = sg_make_pipeline(&(sg_pipeline_desc){
-            .shader = shd,
-            .index_type = SG_INDEXTYPE_UINT32,
-            .layout = {
-                .attrs = {
-                    [0].format=SG_VERTEXFORMAT_FLOAT3,
-                    //[1].format=SG_VERTEXFORMAT_FLOAT4
-                }
-            }
-        });
-
-        free(vert);
-        free(frag);
-
-        /* resource bindings */
-        sg_bindings bind = {
-            .vertex_buffers[0] = vbuf,
-            .index_buffer = ibuf
-        };
-
-        rc->internalRenderContext->testPipeline = pip;
-        rc->internalRenderContext->testBinding = bind;
-    }
 
     return rc;
 }
@@ -268,7 +194,7 @@ void bc_renderFrame(bc_RenderContext *rc, bc_WorldState *world) {
         bc_updateTerrainVisibleChunks(cm, rc->internalRenderContext->surfaceTerrain, centerChunk);
 
         // NOTE/TODO: need to figure out a best practice regarding push constant updates. Would be reasonable to assume that in this engine, push constants are always used for mvp matricies in [pv, m] layout (at least for world space objects?). Push constants persist through different rendering pipelines, so I could push the pv matrix once per frame and not have to pass camera matrix info to any of the sub-rendering methods like drawHexmapTerrain. Those methods would only have to be responsible for updating the model portion of the push constant range. QUESTION: is this a good way to do things, or am I setting up a trap by not assigning the pv matrix per-pipeline?
-        bc_drawHexmapTerrain(cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, mvp, rc->windowInfo.mousePosition, &rc->feedbackInfo);
+        //bc_drawHexmapTerrain(cm, rc->internalRenderContext->renderableHexmap, rc->internalRenderContext->surfaceTerrain, mvp, rc->windowInfo.mousePosition, &rc->feedbackInfo);
 
         if (rc->drawSystems) {
             // Wait with a timeout to prevent framerate from dropping or locking entirely

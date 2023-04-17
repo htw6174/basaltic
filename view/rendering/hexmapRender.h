@@ -71,6 +71,8 @@ typedef struct {
 bc_RenderableHexmap *bc_createRenderableHexmap(sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag);
 bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderableHexmap *hexmap, u32 visibilityRadius);
 
+sg_bindings bc_createHexmapBindings(u32 *out_elementCount);
+
 // TODO: do these need to be seperate methods from other setup?
 void bc_writeTerrainBuffers(bc_RenderableHexmap *hexmap);
 void bc_updateHexmapDescriptors(bc_HexmapTerrain *terrain);

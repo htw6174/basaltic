@@ -41,13 +41,6 @@ typedef struct {
 typedef struct private_bc_RenderContext *bc_InternalRenderContext;
 
 typedef struct {
-    // htw_DescriptorSetLayout perFrameLayout;
-    // htw_DescriptorSet perFrameDescriptorSet;
-    // htw_DescriptorSetLayout perPassLayout;
-    // htw_DescriptorSet perPassDescriptorSet;
-    sg_shader_uniform_block_desc perFrameUniformsVert; // MV&P matricies
-    sg_shader_uniform_block_desc perFrameUniformsFrag; // Mouse and camera position
-
     bc_WindowInfo windowInfo;
     bc_FeedbackInfo feedbackInfo;
     bc_WorldInfo worldInfo;
