@@ -1,6 +1,5 @@
 #include "basaltic_view.h"
 #include "basaltic_window.h"
-#include "basaltic_render.h"
 #include "basaltic_editor.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
@@ -20,7 +19,6 @@
 typedef struct {
     ecs_world_t *ecsWorld;
     // TODO: change the scope of render context to be much smaller or remove entirely
-    bc_RenderContext rc;
     bc_UiState *ui;
 } bc_ViewContext;
 
@@ -39,14 +37,6 @@ void bc_view_setup(bc_WindowContext* wc) {
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
-    //vc.rc = bc_createRenderContext(wc);
-    // TODO: should probably move all this info elsewhere, for now just initialize enough to prevent rendering issues
-    vc.rc = (bc_RenderContext){
-        .windowInfo.visibilityRadius = 512,
-        .worldInfo.gridToWorld = (vec3){{1.0, 1.0, 0.2}},
-        .worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL,
-        .chunkVisibilityRadius = 3
-    };
     vc.ui = bc_createUiState();
 }
 
@@ -76,6 +66,7 @@ void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool
 }
 
 u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer) {
+    ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     bc_WorldState *world = model == NULL ? NULL : model->world;
     // TODO
     //bc_updateRenderContextWithWorldParams(vc->rc, world);
@@ -113,5 +104,5 @@ void bc_view_teardownEditor() {
 }
 
 void bc_view_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, bc_CommandBuffer inputBuffer) {
-    bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, &vc.rc, vc.ui);
+    bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, vc.ui);
 }

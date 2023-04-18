@@ -10,8 +10,8 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticComponentsView);
 
     // TODO: figure out correct way to create reflection data for custom primitive types used in other components
-    printf("%lu\n", ecs_id(ecs_i32_t));
-    ecs_primitive(world, {.entity = ecs_id(ecs_i32_t), .kind = EcsI32});
+    //printf("%lu\n", ecs_id(ecs_i32_t));
+    //ecs_primitive(world, {.entity = ecs_id(ecs_i32_t), .kind = EcsI32});
     //ECS_COMPONENT_DEFINE(world, u32);
     //ECS_COMPONENT_DEFINE(world, s32);
     //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
@@ -21,7 +21,7 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_COMPONENT_DEFINE(world, QueryDesc);
 
-    ECS_META_COMPONENT(world, Pointer);
+    ECS_COMPONENT_DEFINE(world, Pointer);
     ECS_COMPONENT_DEFINE(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);

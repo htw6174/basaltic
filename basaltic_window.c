@@ -32,11 +32,12 @@ void bc_destroyWindow(bc_WindowContext *wc) {
 }
 
 void bc_changeScreenSize(bc_WindowContext *wc, u32 width, u32 height) {
-    // TODO
+    wc->width = width;
+    wc->height = height;
 }
 
 SDL_Window *createWindow(u32 width, u32 height) {
-    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+    SDL_Window *sdlWindow = SDL_CreateWindow("basaltic", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_OPENGL);
     if (sdlWindow == NULL) {
         printf("Failed to create SDL window: %s\n", SDL_GetError());
     }

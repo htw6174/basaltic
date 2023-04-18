@@ -115,6 +115,10 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 requestProcessStop(&sc.appState, &sc.modelThreadState);
+            } else if (e.type == SDL_WINDOWEVENT) {
+                if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                    bc_changeScreenSize(wc, e.window.data1, e.window.data2);
+                }
             }
             bc_handleEditorInputEvents(&editorEngineContext, &e);
             bc_view_onInputEvent(sc.inputBuffer, &e, passthroughMouse, passthroughKeyboard);

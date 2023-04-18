@@ -19,6 +19,7 @@
 layout(early_fragment_tests) in;
 
 uniform vec2 mousePosition;
+uniform int chunkIndex;
 
 layout(std430, binding = 0) buffer feedbackBuffer {
 	uint hoveredChunk;
@@ -29,7 +30,6 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 
 in vec4 inout_color;
 in vec3 inout_pos;
-flat in uint inout_chunkIndex;
 flat in uint inout_cellIndex;
 
 out vec4 out_color;
@@ -62,7 +62,7 @@ void main()
 	vec2 mousePos = mousePosition * vec2(1.0, -1.0) + vec2(0.0, 720.0);
 	float mouseDist = distance(windowPos, mousePos);
 	if (mouseDist < 1.0) {
-		FeedbackBuffer.hoveredChunk = inout_chunkIndex;
+		FeedbackBuffer.hoveredChunk = chunkIndex;
 		FeedbackBuffer.hoveredCell = inout_cellIndex;
 	}
 

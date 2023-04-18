@@ -8,7 +8,6 @@
 #include "basaltic_defs.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
-#include "basaltic_render.h"
 #include "basaltic_worldState.h"
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
@@ -48,7 +47,7 @@ void bc_teardownEditor(void) {
 }
 
 // TODO: untangle and replace everything to do with bc_GraphicsState
-void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_RenderContext *rc, bc_UiState *ui)
+void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
 {
     igBegin("Options", NULL, 0);
 
@@ -67,6 +66,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 
     const HoveredCell *hc = ecs_singleton_get(viewWorld, HoveredCell);
     igValue_Uint("Hovered cell", hc->cellIndex);
+    igValue_Uint("Hovered chunk", hc->chunkIndex);
 
     if (igButton("Generate world", (ImVec2){0, 0})) {
         bc_ModelSetupSettings newSetupSettings = {
@@ -96,12 +96,6 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
             dateTimeInspector(world->step);
             igSpacing();
 
-            if(igSliderInt("(in half chunks)##renderDistance", &rc->chunkVisibilityRadius, 1, 16, "View Distance: %u", 0)) {
-                rc->windowInfo.visibilityRadius = rc->chunkVisibilityRadius * 32.0;
-            }
-            igInputFloat("Fog Extinction", &rc->windowInfo.fogExtinction, 0.001, 0.01, "%f", 0);
-            igInputFloat("Fog Inscattering", &rc->windowInfo.fogInscattering, 0.0001, 0.001, "%f", 0);
-
             //coordInspector("Mouse", (htw_geo_GridCoord){ui->mouse.x, ui->mouse.y});
             igValue_Uint("Hovered chunk", ui->hoveredChunkIndex);
             igValue_Uint("Hovered cell", ui->hoveredCellIndex);
@@ -123,8 +117,6 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
             }
             igSpacing();
 
-            igCheckbox("Draw entity markers", &rc->drawSystems);
-
             /* Ensure the model isn't running before doing anything else */
             if (!bc_model_isRunning(model)) {
                 if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
@@ -135,21 +127,16 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         }
     }
 
-    bc_WorldInfo *worldInfo = &rc->worldInfo;
-    if (igCollapsingHeader_BoolPtr("World Info settings", NULL, 0)) {
-        igSliderInt("Time of day", &worldInfo->timeOfDay, 0, 255, "%i", 0);
-        igSliderInt("Sea level", &worldInfo->seaLevel, 0, 128, "%i", 0);
-    }
-
     if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
-        if (igButton("Enable All", (ImVec2){0, 0})) {
-            worldInfo->visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
-        }
-        if (igButton("Disable All", (ImVec2){0, 0})) {
-            worldInfo->visibilityOverrideBits = 0;
-        }
-        bitmaskToggle("Geometry", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
-        bitmaskToggle("Color", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
+        // TODO: custom inspector for ECS enum components
+        // if (igButton("Enable All", (ImVec2){0, 0})) {
+        //     worldInfo->visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL;
+        // }
+        // if (igButton("Disable All", (ImVec2){0, 0})) {
+        //     worldInfo->visibilityOverrideBits = 0;
+        // }
+        // bitmaskToggle("Geometry", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
+        // bitmaskToggle("Color", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
     }
 
     igEnd();

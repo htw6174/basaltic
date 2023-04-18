@@ -26,7 +26,6 @@ layout(location = 1) in float in_cellIndex; // For compatability, this is a u16 
 
 out vec4 inout_color;
 out vec3 inout_pos;
-flat out uint inout_chunkIndex;
 flat out uint inout_cellIndex;
 
 // float rand(float x) {
@@ -61,5 +60,4 @@ void main()
 
     //inout_color = vec4(1.0, 0.0, 0.0, 1.0);
     inout_color = vec4(cellData.temperature / 255.0, cellData.vegetation / 255.0, cellData.rainfall / 255.0, 1.0);
-    inout_chunkIndex = 0u;//TerrainBuffer.chunkIndex;
 }

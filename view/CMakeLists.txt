@@ -6,9 +6,8 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
 add_library(basaltic_view basaltic_view.c basaltic_interaction.c basaltic_editor.c basaltic_uiState.c)
 
-target_include_directories(basaltic_view PRIVATE include sokol ecs rendering)
+target_include_directories(basaltic_view PRIVATE include sokol ecs)
 add_subdirectory(ecs)
-add_subdirectory(rendering)
 
 add_subdirectory(shaders)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/shaders")

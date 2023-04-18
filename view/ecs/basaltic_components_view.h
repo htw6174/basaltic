@@ -37,10 +37,10 @@ ECS_STRUCT(QueryDesc, {
 /* User Interface */
 
 ECS_STRUCT(Pointer, {
-    ecs_i32_t x;
-    ecs_i32_t y;
-    ecs_i32_t lastX;
-    ecs_i32_t lastY;
+    s32 x;
+    s32 y;
+    s32 lastX;
+    s32 lastY;
 });
 
 // TODO: setup camera 'real' position and 'target' position, smoothly interpolate each frame

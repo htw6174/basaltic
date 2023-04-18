@@ -35,6 +35,14 @@ bc_RenderContext* bc_createRenderContext(bc_WindowContext* wc) {
     private_bc_RenderContext *prc = calloc(1, sizeof(private_bc_RenderContext));
     rc->internalRenderContext = prc;
 
+    // DEFAULTS TODO: make these components
+    vc.rc = (bc_RenderContext){
+        .windowInfo.visibilityRadius = 512,
+        .worldInfo.gridToWorld = (vec3){{1.0, 1.0, 0.2}},
+        .worldInfo.visibilityOverrideBits = BC_TERRAIN_VISIBILITY_ALL,
+        .chunkVisibilityRadius = 3
+    };
+
     // create per frame descriptor buffers
     // rc->windowInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_WindowInfo), HTW_BUFFER_USAGE_UNIFORM);
     // rc->feedbackInfoBuffer = htw_createBuffer(vkContext, rc->bufferPool, sizeof(bc_FeedbackInfo), HTW_BUFFER_USAGE_STORAGE);

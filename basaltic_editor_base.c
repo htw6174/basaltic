@@ -16,7 +16,7 @@ bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc)
     // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
     ImGui_ImplSDL2_InitForOpenGL(wc->window, wc->glContext);
-    ImGui_ImplOpenGL3_Init("#version 130");
+    ImGui_ImplOpenGL3_Init("#version 330");
 
     bc_EditorEngineContext newEditor = {
         .isActive = isActiveAtStart,

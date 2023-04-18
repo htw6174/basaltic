@@ -1,110 +1,43 @@
-#include "hexmapRender.h"
-#include "htw_core.h"
-#include "htw_geomap.h"
-#include "sokol_gfx.h"
-#include "GL/gl.h"
-#include "basaltic_uniforms.h"
-#include "basaltic_logic.h"
+#include "basaltic_systems_view_terrain.h"
+#include "basaltic_components_view.h"
+#include "components/basaltic_components_planes.h"
 #include "basaltic_worldState.h"
+#include "htw_core.h"
+#include "sokol_gfx.h"
+#include "basaltic_sokol_gfx.h"
+#define GL_GLEXT_PROTOTYPES
+#include "GL/gl.h"
 
-static void createHexmapPipeline(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag);
-static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex);
-static void setHexmapBufferFromCell(bc_CellData *cell, bc_TerrainCellData *target);
+typedef struct {
+    vec3 position;
+    u16 cellIndex;
+    u16 unused;
+} bc_HexmapVertexData;
 
-bc_RenderableHexmap *bc_createRenderableHexmap(sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag) {
-    bc_RenderableHexmap *newHexmap = calloc(1, sizeof(bc_RenderableHexmap));
-    createHexmapPipeline(newHexmap, perFrameUniformsVert, perFrameUniformsFrag);
-    newHexmap->bindings = bc_createHexmapBindings(&newHexmap->indexCount);
-    //createHexmapInstanceBuffers(rc, world);
-    return newHexmap;
-}
+// Compressed version of bc_CellData used for rendering
+// TODO: deprecated, only go back to this if video memory starts to become an issue
+typedef struct {
+    // joined to int packed1
+    s16 elevation;
+    u8 paletteX;
+    u8 paletteY;
+    // joined to uint packed2
+    u8 visibilityBits;
+    u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
+    u16 unused2; // weather / temporary effect bitmask?
+    //int64_t aligner;
+} bc_TerrainCellData;
 
-bc_HexmapTerrain *bc_createHexmapTerrain(bc_RenderableHexmap *hexmap, u32 visibilityRadius) {
-    bc_HexmapTerrain *newTerrain = calloc(1, sizeof(bc_HexmapTerrain));
-    newTerrain->renderedChunkRadius = visibilityRadius;
-    u32 visibilityDiameter = (visibilityRadius * 2) - 1;
-    u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
-    newTerrain->renderedChunkCount = renderedChunkCount;
-    newTerrain->closestChunks = calloc(renderedChunkCount, sizeof(u32));
-    newTerrain->loadedChunks = calloc(renderedChunkCount, sizeof(u32));
-    for (int i = 0; i < renderedChunkCount; i++) {
-        newTerrain->loadedChunks[i] = -1;
-    }
-
-    // create descriptor set for each chunk, to swap between during each frame
-    //newTerrain->chunkObjectDescriptorSets = malloc(sizeof(htw_DescriptorSet) * renderedChunkCount);
-    //htw_allocateDescriptors(vkContext, hexmap->chunkObjectLayout, renderedChunkCount, newTerrain->chunkObjectDescriptorSets);
-
-    // best way to handle using multiple sub-buffers and binding a different one each draw call?
-    // Options:
-    // a. create a descriptor set for every sub buffer, and set a different buffer offset for each. When drawing, most descriptors sets can be bound once per frame. A new terrain data descriptor set will be bound before every draw call.
-    // b. create one descriptor set with a dynamic storage buffer. When drawing, bind the terrain data descriptor set with a different dynamic offset before every draw call.
-    // because I don't need to change the size of these sub buffers at runtime, there shouldn't be much of a difference between these approaches.
-    // include strips of adjacent chunk data in buffer size
-    u32 bufferCellCount = (bc_chunkSize * bc_chunkSize) + (2 * bc_chunkSize) + 1;
-    // Chunk data includes the chunk index out front
-    newTerrain->terrainBufferSize = offsetof(bc_TerrainBufferData, chunkData) + (sizeof(bc_CellData) * bufferCellCount);
-
-    newTerrain->terrainBufferData = malloc(newTerrain->terrainBufferSize * renderedChunkCount);
-    //newTerrain->terrainBuffer = htw_createSplitBuffer(vkContext, bufferPool, newTerrain->terrainBufferSize, renderedChunkCount, HTW_BUFFER_USAGE_STORAGE);
-
-    return newTerrain;
-}
-
-static void createHexmapPipeline(bc_RenderableHexmap *hexmap, sg_shader_uniform_block_desc perFrameUniformsVert, sg_shader_uniform_block_desc perFrameUniformsFrag) {
-
-    // TEST: setup native GL buffer for shader writes
-    hexmap->fbb = (bc_FeedbackBuffer){
-        .chunkIndex = 61,
-        .cellIndex = 74
-    };
-
-    GLuint feedbackBuffer;
-    glGenBuffers(1, &feedbackBuffer);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(hexmap->fbb), &hexmap->fbb, GL_DYNAMIC_READ);
-    hexmap->feedbackBuffer = feedbackBuffer;
-
-    sg_reset_state_cache();
-
-    char *vert = htw_load("view/shaders/hexTerrain.vert");
-    char *frag = htw_load("view/shaders/hexTerrain.frag");
-
-    sg_shader_desc tsd = {
-        .vs.uniform_blocks[0] = perFrameUniformsVert,
-        .vs.source = vert,
-        .fs.uniform_blocks[0] = perFrameUniformsFrag,
-        .fs.source = frag
-    };
-    sg_shader terrainShader = sg_make_shader(&tsd);
-
-    free(vert);
-    free(frag);
-
-    sg_pipeline_desc pd = {
-        .shader = terrainShader,
-        .layout = {
-            .attrs = {
-                [0].format = SG_VERTEXFORMAT_FLOAT3,
-                [1].format = SG_VERTEXFORMAT_USHORT2N
-            }
-        },
-        .index_type = SG_INDEXTYPE_UINT32,
-        .depth = {
-            .compare = SG_COMPAREFUNC_LESS_EQUAL,
-            .write_enabled = true
-        },
-        .cull_mode = SG_CULLMODE_NONE
-    };
-    hexmap->pipeline = sg_make_pipeline(&pd);
-}
+sg_bindings createHexmapBindings(u32 *out_elementCount);
+void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk);
+void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex);
 
 /**
  * @brief Creates featureless hexagonal tile surface geometry, detail is added later by shaders
  *
- * @param terrain
+ * @param out_elementCount number of triangle indicies
  */
-sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
+sg_bindings createHexmapBindings(u32 *out_elementCount) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -116,31 +49,6 @@ sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
      *
      * The mesh has one extra tri strip on the top and right sides, so that the gaps between chunks can be filled seamlessly
      */
-
-    // create rendering pipeline
-    // htw_ShaderInputInfo positionInputInfo = {
-    //     .size = sizeof(((bc_HexmapVertexData*)0)->position), // pointer casting trick to get size of a struct member
-    //     .offset = offsetof(bc_HexmapVertexData, position),
-    //     .inputType = HTW_VERTEX_TYPE_FLOAT
-    // };
-    // htw_ShaderInputInfo cellInputInfo = {
-    //     .size = sizeof(((bc_HexmapVertexData*)0)->cellIndex),
-    //     .offset = offsetof(bc_HexmapVertexData, cellIndex),
-    //     .inputType = HTW_VERTEX_TYPE_UINT
-    // };
-    // htw_ShaderInputInfo vertexInputInfos[] = {positionInputInfo, cellInputInfo};
-    // htw_ShaderSet shaderInfo = {
-    //     .vertexShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.vert.spv"),
-    //     .fragmentShader = htw_loadShader(vkContext, "shaders_bin/hexTerrain.frag.spv"),
-    //     .vertexInputStride = sizeof(bc_HexmapVertexData),
-    //     .vertexInputCount = 2,
-    //     .vertexInputInfos = vertexInputInfos,
-    //     .instanceInputCount = 0,
-    // };
-
-    //hexmap->chunkObjectLayout = htw_createTerrainObjectSetLayout(vkContext);
-    //htw_DescriptorSetLayout terrainPipelineLayouts[] = {perFrameLayout, perPassLayout, NULL, hexmap->chunkObjectLayout};
-
 
     // determine required size for vertex and triangle buffers
     const u32 width = bc_chunkSize;
@@ -188,7 +96,7 @@ sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
     };
 
     // create and write model data for each cell
-    // vert and tri array layout: | main chunk data (left to right, bottom to top) | right chunk edge strip (bottom to top) | top chunk edge strip (left to right) | top-right corner infill |
+    // vert and tri array layout: [main chunk data (left to right, bottom to top), right chunk edge strip (bottom to top), top chunk edge strip (left to right), top-right corner infill]
     bc_HexmapVertexData *vertexData = malloc(vertexDataSize);
     u32 *triData = malloc(indexDataSize);
     u32 vIndex = 0;
@@ -461,58 +369,6 @@ sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
         triData[tIndex++] = p8;
     }
 
-    // TEST: cube vertex + index buffers
-    /*{
-        float vertices[] = {
-            -1.0, -1.0, -1.0,
-            1.0, -1.0, -1.0,
-            1.0,  1.0, -1.0,
-            -1.0,  1.0, -1.0,
-            -1.0, -1.0,  1.0,
-            1.0, -1.0,  1.0,
-            1.0,  1.0,  1.0,
-            -1.0,  1.0,  1.0,
-            -1.0, -1.0, -1.0,
-            -1.0,  1.0, -1.0,
-            -1.0,  1.0,  1.0,
-            -1.0, -1.0,  1.0,
-            1.0, -1.0, -1.0,
-            1.0,  1.0, -1.0,
-            1.0,  1.0,  1.0,
-            1.0, -1.0,  1.0,
-            -1.0, -1.0, -1.0,
-            -1.0, -1.0,  1.0,
-            1.0, -1.0,  1.0,
-            1.0, -1.0, -1.0,
-            -1.0,  1.0, -1.0,
-            -1.0,  1.0,  1.0,
-            1.0,  1.0,  1.0,
-            1.0,  1.0, -1.0
-        };
-        sg_buffer_desc vbuf = {
-            .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .data = SG_RANGE(vertices)
-        };
-
-        u32 indices[] = {
-            0, 1, 2,  0, 2, 3,
-            6, 5, 4,  7, 6, 4,
-            8, 9, 10,  8, 10, 11,
-            14, 13, 12,  15, 14, 12,
-            16, 17, 18,  16, 18, 19,
-            22, 21, 20,  23, 22, 20
-        };
-        sg_buffer_desc ibuf = {
-            .type = SG_BUFFERTYPE_INDEXBUFFER,
-            .data = SG_RANGE(indices)
-        };
-
-        hexmap->bindings = (sg_bindings){
-            .vertex_buffers[0] = sg_make_buffer(&vbuf),
-            .index_buffer = sg_make_buffer(&ibuf)
-        };
-    }*/
-
     sg_buffer_desc vbd = {
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .data.ptr = vertexData,
@@ -531,30 +387,9 @@ sg_bindings bc_createHexmapBindings(u32 *out_elementCount) {
         .vertex_buffers[0] = vb,
         .index_buffer = ib
     };
-
-//     // test log vert array
-//     unsigned int vecsPerLine = vertsPerCell;
-//     for (int i = 0; i < vertexCount; i++) {
-//         vec3 v = vertexData[i].position;
-//         printf("(%f, %f, %f), ", v.x, v.y, v.z);
-//         // end of line
-//         if (i % vecsPerLine == (vecsPerLine - 1)) printf("\n");
-//     }
-//     // test log tri array
-//     htw_printArray(stdout, triData, sizeof(triData[0]), triangleCount, trisPerCell, "%u, ");
 }
 
-void bc_writeTerrainBuffers(bc_RenderableHexmap *hexmap) {
-    //bc_Mesh chunkMesh = hexmap->chunkMesh;
-    //htw_writeBuffer(vkContext, chunkMesh.meshBufferSet.vertexBuffer, chunkMesh.vertexData, chunkMesh.vertexDataSize);
-    //htw_writeBuffer(vkContext, chunkMesh.meshBufferSet.indexBuffer, chunkMesh.indexData, chunkMesh.indexDataSize);
-}
-
-void bc_updateHexmapDescriptors(bc_HexmapTerrain *terrain) {
-    //htw_updateTerrainObjectDescriptors(vkContext, terrain->chunkObjectDescriptorSets, terrain->terrainBuffer);
-}
-
-void bc_updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 centerChunk) {
+void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -580,18 +415,6 @@ void bc_updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
         }
     }
 
-    // // TEST
-    // printf("closest chunks: ");
-    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
-    //     printf("%i, ", closestChunks[i]);
-    // }
-    // printf("\n");
-    // printf("loaded chunks: ");
-    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
-    //     printf("%i, ", loadedChunks[i]);
-    // }
-    // printf("\n");
-
     // compare closest chunks to currently loaded chunks
     for (int i = 0; i < terrain->renderedChunkCount; i++) {
         s32 loadedTarget = loadedChunks[i];
@@ -612,18 +435,6 @@ void bc_updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
         }
     }
 
-    // // TEST
-    // printf("closest chunks: ");
-    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
-    //     printf("%i, ", closestChunks[i]);
-    // }
-    // printf("\n");
-    // printf("loaded chunks: ");
-    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
-    //     printf("%i, ", loadedChunks[i]);
-    // }
-    // printf("\n");
-
     // move all positive values from b into negative values of a
     u32 ia = 0, ib = 0;
     while (ia < terrain->renderedChunkCount) {
@@ -640,54 +451,18 @@ void bc_updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
         ia++;
     }
 
-    // // TEST
-    // printf("loaded chunks: ");
-    // for (int i = 0; i < MAX_VISIBLE_CHUNKS; i++) {
-    //     printf("%i, ", loadedChunks[i]);
-    // }
-    // printf("\n\n");
-
     for (int c = 0; c < terrain->renderedChunkCount; c++) {
         // TODO: only update chunk if freshly visible or has pending updates
         updateHexmapDataBuffer(chunkMap, terrain, loadedChunks[c], c);
     }
 }
 
-void bc_drawHexmapTerrain(htw_ChunkMap *chunkMap, bc_RenderableHexmap *hexmap, bc_HexmapTerrain *terrain, bc_mvp mvp, vec2 mousePos, bc_FeedbackBuffer *feedbackInfo) {
-    sg_apply_pipeline(hexmap->pipeline);
-    sg_apply_bindings(&hexmap->bindings);
-    sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(mousePos));
-
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, hexmap->feedbackBuffer);
-
-    for (int c = 0; c < terrain->renderedChunkCount; c++) {
-        u32 chunkIndex = terrain->loadedChunks[c];
-        static float chunkX, chunkY;
-        htw_geo_getChunkRootPosition(chunkMap, chunkIndex, &chunkX, &chunkY);
-        vec3 chunkPos = {{chunkX, chunkY, 0.0}};
-
-        //htw_bindDescriptorSet(vkContext, hexmap->pipeline, terrain->chunkObjectDescriptorSets[c], HTW_DESCRIPTOR_BINDING_FREQUENCY_PER_OBJECT);
-        mat4x4SetTranslation(mvp.m, chunkPos);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(mvp));
-        //htw_drawPipelineX4(vkContext, hexmap->pipeline, &hexmap->chunkMesh.meshBufferSet, HTW_DRAW_TYPE_INDEXED, (float*)modelMatrix);
-
-        //sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(terrain->terrainBufferData[c]));
-        sg_draw(0, hexmap->indexCount, 1);
-    }
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, hexmap->feedbackBuffer);
-    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hexmap->fbb), &hexmap->fbb);
-    *feedbackInfo = hexmap->fbb;
-}
-
-static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *terrain, u32 chunkIndex, u32 subBufferIndex) {
+void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
     htw_Chunk *chunk = &chunkMap->chunks[chunkIndex];
 
-    size_t subBufferOffset = 0;//subBufferIndex * terrain->terrainBuffer.subBufferHostSize;
-    bc_TerrainBufferData *subBuffer = ((void*)terrain->terrainBufferData) + subBufferOffset; // cast to void* so that offset is applied correctly
-    subBuffer->chunkIndex = chunkIndex;
-    bc_CellData *cellData = &subBuffer->chunkData; // address of cell data array
+    bc_CellData *cellData = terrain->data + (terrain->chunkBufferCellCount * subBufferIndex);
 
     // get primary chunk data
     for (s32 y = 0; y < height; y++) {
@@ -695,7 +470,6 @@ static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
             u32 c = x + (y * width);
             bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
             cellData[c] = *cell;
-            //setHexmapBufferFromCell(cell, &cellData[c]);
         }
     }
 
@@ -707,7 +481,6 @@ static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
         u32 c = edgeDataIndex + y; // right edge of this row
         bc_CellData *cell = bc_getCellByIndex(chunkMap, rightChunk, y * chunkMap->chunkSize);
         cellData[c] = *cell;
-        //setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += height;
 
@@ -718,7 +491,6 @@ static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
         u32 c = edgeDataIndex + x;
         bc_CellData *cell = bc_getCellByIndex(chunkMap, topChunk, x);
         cellData[c] = *cell;
-        //setHexmapBufferFromCell(cell, &cellData[c]);
     }
     edgeDataIndex += width;
 
@@ -727,20 +499,219 @@ static void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, bc_HexmapTerrain *ter
     chunk = &chunkMap->chunks[topRightChunk];
     bc_CellData *cell = bc_getCellByIndex(chunkMap, topRightChunk, 0);
     cellData[edgeDataIndex] = *cell;
-    //setHexmapBufferFromCell(cell, &cellData[edgeDataIndex]); // set last position in buffer
 
-    //htw_writeSubBuffer(vkContext, &terrain->terrainBuffer, subBufferIndex, subBuffer, terrain->terrainBufferSize);
+    size_t chunkDataSize = terrain->chunkBufferCellCount *  sizeof(bc_CellData);
+    size_t chunkDataOffset = chunkDataSize * subBufferIndex;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrain->gluint);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, chunkDataOffset, chunkDataSize, cellData);
 }
 
-static void setHexmapBufferFromCell(bc_CellData *cell, bc_TerrainCellData *target) {
-    bc_TerrainCellData cellData = {
-        .elevation = cell->height,
-        .paletteX = (u8)cell->temperature,
-        .paletteY = (u8)cell->nutrient,
-        //.paletteX = (u8)remap_int(rawTemperature, 0, chunk->temperatureMap->maxMagnitude, 0, 255),
-        //.paletteY = (u8)remap_int(rawRainfall, 0, chunk->rainfallMap->maxMagnitude, 0, 255),
-        .visibilityBits = (u8)cell->visibility,
-    };
-    *target = cellData;
+void SetupPipelineHexTerrain(ecs_iter_t *it) {
+    RenderDistance *rd = ecs_field(it, RenderDistance, 1);
 
+    char *vert = htw_load("view/shaders/hexTerrain.vert");
+    char *frag = htw_load("view/shaders/hexTerrain.frag");
+
+    // TODO: better way to setup uniform block descriptions? Maybe add description as component to each uniform component, or use sokol's shader reflection to autogen
+    sg_shader_uniform_block_desc vsdGlobal = {
+        .size = sizeof(PVMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    };
+
+    sg_shader_uniform_block_desc vsdLocal = {
+        .size = sizeof(ModelMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    };
+
+    // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
+    sg_shader_uniform_block_desc fsdGlobal = {
+        .size = sizeof(vec2),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
+        }
+    };
+
+    sg_shader_uniform_block_desc fsdLocal = {
+        .size = sizeof(s32),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
+        }
+    };
+
+    sg_shader_desc tsd = {
+        .vs.uniform_blocks[0] = vsdGlobal,
+        .vs.uniform_blocks[1] = vsdLocal,
+        .vs.source = vert,
+        .fs.uniform_blocks[0] = fsdGlobal,
+        .fs.uniform_blocks[1] = fsdLocal,
+        .fs.source = frag
+    };
+    sg_shader terrainShader = sg_make_shader(&tsd);
+
+    free(vert);
+    free(frag);
+
+    sg_pipeline_desc pd = {
+        .shader = terrainShader,
+        .layout = {
+            .attrs = {
+                [0].format = SG_VERTEXFORMAT_FLOAT3,
+                [1].format = SG_VERTEXFORMAT_USHORT2N
+            }
+        },
+        .index_type = SG_INDEXTYPE_UINT32,
+        .depth = {
+            .compare = SG_COMPAREFUNC_LESS_EQUAL,
+            .write_enabled = true
+        },
+        .cull_mode = SG_CULLMODE_NONE
+    };
+    sg_pipeline pip = sg_make_pipeline(&pd);
+
+    u32 elementCount;
+    sg_bindings bind = createHexmapBindings(&elementCount);
+
+    for (int i = 0; i < it->count; i++) {
+        ecs_set(it->world, it->entities[i], Pipeline, {pip});
+        ecs_set(it->world, it->entities[i], Binding, {.binding = bind, .elements = elementCount});
+        ecs_set(it->world, it->entities[i], QueryDesc, {
+            .desc.filter.terms = {{
+                .id = ecs_id(Plane), .inout = EcsIn
+            }}
+        });
+
+        u32 visibilityRadius = rd[i].radius;
+        u32 visibilityDiameter = (visibilityRadius * 2) - 1;
+        u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
+
+        u32 chunkBufferCellCount = (bc_chunkSize * bc_chunkSize) + (2 * bc_chunkSize) + 1;
+        size_t bufferSize = chunkBufferCellCount * renderedChunkCount * sizeof(bc_CellData);
+
+        GLuint terrainBuffer;
+        glGenBuffers(1, &terrainBuffer);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrainBuffer);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, bufferSize, NULL, GL_DYNAMIC_DRAW);
+
+        ecs_set(it->world, it->entities[i], TerrainBuffer, {
+            .gluint = terrainBuffer,
+            .renderedChunkRadius = visibilityRadius,
+            .renderedChunkCount = renderedChunkCount,
+            .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
+                .loadedChunks = calloc(renderedChunkCount, sizeof(u32)),
+                .chunkBufferCellCount = chunkBufferCellCount,
+                .data = malloc(bufferSize)
+        });
+    }
+
+    sg_reset_state_cache();
+}
+
+void DrawPipelineHexTerrain(ecs_iter_t *it) {
+    Pipeline *pips = ecs_field(it, Pipeline, 1);
+    Binding *binds = ecs_field(it, Binding, 2);
+    ModelQuery *queries = ecs_field(it, ModelQuery, 3);
+    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 4);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, 5);
+    Mouse *mouse = ecs_field(it, Mouse, 6);
+    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, 7);
+    HoveredCell *hovered = ecs_field(it, HoveredCell, 8);
+
+    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_apply_pipeline(pips[i].pipeline);
+        sg_apply_bindings(&binds[i].binding);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(mouse[i]));
+
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
+
+        ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Plane *planes = ecs_field(&mit, Plane, 1);
+
+            for (int m = 0; m < mit.count; m++) {
+                // TODO: correctly determine center chunk from camera focus
+                u32 centerChunk = bc_getChunkIndexByWorldPosition(planes[i].chunkMap, 0.0f, 0.0f);
+                updateTerrainVisibleChunks(planes[i].chunkMap, &terrainBuffers[i], centerChunk);
+
+                htw_ChunkMap *cm = planes[i].chunkMap;
+                for (int c = 0; c < cm->chunkCountX * cm->chunkCountY; c++) {
+                    u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
+                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
+
+                    static float chunkX, chunkY;
+                    htw_geo_getChunkRootPosition(cm, chunkIndex, &chunkX, &chunkY);
+                    vec3 chunkPos = {{chunkX, chunkY, 0.0}};
+
+                    size_t range = terrainBuffers[i].chunkBufferCellCount * sizeof(bc_CellData);
+                    size_t offset = c * range;
+                    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
+
+                    //if (glGetError()) printf("%x\n", glGetError());
+
+                    if (wraps != NULL) {
+                        bc_drawWrapInstances(0, binds[i].elements, 1, 1, chunkPos, wraps->offsets);
+                    } else {
+                        mat4x4 model;
+                        mat4x4SetTranslation(model, chunkPos);
+                        sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+                        sg_draw(0, binds[i].elements, 1);
+                    }
+                }
+            }
+        }
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
+        glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
+    }
+}
+
+void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
+    ECS_MODULE(world, BasalticSystemsViewTerrain);
+
+    ECS_IMPORT(world, BasalticComponentsView);
+    ECS_IMPORT(world, BasalticComponentsPlanes);
+
+    ECS_SYSTEM(world, SetupPipelineHexTerrain, EcsOnStart,
+               [in] RenderDistance($),
+               [out] !Pipeline,
+               [out] !Binding,
+               [out] !QueryDesc,
+               [out] !TerrainBuffer,
+               [none] basaltic.components.view.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
+               [in] Pipeline,
+               [in] Binding,
+               [in] ModelQuery,
+               [in] TerrainBuffer,
+               [in] PVMatrix($),
+               [in] Mouse($),
+               [in] FeedbackBuffer($),
+               [out] HoveredCell($),
+               [none] ModelWorld($),
+               [none] basaltic.components.view.TerrainRender,
+    );
+
+    GLuint feedbackBuffer;
+    glGenBuffers(1, &feedbackBuffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(HoveredCell), NULL, GL_DYNAMIC_READ);
+
+    sg_reset_state_cache();
+
+    ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
+
+    ecs_entity_t terrainDraw = ecs_new_id(world);
+    ecs_add(world, terrainDraw, TerrainRender);
 }
