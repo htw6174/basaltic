@@ -17,7 +17,6 @@
 #include "sokol/sokol_log.h"
 #include "sokol/sokol_gfx.h"
 
-// TODO: add 'guard' value to ensure valid state before being used? This is only used in my core engine, so may be unnecessary
 typedef struct {
     ecs_world_t *ecsWorld;
     // TODO: change the scope of render context to be much smaller or remove entirely
@@ -82,6 +81,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     //bc_updateRenderContextWithWorldParams(vc->rc, world);
     //bc_updateRenderContextWithUiState(vc.rc, wc, vc.ui);
     //bc_renderFrame(vc.rc, world);
+    // TODO: if model is running, wait on lock semaphore before rendering (at least for model-reading pipelines)
     ecs_progress(vc.ecsWorld, 0.0f);
     // TODO: return elapsed time in ms
     return 0;
@@ -90,6 +90,12 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
 void bc_view_onModelStart(bc_ModelData *model) {
     ecs_singleton_set(vc.ecsWorld, ModelWorld, {model->world->ecsWorld});
     ecs_singleton_set(vc.ecsWorld, FocusPlane, {model->world->centralPlane});
+
+    // TEST: ensure that import order hasn't caused mismatched component IDs
+    ecs_entity_t modelPlaneId = ecs_lookup_fullpath(model->world->ecsWorld, "basaltic.components.planes.Plane");
+    ecs_entity_t viewPlaneId = ecs_lookup_fullpath(vc.ecsWorld, "basaltic.components.planes.Plane"); //ecs_id(Plane);
+    assert(modelPlaneId == viewPlaneId);
+
     bc_setCameraWrapLimits(vc.ecsWorld);
 }
 
@@ -107,5 +113,5 @@ void bc_view_teardownEditor() {
 }
 
 void bc_view_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, bc_CommandBuffer inputBuffer) {
-    bc_drawEditor(si, model, inputBuffer, &vc.rc, vc.ui);
+    bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, &vc.rc, vc.ui);
 }

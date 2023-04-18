@@ -82,6 +82,7 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     translateCamera(world, camDelta);
 }
 
+// TODO: should put all of this in an observer of focusplane changes
 void bc_setCameraWrapLimits(ecs_world_t *world) {
     ecs_world_t *modelWorld = ecs_singleton_get(world, ModelWorld)->world;
     ecs_entity_t focus = ecs_singleton_get(world, FocusPlane)->entity;
@@ -90,6 +91,22 @@ void bc_setCameraWrapLimits(ecs_world_t *world) {
         .x = cm->mapWidth / 2,
         .y = cm->mapHeight / 2
     });
+    {
+        float x00, y00;
+        htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){-cm->mapWidth, -cm->mapHeight}, &x00, &y00);
+        float x10 = htw_geo_getHexPositionX(0, -cm->mapHeight);
+        float x01 = htw_geo_getHexPositionX(-cm->mapWidth, 0);
+        float x11 = 0.0;
+        float y10 = y00;
+        float y01 = 0.0;
+        float y11 = 0.0;
+        ecs_singleton_set(world, WrapInstanceOffsets, {
+            .offsets[0] = {{x00, y00, 0.0}},
+            .offsets[1] = {{x01, y01, 0.0}},
+            .offsets[2] = {{x10, y10, 0.0}},
+            .offsets[3] = {{x11, y11, 0.0}}
+        });
+    }
 }
 
 void bc_focusCameraOnCell(bc_UiState *ui, htw_geo_GridCoord cellCoord) {

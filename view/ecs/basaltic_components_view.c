@@ -9,20 +9,25 @@ ECS_TAG_DECLARE(TerrainRender);
 void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticComponentsView);
 
+    // TODO: figure out correct way to create reflection data for custom primitive types used in other components
+    printf("%lu\n", ecs_id(ecs_i32_t));
+    ecs_primitive(world, {.entity = ecs_id(ecs_i32_t), .kind = EcsI32});
     //ECS_COMPONENT_DEFINE(world, u32);
     //ECS_COMPONENT_DEFINE(world, s32);
-    ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
-    ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
+    //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
+    //ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
 
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_COMPONENT_DEFINE(world, QueryDesc);
 
-    ECS_COMPONENT_DEFINE(world, Pointer);
+    ECS_META_COMPONENT(world, Pointer);
     ECS_COMPONENT_DEFINE(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);
+    ECS_COMPONENT_DEFINE(world, RenderDistance);
     ECS_META_COMPONENT(world, FocusPlane);
+    ECS_COMPONENT_DEFINE(world, HoveredCell);
 
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
@@ -32,6 +37,10 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Binding);
 
     ECS_TAG_DEFINE(world, TerrainRender);
+
+    ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
+    ECS_COMPONENT_DEFINE(world, FeedbackBuffer);
+    ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 
     //ecs_singleton_add(world, ModelWorld);
 
@@ -51,8 +60,11 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
 
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);
+    ecs_singleton_add(world, WrapInstanceOffsets);
 
+    ecs_singleton_set(world, RenderDistance, {.radius = 2});
     ecs_singleton_set(world, FocusPlane, {0});
+    ecs_singleton_set(world, HoveredCell, {0});
 
     // Global uniforms
     ecs_singleton_add(world, Mouse);

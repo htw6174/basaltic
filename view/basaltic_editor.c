@@ -12,6 +12,7 @@
 #include "basaltic_worldState.h"
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
+#include "basaltic_components_view.h"
 #include "basaltic_components.h"
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
@@ -47,7 +48,7 @@ void bc_teardownEditor(void) {
 }
 
 // TODO: untangle and replace everything to do with bc_GraphicsState
-void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, bc_RenderContext *rc, bc_UiState *ui)
+void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_RenderContext *rc, bc_UiState *ui)
 {
     igBegin("Options", NULL, 0);
 
@@ -63,6 +64,9 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     igValue_Float("Camera Distance", ui->cameraDistance, "%.3f");
     igValue_Float("Camera Pitch", ui->cameraPitch, "%.3f");
     igValue_Float("Camera Yaw", ui->cameraYaw, "%.3f");*/
+
+    const HoveredCell *hc = ecs_singleton_get(viewWorld, HoveredCell);
+    igValue_Uint("Hovered cell", hc->cellIndex);
 
     if (igButton("Generate world", (ImVec2){0, 0})) {
         bc_ModelSetupSettings newSetupSettings = {

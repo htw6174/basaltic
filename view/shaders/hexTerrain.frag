@@ -20,7 +20,7 @@ layout(early_fragment_tests) in;
 
 uniform vec2 mousePosition;
 
-layout(std430, binding = 1) buffer feedbackBuffer {
+layout(std430, binding = 0) buffer feedbackBuffer {
 	uint hoveredChunk;
 	uint hoveredCell;
 } FeedbackBuffer;
@@ -68,9 +68,9 @@ void main()
 
 	//float cliff = 1.0 - normal.z;
 	//vec3 surfaceColor = mix(in_color.rgb, cliffColor, cliff * cliff);
-	vec3 randColor = randColor(inout_cellIndex);
+	//vec3 randColor = randColor(inout_cellIndex);
 
-	vec3 litColor = randColor * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
+	vec3 litColor = inout_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 
 	//vec2 mouseNormalized = mousePos / WindowInfo.windowSize;
 	//litColor = vec3(mouseNormalized, 1.0 - (mouseDist / 10.0));
