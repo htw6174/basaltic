@@ -1,2 +1,2 @@
-target_sources(basaltic_view PRIVATE basaltic_components_view.c basaltic_systems_view.c)
+target_sources(basaltic_view PRIVATE basaltic_components_view.c basaltic_phases_view.c basaltic_systems_view.c)
 add_subdirectory(systems)

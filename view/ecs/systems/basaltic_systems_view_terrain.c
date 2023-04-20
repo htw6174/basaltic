@@ -1,5 +1,6 @@
 #include "basaltic_systems_view_terrain.h"
 #include "basaltic_components_view.h"
+#include "basaltic_phases_view.h"
 #include "components/basaltic_components_planes.h"
 #include "basaltic_worldState.h"
 #include "htw_core.h"
@@ -452,6 +453,9 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
     }
 
     for (int c = 0; c < terrain->renderedChunkCount; c++) {
+        static float chunkX, chunkY;
+        htw_geo_getChunkRootPosition(chunkMap, loadedChunks[c], &chunkX, &chunkY);
+        terrain->chunkPositions[c] = (vec3){{chunkX, chunkY, 0.0}};
         // TODO: only update chunk if freshly visible or has pending updates
         updateHexmapDataBuffer(chunkMap, terrain, loadedChunks[c], c);
     }
@@ -605,24 +609,47 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
             .renderedChunkRadius = visibilityRadius,
             .renderedChunkCount = renderedChunkCount,
             .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
-                .loadedChunks = calloc(renderedChunkCount, sizeof(u32)),
-                .chunkBufferCellCount = chunkBufferCellCount,
-                .data = malloc(bufferSize)
+            .loadedChunks = calloc(renderedChunkCount, sizeof(u32)),
+            .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
+            .chunkBufferCellCount = chunkBufferCellCount,
+            .data = malloc(bufferSize)
         });
     }
 
     sg_reset_state_cache();
 }
 
+void UpdateHexTerrainBuffers(ecs_iter_t *it) {
+    Binding *binds = ecs_field(it, Binding, 1);
+    ModelQuery *queries = ecs_field(it, ModelQuery, 2);
+    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 3);
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Plane *planes = ecs_field(&mit, Plane, 1);
+
+            for (int m = 0; m < mit.count; m++) {
+                htw_ChunkMap *cm = planes[m].chunkMap;
+
+                // TODO: correctly determine center chunk from camera focus
+                u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, 0.0f, 0.0f);
+                updateTerrainVisibleChunks(cm, &terrainBuffers[i], centerChunk);
+            }
+        }
+    }
+}
+
 void DrawPipelineHexTerrain(ecs_iter_t *it) {
     Pipeline *pips = ecs_field(it, Pipeline, 1);
     Binding *binds = ecs_field(it, Binding, 2);
-    ModelQuery *queries = ecs_field(it, ModelQuery, 3);
-    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 4);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 5);
-    Mouse *mouse = ecs_field(it, Mouse, 6);
-    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, 7);
-    HoveredCell *hovered = ecs_field(it, HoveredCell, 8);
+    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 3);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
+    Mouse *mouse = ecs_field(it, Mouse, 5);
+    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, 6);
+    HoveredCell *hovered = ecs_field(it, HoveredCell, 7);
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -634,40 +661,23 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
 
-        ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
-        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
-        while (ecs_query_next(&mit)) {
-            Plane *planes = ecs_field(&mit, Plane, 1);
+        for (int c = 0; c < terrainBuffers[i].renderedChunkCount; c++) {
+            u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
+            sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
 
-            for (int m = 0; m < mit.count; m++) {
-                // TODO: correctly determine center chunk from camera focus
-                u32 centerChunk = bc_getChunkIndexByWorldPosition(planes[i].chunkMap, 0.0f, 0.0f);
-                updateTerrainVisibleChunks(planes[i].chunkMap, &terrainBuffers[i], centerChunk);
+            size_t range = terrainBuffers[i].chunkBufferCellCount * sizeof(bc_CellData);
+            size_t offset = c * range;
+            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
 
-                htw_ChunkMap *cm = planes[i].chunkMap;
-                for (int c = 0; c < cm->chunkCountX * cm->chunkCountY; c++) {
-                    u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
-                    sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
+            //if (glGetError()) printf("%x\n", glGetError());
 
-                    static float chunkX, chunkY;
-                    htw_geo_getChunkRootPosition(cm, chunkIndex, &chunkX, &chunkY);
-                    vec3 chunkPos = {{chunkX, chunkY, 0.0}};
-
-                    size_t range = terrainBuffers[i].chunkBufferCellCount * sizeof(bc_CellData);
-                    size_t offset = c * range;
-                    glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
-
-                    //if (glGetError()) printf("%x\n", glGetError());
-
-                    if (wraps != NULL) {
-                        bc_drawWrapInstances(0, binds[i].elements, 1, 1, chunkPos, wraps->offsets);
-                    } else {
-                        mat4x4 model;
-                        mat4x4SetTranslation(model, chunkPos);
-                        sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
-                        sg_draw(0, binds[i].elements, 1);
-                    }
-                }
+            if (wraps != NULL) {
+                bc_drawWrapInstances(0, binds[i].elements, 1, 1, terrainBuffers[i].chunkPositions[c], wraps->offsets);
+            } else {
+                mat4x4 model;
+                mat4x4SetTranslation(model, terrainBuffers[i].chunkPositions[c]);
+                sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+                sg_draw(0, binds[i].elements, 1);
             }
         }
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
@@ -679,6 +689,7 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticSystemsViewTerrain);
 
     ECS_IMPORT(world, BasalticComponentsView);
+    ECS_IMPORT(world, BasalticPhasesView);
     ECS_IMPORT(world, BasalticComponentsPlanes);
 
     ECS_SYSTEM(world, SetupPipelineHexTerrain, EcsOnStart,
@@ -690,10 +701,17 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
                [none] basaltic.components.view.TerrainRender,
     );
 
+    ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
+               [in] Binding,
+               [in] ModelQuery,
+               [inout] TerrainBuffer,
+               [none] ModelWorld($),
+               [none] basaltic.components.view.TerrainRender,
+    );
+
     ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
                [in] Pipeline,
                [in] Binding,
-               [in] ModelQuery,
                [in] TerrainBuffer,
                [in] PVMatrix($),
                [in] Mouse($),

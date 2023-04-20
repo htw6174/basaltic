@@ -4,6 +4,7 @@
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
 #include "basaltic_components_view.h"
+#include "basaltic_phases_view.h"
 #include "basaltic_systems_view.h"
 #include "flecs.h"
 
@@ -33,6 +34,7 @@ void bc_view_setup(bc_WindowContext* wc) {
 
     vc.ecsWorld = ecs_init();
     ECS_IMPORT(vc.ecsWorld, BasalticComponentsView);
+    ECS_IMPORT(vc.ecsWorld, BasalticPhasesView);
     ECS_IMPORT(vc.ecsWorld, BasalticSystemsView);
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
@@ -70,14 +72,16 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     bc_WorldState *world = model == NULL ? NULL : model->world;
 
     if (world != NULL) {
-        if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+        if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
             // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
-            // TODO: do rendering tasks that don't rely on model ECS access outside this lock
-            // TODO: get frame time here, pass instead of making flecs calculate it
-            ecs_progress(vc.ecsWorld, 0.0f);
+            // TODO: could be useful to pass elapsed model steps as delta time
+            ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
             SDL_SemPost(world->lock);
         }
     }
+
+    // TODO: get frame time here, pass instead of making flecs calculate it
+    ecs_progress(vc.ecsWorld, 0.0f);
 
     // TODO: return elapsed time in ms
     return 0;

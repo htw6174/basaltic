@@ -1,5 +1,6 @@
 #include "basaltic_systems_view.h"
 #include "basaltic_components_view.h"
+#include "basaltic_phases_view.h"
 #include "systems/basaltic_systems_view_terrain.h"
 #include "systems/basaltic_systems_view_debug.h"
 #include "htw_core.h"
@@ -72,6 +73,7 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticSystemsView);
 
     ECS_IMPORT(world, BasalticComponentsView);
+    ECS_IMPORT(world, BasalticPhasesView);
     ECS_IMPORT(world, BasalticSystemsViewDebug);
     ECS_IMPORT(world, BasalticSystemsViewTerrain);
 
@@ -87,7 +89,7 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
     );
 
     // After attaching to model, create queries in the model's ecs world
-    ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
+    ECS_SYSTEM(world, CreateModelQueries, OnModelChanged,
         [in] QueryDesc,
         [in] ModelWorld($),
         [out] !ModelQuery

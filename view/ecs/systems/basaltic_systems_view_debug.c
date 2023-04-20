@@ -1,5 +1,6 @@
 #include "basaltic_systems_view_debug.h"
 #include "basaltic_components_view.h"
+#include "basaltic_phases_view.h"
 #include "components/basaltic_components_planes.h"
 #include "ccVector.h"
 #include "sokol_gfx.h"
@@ -88,15 +89,12 @@ void InitDebugPipeline(ecs_iter_t *it) {
     }
 }
 
-void DrawDebugPipeline(ecs_iter_t *it) {
-    Pipeline *pips = ecs_field(it, Pipeline, 1);
-    Binding *binds = ecs_field(it, Binding, 2);
-    ModelQuery *queries = ecs_field(it, ModelQuery, 3);
-    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 4);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 5);
+void UpdateDebugPipelineBuffers(ecs_iter_t *it) {
+    Binding *binds = ecs_field(it, Binding, 1);
+    ModelQuery *queries = ecs_field(it, ModelQuery, 2);
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 3);
 
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
-    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
     for (int i = 0; i < it->count; i++) {
         DebugInstanceData *instanceData = instanceBuffers[i].data;
@@ -116,13 +114,24 @@ void DrawDebugPipeline(ecs_iter_t *it) {
                 instanceCount++;
             }
         }
+        binds[i].instances = instanceCount;
         sg_update_buffer(binds[i].binding.vertex_buffers[0], &(sg_range){.ptr = instanceData, .size = instanceBuffers[i].size});
+    }
+}
 
+void DrawDebugPipeline(ecs_iter_t *it) {
+    Pipeline *pips = ecs_field(it, Pipeline, 1);
+    Binding *binds = ecs_field(it, Binding, 2);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, 3);
+
+    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
+
+    for (int i = 0; i < it->count; i++) {
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&binds[i].binding);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
 
-        bc_drawWrapInstances(0, 24, instanceCount, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+        bc_drawWrapInstances(0, 24, binds[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
     }
 }
 
@@ -130,6 +139,7 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticSystemsViewDebug);
 
     ECS_IMPORT(world, BasalticComponentsView);
+    ECS_IMPORT(world, BasalticPhasesView);
 
     ECS_SYSTEM(world, InitDebugPipeline, EcsOnStart,
         [out] !Pipeline,
@@ -138,11 +148,17 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
         [none] basaltic.components.view.DebugRender
     );
 
+    ECS_SYSTEM(world, UpdateDebugPipelineBuffers, OnModelChanged,
+        [in] Binding,
+        [in] ModelQuery,
+        [out] InstanceBuffer,
+        [none] ModelWorld($),
+        [none] basaltic.components.view.DebugRender
+    )
+
     ECS_SYSTEM(world, DrawDebugPipeline, EcsOnUpdate,
         [in] Pipeline,
         [in] Binding,
-        [in] ModelQuery,
-        [in] InstanceBuffer,
         [in] PVMatrix($),
         [none] ModelWorld($),
         [none] WrapInstanceOffsets($),

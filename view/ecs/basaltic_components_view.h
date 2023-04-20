@@ -131,6 +131,7 @@ ECS_STRUCT(TerrainBuffer, {
     // length renderedChunkCount arrays that are compared to determine what chunks to reload each frame, and where to place them
     s32 *closestChunks;
     s32 *loadedChunks;
+    vec3 *chunkPositions;
     // Size of the data buffered for each draw call; length of data array is chunkBufferCellCount * renderedChunkCount
     // NOTE: this is greater than the number of cells in a chunk, also includes adjacent chunk data
     size_t chunkBufferCellCount;
