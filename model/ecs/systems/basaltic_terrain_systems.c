@@ -6,13 +6,18 @@
 #include "basaltic_worldGen.h"
 #include "khash.h"
 
+
+void TerrainHourlyStep(ecs_iter_t *it);
+void TerrainSeasonalStep(ecs_iter_t *it);
+void CleanEmptyRoots(ecs_iter_t *it);
+
 void updateVegetation(bc_CellData *cellData);
 
-void bc_terrainStep(ecs_iter_t *it) {
+void TerrainHourlyStep(ecs_iter_t *it) {
     // TODO: are there any terrain updates that need to be make hourly (per-step)? If not, just make day/week/month/year step systems
 }
 
-void bc_terrainSeasonalStep(ecs_iter_t *it) {
+void TerrainSeasonalStep(ecs_iter_t *it) {
     Plane *planes = ecs_field(it, Plane, 1);
 
     for (int i = 0; i < it->count; i++) {
@@ -29,7 +34,7 @@ void bc_terrainSeasonalStep(ecs_iter_t *it) {
     }
 }
 
-void bc_terrainCleanEmptyRoots(ecs_iter_t *it) {
+void CleanEmptyRoots(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         // Remove root if no more children
         u32 childCount = 0;
@@ -51,8 +56,8 @@ void BasalticSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, BasalticPhases);
     ECS_IMPORT(world, BasalticComponentsPlanes);
 
-    ECS_SYSTEM(world, bc_terrainSeasonalStep, AdvanceHour, Plane);
-    ECS_SYSTEM(world, bc_terrainCleanEmptyRoots, Cleanup, basaltic.components.planes.CellRoot);
+    ECS_SYSTEM(world, TerrainSeasonalStep, AdvanceHour, Plane);
+    ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, basaltic.components.planes.CellRoot);
 }
 
 void updateVegetation(bc_CellData *cellData) {

@@ -1,1 +1,1 @@
-target_sources(basaltic_model PRIVATE basaltic_terrain_systems.c)
+target_sources(basaltic_model PRIVATE basaltic_terrain_systems.c basaltic_character_systems.c)

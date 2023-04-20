@@ -68,12 +68,17 @@ void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool
 u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer) {
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     bc_WorldState *world = model == NULL ? NULL : model->world;
-    // TODO
-    //bc_updateRenderContextWithWorldParams(vc->rc, world);
-    //bc_updateRenderContextWithUiState(vc.rc, wc, vc.ui);
-    //bc_renderFrame(vc.rc, world);
-    // TODO: if model is running, wait on lock semaphore before rendering (at least for model-reading pipelines)
-    ecs_progress(vc.ecsWorld, 0.0f);
+
+    if (world != NULL) {
+        if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+            // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
+            // TODO: do rendering tasks that don't rely on model ECS access outside this lock
+            // TODO: get frame time here, pass instead of making flecs calculate it
+            ecs_progress(vc.ecsWorld, 0.0f);
+            SDL_SemPost(world->lock);
+        }
+    }
+
     // TODO: return elapsed time in ms
     return 0;
 }

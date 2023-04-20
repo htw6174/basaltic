@@ -1,6 +1,7 @@
 #include "basaltic_systems_view.h"
 #include "basaltic_components_view.h"
 #include "systems/basaltic_systems_view_terrain.h"
+#include "systems/basaltic_systems_view_debug.h"
 #include "htw_core.h"
 #include "sokol_gfx.h"
 
@@ -71,6 +72,7 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticSystemsView);
 
     ECS_IMPORT(world, BasalticComponentsView);
+    ECS_IMPORT(world, BasalticSystemsViewDebug);
     ECS_IMPORT(world, BasalticSystemsViewTerrain);
 
     // char *path = ecs_get_fullpath(world, TerrainRender);

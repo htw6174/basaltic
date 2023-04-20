@@ -108,9 +108,15 @@ ECS_STRUCT(Binding, {
 });
 
 extern ECS_TAG_DECLARE(TerrainRender);
+extern ECS_TAG_DECLARE(DebugRender);
 
 ECS_STRUCT(WrapInstanceOffsets, {
     vec3 offsets[4];
+});
+
+ECS_STRUCT(InstanceBuffer, {
+    size_t size;
+    void *data;
 });
 
 ECS_STRUCT(FeedbackBuffer, {

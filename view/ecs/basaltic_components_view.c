@@ -5,6 +5,7 @@ ECS_COMPONENT_DECLARE(u32);
 ECS_COMPONENT_DECLARE(s32);
 
 ECS_TAG_DECLARE(TerrainRender);
+ECS_TAG_DECLARE(DebugRender);
 
 void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticComponentsView);
@@ -37,8 +38,10 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Binding);
 
     ECS_TAG_DEFINE(world, TerrainRender);
+    ECS_TAG_DEFINE(world, DebugRender);
 
     ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
+    ECS_COMPONENT_DEFINE(world, InstanceBuffer);
     ECS_COMPONENT_DEFINE(world, FeedbackBuffer);
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 

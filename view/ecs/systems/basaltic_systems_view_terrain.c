@@ -700,6 +700,7 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
                [in] FeedbackBuffer($),
                [out] HoveredCell($),
                [none] ModelWorld($),
+               [none] WrapInstanceOffsets($),
                [none] basaltic.components.view.TerrainRender,
     );
 

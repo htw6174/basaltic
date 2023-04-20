@@ -1,1 +1,1 @@
-target_sources(basaltic_view PRIVATE basaltic_systems_view_terrain.c)
+target_sources(basaltic_view PRIVATE basaltic_systems_view_terrain.c basaltic_systems_view_debug.c)
