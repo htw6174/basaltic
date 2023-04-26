@@ -42,16 +42,6 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
     ECS_IMPORT(newWorld->ecsWorld, BasalticComponents);
     ECS_IMPORT(newWorld->ecsWorld, BasalticSystems);
-#ifndef _WIN32
-// TODO: create a proper toggle for this in build settings
-#ifdef FLECS_REST
-    printf("Initializing flecs REST API\n");
-    ecs_singleton_set(newWorld->ecsWorld, EcsRest, {0});
-    //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
-    FlecsMonitorImport(newWorld->ecsWorld);
-    ecs_set_scope(newWorld->ecsWorld, 0);
-#endif
-#endif
 
     htw_ChunkMap *cm = bc_createTerrain(chunkCountX, chunkCountY);
     newWorld->centralPlane = ecs_set(newWorld->ecsWorld, 0, Plane, {cm});
@@ -86,6 +76,9 @@ int bc_initializeWorldState(bc_WorldState *world) {
             //{ecs_pair(IsOn, ecs_id(bc_TerrainMap))}
         }
     });
+
+    // Progress single step to run EcsOnStart systems
+    doWorldStep(world);
 
     return 0;
 }

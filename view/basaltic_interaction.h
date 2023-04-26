@@ -8,7 +8,7 @@
 #include "basaltic_uiState.h"
 #include "flecs.h"
 
-void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard);
+void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard);
 void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard);
 
 void bc_setCameraWrapLimits(ecs_world_t *world);

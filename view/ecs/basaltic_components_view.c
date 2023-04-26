@@ -1,8 +1,12 @@
 #define BASALTIC_VIEW_IMPL
 #include "basaltic_components_view.h"
 
-ECS_COMPONENT_DECLARE(u32);
 ECS_COMPONENT_DECLARE(s32);
+ECS_COMPONENT_DECLARE(vec3);
+
+ECS_COMPONENT_DECLARE(Scale);
+
+ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
@@ -10,25 +14,37 @@ ECS_TAG_DECLARE(DebugRender);
 void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticComponentsView);
 
-    // TODO: figure out correct way to create reflection data for custom primitive types used in other components
-    //printf("%lu\n", ecs_id(ecs_i32_t));
-    //ecs_primitive(world, {.entity = ecs_id(ecs_i32_t), .kind = EcsI32});
-    //ECS_COMPONENT_DEFINE(world, u32);
-    //ECS_COMPONENT_DEFINE(world, s32);
+    // Creating meta info for custom primitive types:
+    // 1. Declare and Define a component for the type
+    // 2. Use ecs_primitive to create meta info
+    ECS_COMPONENT_DEFINE(world, s32);
+    ECS_COMPONENT_DEFINE(world, vec3);
+
+    ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
+    // NOTE: because Flecs also happens to use the name u32 for uint32_t prims, I don't need to create reflection data for it
     //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
-    //ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
+    ecs_struct(world, {.entity = ecs_id(vec3), .members = {
+        [0] = {.name = "x", .type = ecs_id(ecs_f32_t)},
+        [1] = {.name = "y", .type = ecs_id(ecs_f32_t)},
+        [2] = {.name = "z", .type = ecs_id(ecs_f32_t)},
+    }});
+
+    // TODO: figure out how to re-use vec3's struct_desc for Scale
+    ECS_COMPONENT_DEFINE(world, Scale);
 
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_COMPONENT_DEFINE(world, QueryDesc);
+    ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
-    ECS_COMPONENT_DEFINE(world, Pointer);
-    ECS_COMPONENT_DEFINE(world, Camera);
+    ECS_META_COMPONENT(world, Pointer);
+    ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);
-    ECS_COMPONENT_DEFINE(world, RenderDistance);
+    ECS_META_COMPONENT(world, RenderDistance);
     ECS_META_COMPONENT(world, FocusPlane);
-    ECS_COMPONENT_DEFINE(world, HoveredCell);
+    ECS_META_COMPONENT(world, HoveredCell);
+    ECS_META_COMPONENT(world, SelectedCell);
 
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
@@ -46,6 +62,7 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 
     //ecs_singleton_add(world, ModelWorld);
+    ecs_singleton_set(world, ModelLastRenderedStep, {0});
 
     ecs_singleton_set(world, Pointer, {0});
 
@@ -61,6 +78,9 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
         .rotation = 1.5f
     });
 
+    // Global scale for world rendering
+    ecs_singleton_set(world, Scale, {{1.0, 1.0, 0.2}});
+
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);
     ecs_singleton_add(world, WrapInstanceOffsets);
@@ -68,8 +88,10 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ecs_singleton_set(world, RenderDistance, {.radius = 2});
     ecs_singleton_set(world, FocusPlane, {0});
     ecs_singleton_set(world, HoveredCell, {0});
+    ecs_singleton_set(world, SelectedCell, {0});
 
     // Global uniforms
+    ecs_singleton_add(world, Pointer);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, PVMatrix);
 

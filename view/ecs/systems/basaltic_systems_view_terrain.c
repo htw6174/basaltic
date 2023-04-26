@@ -419,14 +419,14 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
     // compare closest chunks to currently loaded chunks
     for (int i = 0; i < terrain->renderedChunkCount; i++) {
         s32 loadedTarget = loadedChunks[i];
-        u8 foundMatch = 0;
+        bool foundMatch = false;
         for (int k = 0; k < terrain->renderedChunkCount; k++) {
             u32 requiredTarget = closestChunks[k];
             if (requiredTarget != -1 && loadedTarget == requiredTarget) {
                 // found a position in a that already contains an element of b
                 // mark b[k] -1 so we know it doesn't need to be touched later
                 closestChunks[k] = -1;
-                foundMatch = 1;
+                foundMatch = true;
                 break;
             }
         }
@@ -437,8 +437,8 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
     }
 
     // move all positive values from b into negative values of a
-    u32 ia = 0, ib = 0;
-    while (ia < terrain->renderedChunkCount) {
+    u32 ib = 0;
+    for (u32 ia = 0; ia < terrain->renderedChunkCount; ia++) {
         if (loadedChunks[ia] == -1) {
             // find next positive value in b
             while (1) {
@@ -449,7 +449,6 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
                 ib++;
             }
         }
-        ia++;
     }
 
     for (int c = 0; c < terrain->renderedChunkCount; c++) {
@@ -604,12 +603,18 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrainBuffer);
         glBufferData(GL_SHADER_STORAGE_BUFFER, bufferSize, NULL, GL_DYNAMIC_DRAW);
 
+        s32 *loadedChunks = calloc(renderedChunkCount, sizeof(u32));
+        // Initialize loaded chunks to those closest to the origin. TODO: this is related to an issue where initially filling loaded chunks takes several calls to updateTerrainVisibleChunks. This fixes the issue when renderedChunkCount == total chunk count
+        for (int c = 0; c < renderedChunkCount; c++) {
+            loadedChunks[c] = c;
+        }
+
         ecs_set(it->world, it->entities[i], TerrainBuffer, {
             .gluint = terrainBuffer,
             .renderedChunkRadius = visibilityRadius,
             .renderedChunkCount = renderedChunkCount,
             .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
-            .loadedChunks = calloc(renderedChunkCount, sizeof(u32)),
+            .loadedChunks = loadedChunks,
             .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
             .chunkBufferCellCount = chunkBufferCellCount,
             .data = malloc(bufferSize)

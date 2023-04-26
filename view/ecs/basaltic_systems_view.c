@@ -8,7 +8,16 @@
 
 // Unused; maybe have a more general input->uniform system?
 void UniformPointerToMouse(ecs_iter_t *it) {
+    Pointer *pointers = ecs_field(it, Pointer, 1);
+    const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
+    const Mouse *mouse = ecs_singleton_get(it->world, Mouse);
 
+    // TODO: need any special handling for multiple pointer inputs? For now just override with last pointer
+    for (int i = 0; i < it->count; i++) {
+        float x = pointers[i].x;
+        float y = w->y - pointers[i].y;
+        ecs_singleton_set(it->world, Mouse, {x, y});
+    }
 }
 
 void UniformCameraToPVMatrix(ecs_iter_t *it) {
@@ -81,6 +90,12 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
     // printf("%s\n", path);
     // assert(ecs_lookup_fullpath(world, path) == ecs_id(TerrainRender));
     // ecs_os_free(path);
+
+    ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
+        [in] Pointer,
+        [in] WindowSize($),
+        [out] Mouse($)
+    );
 
     ECS_SYSTEM(world, UniformCameraToPVMatrix, EcsPreUpdate,
         [in] Camera($),

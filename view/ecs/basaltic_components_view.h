@@ -13,8 +13,11 @@
 #endif
 
 /* Common types */
-//extern ECS_COMPONENT_DECLARE(u32);
-//extern ECS_COMPONENT_DECLARE(s32);
+extern ECS_COMPONENT_DECLARE(s32);
+extern ECS_COMPONENT_DECLARE(vec3);
+
+typedef vec3 Scale;
+extern ECS_COMPONENT_DECLARE(Scale);
 
 
 
@@ -31,6 +34,9 @@ ECS_STRUCT(ModelQuery, {
 ECS_STRUCT(QueryDesc, {
     ecs_query_desc_t desc;
 });
+
+typedef u64 ModelLastRenderedStep;
+extern ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 
 
@@ -71,6 +77,11 @@ ECS_STRUCT(FocusPlane, {
 });
 
 ECS_STRUCT(HoveredCell, {
+    u32 chunkIndex;
+    u32 cellIndex;
+});
+
+ECS_STRUCT(SelectedCell, {
     u32 chunkIndex;
     u32 cellIndex;
 });

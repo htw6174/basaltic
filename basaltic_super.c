@@ -110,7 +110,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         }
 
         bool passthroughMouse = !bc_editorWantCaptureMouse(&editorEngineContext);
-        bool passthroughKeyboard = !bc_editorWantCaptureMouse(&editorEngineContext);
+        bool passthroughKeyboard = !bc_editorWantCaptureKeyboard(&editorEngineContext);
         SDL_Event e;
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {

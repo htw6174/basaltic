@@ -59,8 +59,7 @@ void main()
 	vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
 
 	vec2 windowPos = gl_FragCoord.xy;
-	vec2 mousePos = mousePosition * vec2(1.0, -1.0) + vec2(0.0, 720.0);
-	float mouseDist = distance(windowPos, mousePos);
+	float mouseDist = distance(windowPos, mousePosition);
 	if (mouseDist < 1.0) {
 		FeedbackBuffer.hoveredChunk = chunkIndex;
 		FeedbackBuffer.hoveredCell = inout_cellIndex;
@@ -72,8 +71,7 @@ void main()
 
 	vec3 litColor = inout_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 
-	//vec2 mouseNormalized = mousePos / WindowInfo.windowSize;
-	//litColor = vec3(mouseNormalized, 1.0 - (mouseDist / 10.0));
+	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
 
 	out_color = vec4(litColor, 1.0);
 	//out_color = inout_color;

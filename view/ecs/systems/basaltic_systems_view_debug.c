@@ -81,9 +81,10 @@ void InitDebugPipeline(ecs_iter_t *it) {
         ecs_set(it->world, it->entities[i], Pipeline, {pip});
         ecs_set(it->world, it->entities[i], Binding, {.binding = bind, .instances = DEBUG_INSTANCE_COUNT});
         ecs_set(it->world, it->entities[i], QueryDesc, {
-            .desc.filter.terms = {{
-                .id = ecs_id(Position), .inout = EcsIn
-            }}
+            .desc.filter.terms = {
+                {.id = ecs_id(Position), .inout = EcsIn},
+                {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
+            }
         });
         ecs_set(it->world, it->entities[i], InstanceBuffer, {.size = instanceDataSize, .data = instanceData});
     }
@@ -94,6 +95,7 @@ void UpdateDebugPipelineBuffers(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 2);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 3);
 
+    const vec3 *scale = ecs_singleton_get(it->world, Scale);
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
     for (int i = 0; i < it->count; i++) {
@@ -103,11 +105,16 @@ void UpdateDebugPipelineBuffers(ecs_iter_t *it) {
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
         while (ecs_query_next(&mit)) {
             Position *positions = ecs_field(&mit, Position, 1);
+            ecs_entity_t tmEnt = ecs_field_id(&mit, 2);
+            htw_ChunkMap *cm = ecs_get(mit.world, ecs_pair_second(mit.world, tmEnt), Plane)->chunkMap;
             for (int m = 0; m < mit.count; m++) {
+                u32 chunkIndex, cellIndex;
+                htw_geo_gridCoordinateToChunkAndCellIndex(cm, positions[m], &chunkIndex, &cellIndex);
+                s32 elevation = bc_getCellByIndex(cm, chunkIndex, cellIndex)->height;
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(positions[m], &posX, &posY);
                 instanceData[instanceCount] = (DebugInstanceData){
-                    .position = {{posX, posY, 0.0, 1.0}},
+                    .position = {.xyz = vec3MultiplyVector((vec3){{posX, posY, elevation}}, *scale), .__w = 1.0},
                     .color = {{1.0, 0.0, 1.0, 1.0}},
                     .scale = 1.0
                 };
@@ -152,7 +159,8 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
         [in] Binding,
         [in] ModelQuery,
         [out] InstanceBuffer,
-        [none] ModelWorld($),
+        [in] Scale($),
+        [in] ModelWorld($),
         [none] basaltic.components.view.DebugRender
     )
 

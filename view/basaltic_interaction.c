@@ -11,16 +11,16 @@
 
 static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 static void translateCamera(ecs_world_t *world, Camera camDelta);
-static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex);
+static void selectCell(ecs_world_t *world);
 static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
 // TODO: add seperate input handling for each interfaceMode setting
-void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
+void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            selectCell(ui, ui->hoveredChunkIndex, ui->hoveredCellIndex);
+            selectCell(world);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
             advanceStep(commandBuffer);
@@ -53,9 +53,9 @@ void bc_processInputEvent(bc_UiState *ui, bc_CommandBuffer commandBuffer, SDL_Ev
 void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
     if (useMouse) {
         // get mouse state
-        int x, y;
+        s32 x, y;
         Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
-        ecs_singleton_set(world, Mouse, {x, y});
+        ecs_singleton_set(world, Pointer, {x, y});
     }
 
     // camera
@@ -168,9 +168,9 @@ static void translateCamera(ecs_world_t *world, Camera camDelta) {
     });
 }
 
-static void selectCell(bc_UiState *ui, u32 chunkIndex, u32 cellIndex) {
-    ui->selectedChunkIndex = chunkIndex;
-    ui->selectedCellIndex = cellIndex;
+static void selectCell(ecs_world_t *world) {
+    const HoveredCell *hovered = ecs_singleton_get(world, HoveredCell);
+    ecs_singleton_set(world, SelectedCell, {.chunkIndex = hovered->chunkIndex, .cellIndex = hovered->cellIndex});
 }
 
 static void advanceStep(bc_CommandBuffer commandBuffer) {

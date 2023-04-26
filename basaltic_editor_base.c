@@ -45,7 +45,7 @@ bool bc_editorWantCaptureMouse(bc_EditorEngineContext *eec) {
 }
 
 bool bc_editorWantCaptureKeyboard(bc_EditorEngineContext *eec) {
-    return eec->isActive & igGetIO()->WantCaptureMouse;
+    return eec->isActive & igGetIO()->WantCaptureKeyboard;
 }
 
 void bc_handleEditorInputEvents(bc_EditorEngineContext *eec, SDL_Event *e) {

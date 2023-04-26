@@ -39,6 +39,17 @@ void bc_view_setup(bc_WindowContext* wc) {
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
+#ifndef _WIN32
+// TODO: create a proper toggle for this in build settings
+#ifdef FLECS_REST
+    printf("Initializing flecs REST API\n");
+    ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
+    //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
+    //FlecsMonitorImport(vc.ecsWorld);
+    ecs_set_scope(vc.ecsWorld, 0);
+#endif
+#endif
+
     vc.ui = bc_createUiState();
 }
 
@@ -60,7 +71,7 @@ void bc_view_endFrame(bc_WindowContext* wc) {
 }
 
 void bc_view_onInputEvent(bc_CommandBuffer inputBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
-    bc_processInputEvent(vc.ui, inputBuffer, e, useMouse, useKeyboard);
+    bc_processInputEvent(vc.ecsWorld, inputBuffer, e, useMouse, useKeyboard);
 }
 
 void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool useKeyboard) {
@@ -72,12 +83,15 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     bc_WorldState *world = model == NULL ? NULL : model->world;
 
     if (world != NULL) {
-        if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
-            // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
-            // TODO: could be useful to pass elapsed model steps as delta time
-            ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
-            SDL_SemPost(world->lock);
+        if (*ecs_singleton_get(vc.ecsWorld, ModelLastRenderedStep) < world->step) {
+            if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
+                // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
+                // TODO: could be useful to pass elapsed model steps as delta time
+                ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
+                SDL_SemPost(world->lock);
+            }
         }
+        ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {world->step});
     }
 
     // TODO: get frame time here, pass instead of making flecs calculate it
@@ -97,6 +111,10 @@ void bc_view_onModelStart(bc_ModelData *model) {
     assert(modelPlaneId == viewPlaneId);
 
     bc_setCameraWrapLimits(vc.ecsWorld);
+
+    ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
+    // NOTE: model advances to step 1 before it becomes 'ready' (i.e. before onModelStart is called). Setting the last rendered step to 0 tells the view that model data is out of date on the next frame after model start
+    ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {0});
 }
 
 void bc_view_onModelStop() {
