@@ -51,7 +51,8 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e);
 // Returns number of entities in hierarchy, including the root
-u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus);
+u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen);
+void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
@@ -71,7 +72,7 @@ void bc_setupEditor(void) {
         .worldChunkHeight = 3,
     };
     viewInspector = (EcsInspectionContext){.worldName = "View"};
-    modelInspector = (EcsInspectionContext){.worldName = "Model"};
+    modelInspector = (EcsInspectionContext){.worldName = "Model", .queryExpr = "Position"};
 }
 
 void bc_teardownEditor(void) {
@@ -206,7 +207,7 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
         ecs_entity_t selectedRoot = plane_GetRootEntity(world->ecsWorld, focusedPlane, selectedCellCoord);
         if (selectedRoot != 0) {
             if (ecs_is_valid(world->ecsWorld, selectedRoot)) {
-                entityCountHere += hierarchyInspector(world->ecsWorld, selectedRoot, &modelInspector.focusEntity);
+                entityCountHere += hierarchyInspector(world->ecsWorld, selectedRoot, &modelInspector.focusEntity, true);
             }
         }
         igValue_Uint("Entities here", entityCountHere);
@@ -274,6 +275,7 @@ void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic) {
 
     // TODO: Add pages and page navigation. Only show results n..(n+m). Put in a scroll area if list too long
     if (ic->query != NULL) {
+        igPushID_Str("Query Results");
         u32 resultsCount = 0;
         ecs_iter_t it = ecs_query_iter(world, ic->query);
         while (ecs_query_next(&it)) {
@@ -283,11 +285,12 @@ void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic) {
                 resultsCount++;
                 if (resultsCount < QUERY_PAGE_LENGTH) {
                     // TODO: instead of hierarchy inspector, use query fields to display table of filter term components
-                    hierarchyInspector(world, it.entities[i], &ic->focusEntity);
+                    hierarchyInspector(world, it.entities[i], &ic->focusEntity, false);
                 }
             }
         }
         igValue_Uint("Results", resultsCount);
+        igPopID();
     }
 }
 
@@ -296,20 +299,65 @@ void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e) {
         return;
     }
     const char *name = ecs_get_fullpath(world, e);
+    const ecs_type_t *type = ecs_get_type(world, e);
     igText(name);
 
-    igText("Entity Type: ");
-    // NOTE: must be freed by the application
-    char* typeStr = ecs_type_str(world, ecs_get_type(world, e));
-    igTextWrapped(typeStr);
-    ecs_os_free(typeStr);
+    // igText("Entity Type: ");
+    // // NOTE: must be freed by the application
+    // char* typeStr = ecs_type_str(world, type);
+    // igTextWrapped(typeStr);
+    // ecs_os_free(typeStr);
+
     // TODO: use reflection info to make inspector for components
+    for (int i = 0; i < type->count; i++) {
+        ecs_id_t id = type->array[i];
+        if (ecs_id_is_pair(id)) {
+            // TODO: handle relationships
+            ecs_id_t first = ecs_pair_first(world, id);
+            ecs_id_t second = ecs_pair_second(world, id);
+            const char *relationshipName = ecs_get_name(world, first);
+            igText(relationshipName);
+            if (igIsItemHovered(0)) {
+                igSetTooltip(ecs_get_fullpath(world, first));
+            }
+            igSameLine(0, -1);
+            const char *targetName = ecs_get_fullpath(world, second);
+            igText(targetName);
+            if (igIsItemHovered(0)) {
+                igSetTooltip(ecs_get_fullpath(world, second));
+            }
+        } else {
+            componentInspector(world, e, id);
+
+            // if (ecs_has(world, id, EcsComponent)) {
+            //     void *component = ecs_get_mut_id(world, e, id);
+            //     ecs_meta_cursor_t cur = ecs_meta_cursor(world, id, component);
+            //     ecs_meta_push(&cur);
+            //     igText(ecs_meta_get_member(&cur));
+            //     ecs_meta_next(&cur);
+            //     igText(ecs_meta_get_member(&cur));
+            //     ecs_meta_pop(&cur);
+            // }
+
+            // // TODO: don't try to serialize if meta info isn't available
+            // char *expr = ecs_ptr_to_expr(world, id, component);
+            // if (expr != NULL) {
+            //     igText(expr);
+            //     ecs_os_free(expr);
+            // }
+        }
+    }
+
+    igSpacing();
+
+    // TODO: button to add component/tag/relationship, expose list as searchable dropdown
 }
 
-u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus) {
+u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen) {
     u32 count = 1;
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     // Highlight focused node
+    if (defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
     if (node == *focus) flags |= ImGuiTreeNodeFlags_Selected;
 
     ecs_iter_t children = ecs_children(world, node);
@@ -329,12 +377,37 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         children = ecs_children(world, node);
         while (ecs_children_next(&children)) {
             for (int i = 0; i < children.count; i++) {
-                count += hierarchyInspector(world, children.entities[i], focus);
+                count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
             }
         }
         igTreePop();
     }
     return count;
+}
+
+void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component) {
+    ImGuiTableFlags flags = ImGuiTableFlags_Borders;
+
+    const char *componentName = ecs_get_name(world, component);
+    igBeginTable(componentName, 1, flags, (ImVec2){0, 0}, 0);
+    igTableSetupColumn(componentName, ImGuiTableColumnFlags_NoSort, 0, 0);
+    igTableHeadersRow();
+    if (igIsItemHovered(0)) {
+        igSetTooltip(ecs_get_fullpath(world, component));
+    }
+
+    // Reflection info is stored as children of components
+    ecs_iter_t children = ecs_children(world, component);
+    while (ecs_children_next(&children)) {
+        for (int i = 0; i < children.count; i++) {
+            if (ecs_has(world, children.entities[i], EcsMember)) {
+                igTableNextRow(0, 0);
+                igTableSetColumnIndex(0);
+                igText(ecs_get_fullpath(world, ecs_get(world, children.entities[i], EcsMember)->type));
+            }
+        }
+    }
+    igEndTable();
 }
 
 void possessEntity(ecs_world_t *world, ecs_entity_t target) {
