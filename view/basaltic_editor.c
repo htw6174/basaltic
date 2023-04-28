@@ -22,11 +22,14 @@
 #include "cimgui_impl.h"
 
 #define MAX_QUERY_EXPR_LENGTH 1024
-#define QUERY_PAGE_LENGTH 20
 
 typedef struct {
     ecs_entity_t focusEntity;
-    ecs_query_t *query;
+    ecs_query_t *components;
+    ecs_query_t *tags;
+    ecs_query_t *query; // user defined query
+    s32 queryPageLength;
+    s32 queryPage;
     char queryExpr[MAX_QUERY_EXPR_LENGTH];
     char queryExprError[MAX_QUERY_EXPR_LENGTH];
     char worldName[256]; // For providing a unique scope to ImGui fields
@@ -49,10 +52,14 @@ static EcsInspectionContext modelInspector;
 /* ECS General-purpose */
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic);
-void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e);
+void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
 // Returns number of entities in hierarchy, including the root
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen);
+bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected);
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component);
+void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor);
+// If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value
+void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
@@ -71,8 +78,16 @@ void bc_setupEditor(void) {
         .worldChunkWidth = 3,
         .worldChunkHeight = 3,
     };
-    viewInspector = (EcsInspectionContext){.worldName = "View"};
-    modelInspector = (EcsInspectionContext){.worldName = "Model", .queryExpr = "Position"};
+    viewInspector = (EcsInspectionContext){
+        .worldName = "View",
+        .queryPageLength = 20,
+        .queryExpr = "Camera"
+    };
+    modelInspector = (EcsInspectionContext){
+        .worldName = "Model",
+        .queryPageLength = 20,
+        .queryExpr = "Position"
+    };
 }
 
 void bc_teardownEditor(void) {
@@ -232,22 +247,24 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
 
     ImVec2 avail;
     igGetContentRegionAvail(&avail);
-    if(!igBeginChild_Str("Query", (ImVec2){avail.x * 0.5, 0}, true, 0)) {
-        // Early out
-        igEndChild();
-        return;
+    if(igBeginChild_Str("Query", (ImVec2){avail.x * 0.5, 0}, true, ImGuiWindowFlags_MenuBar)) {
+        if (igBeginMenuBar()) {
+            igText("Custom Query");
+            igEndMenuBar();
+        }
+        ecsQueryInspector(world, ic);
     }
-    ecsQueryInspector(world, ic);
     igEndChild();
 
     igSameLine(0, -1);
 
-    if(!igBeginChild_Str("Entity Inspector", (ImVec2){0, 0}, true, 0)) {
-        // Early out
-        igEndChild();
-        return;
+    if(igBeginChild_Str("Entity Inspector", (ImVec2){0, 0}, true, ImGuiWindowFlags_MenuBar)) {
+        if (igBeginMenuBar()) {
+            igText("Entity Inspector");
+            igEndMenuBar();
+        }
+        ecsEntityInspector(world, ic);
     }
-    ecsEntityInspector(world, ic->focusEntity);
     igEndChild();
 
     igPopID();
@@ -268,36 +285,55 @@ void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             // TODO: figure out if there is a way to get detailed expression error information from Flecs
             strcpy(ic->queryExprError, "Error: invalid query expression");
         }
+        ic->queryPage = 0;
     }
     if (ic->queryExprError[0] != '\0') {
         igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, ic->queryExprError);
     }
+    igInputInt("Results per page", &ic->queryPageLength, 1, 1, 0);
+    ic->queryPageLength = max_int(ic->queryPageLength, 1);
 
-    // TODO: Add pages and page navigation. Only show results n..(n+m). Put in a scroll area if list too long
+    // TODO: Put in a scroll area if list too long
     if (ic->query != NULL) {
         igPushID_Str("Query Results");
         u32 resultsCount = 0;
+        u32 minDisplayed = ic->queryPageLength * ic->queryPage;
+        u32 maxDisplayed = minDisplayed + ic->queryPageLength;
         ecs_iter_t it = ecs_query_iter(world, ic->query);
         while (ecs_query_next(&it)) {
 
             for (int i = 0; i < it.count; i++) {
                 //resultsCount += hierarchyInspector(world, it.entities[i], ic);
-                resultsCount++;
-                if (resultsCount < QUERY_PAGE_LENGTH) {
+                if (resultsCount >= minDisplayed && resultsCount < maxDisplayed) {
                     // TODO: instead of hierarchy inspector, use query fields to display table of filter term components
                     hierarchyInspector(world, it.entities[i], &ic->focusEntity, false);
                 }
+                resultsCount++;
             }
         }
+        // TODO: after converting to table, add blank rows so other controls don't change position
         igValue_Uint("Results", resultsCount);
+        s32 pageCount = (s32)ceilf((float)resultsCount / ic->queryPageLength) - 1;
+        if (pageCount > 1) {
+            igSliderInt("Page", &ic->queryPage, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
+        }
+        ic->queryPage = min_int(ic->queryPage, pageCount);
         igPopID();
     }
 }
 
-void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e) {
+void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
+    ecs_entity_t e = ic->focusEntity;
     if(!ecs_is_valid(world, e)) {
         return;
     }
+    igPushItemWidth(-FLT_MIN);
+    if (igButton("Delete", (ImVec2){0, 0})) {
+        ecs_delete(world, e);
+        return;
+    }
+    igPopItemWidth();
+
     const char *name = ecs_get_fullpath(world, e);
     const ecs_type_t *type = ecs_get_type(world, e);
     igText(name);
@@ -308,11 +344,11 @@ void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e) {
     // igTextWrapped(typeStr);
     // ecs_os_free(typeStr);
 
-    // TODO: use reflection info to make inspector for components
+    // Current Components, Tags, Relationships
     for (int i = 0; i < type->count; i++) {
         ecs_id_t id = type->array[i];
         if (ecs_id_is_pair(id)) {
-            // TODO: handle relationships
+            // TODO: dedicated/better relationship inspector
             ecs_id_t first = ecs_pair_first(world, id);
             ecs_id_t second = ecs_pair_second(world, id);
             const char *relationshipName = ecs_get_name(world, first);
@@ -326,31 +362,39 @@ void ecsEntityInspector(ecs_world_t *world, ecs_entity_t e) {
             if (igIsItemHovered(0)) {
                 igSetTooltip(ecs_get_fullpath(world, second));
             }
-        } else {
+        } else if (ecs_has(world, id, EcsComponent)) {
             componentInspector(world, e, id);
-
-            // if (ecs_has(world, id, EcsComponent)) {
-            //     void *component = ecs_get_mut_id(world, e, id);
-            //     ecs_meta_cursor_t cur = ecs_meta_cursor(world, id, component);
-            //     ecs_meta_push(&cur);
-            //     igText(ecs_meta_get_member(&cur));
-            //     ecs_meta_next(&cur);
-            //     igText(ecs_meta_get_member(&cur));
-            //     ecs_meta_pop(&cur);
-            // }
-
-            // // TODO: don't try to serialize if meta info isn't available
-            // char *expr = ecs_ptr_to_expr(world, id, component);
-            // if (expr != NULL) {
-            //     igText(expr);
-            //     ecs_os_free(expr);
-            // }
+        } else {
+            // TODO: tag inspector
+            const char *tagName = ecs_get_name(world, id);
+            if (tagName == NULL) {
+                igText(ecs_get_fullpath(world, id));
+            } else {
+                igText(tagName);
+            }
         }
     }
 
     igSpacing();
 
-    // TODO: button to add component/tag/relationship, expose list as searchable dropdown
+    // Add new Component, Tag, or Relationship
+    static ecs_entity_t newComponent = 0;
+    if (igButton("Add Component", (ImVec2){0, 0})) {
+        if (ic->components == NULL) {
+            // create component query
+            ic->components = ecs_query_new(world, "EcsComponent");
+        }
+        igOpenPopup_Str("add_component_popup", 0);
+        newComponent = 0;
+    }
+    if (igBeginPopup("add_component_popup", 0)) {
+        if (entitySelector(world, ic->components, &newComponent)) {
+            if (newComponent != 0) {
+                ecs_add_id(world, e, newComponent);
+            }
+        }
+        igEndPopup();
+    }
 }
 
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen) {
@@ -385,30 +429,218 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     return count;
 }
 
-void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component) {
-    ImGuiTableFlags flags = ImGuiTableFlags_Borders;
+bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected) {
+    bool selectionMade = false;
+    // Filter by name
+    static ImGuiTextFilter filter;
+    ImGuiTextFilter_Draw(&filter, "Filter", 0);
 
+    // List results, click to make active in this scope
+    // TODO: better way to set size?
+    igBeginChild_Str("Entity Selector", (ImVec2){200, 250}, true, ImGuiWindowFlags_HorizontalScrollbar);
+    ecs_iter_t it = ecs_query_iter(world, query);
+    while (ecs_query_next(&it)) {
+        for (int i = 0; i < it.count; i++) {
+            ecs_entity_t e = it.entities[i];
+            const char *name = ecs_get_name(world, e);
+            if (ImGuiTextFilter_PassFilter(&filter, name, NULL)) {
+                // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Use flags to disable this behavior
+                if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
+                    *selected = e;
+                }
+            }
+        }
+    }
+    igEndChild();
+
+    igBeginDisabled(*selected == 0);
+    if (igButton("Select", (ImVec2){0, 0})) {
+        igCloseCurrentPopup();
+        selectionMade = true;
+    }
+    igSameLine(0, -1);
+    igEndDisabled();
+    if (igButton("Cancel", (ImVec2){0, 0})) {
+        igCloseCurrentPopup();
+        selectionMade = false;
+    }
+
+    return selectionMade;
+}
+
+void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component) {
+
+    igBeginGroup();
     const char *componentName = ecs_get_name(world, component);
-    igBeginTable(componentName, 1, flags, (ImVec2){0, 0}, 0);
-    igTableSetupColumn(componentName, ImGuiTableColumnFlags_NoSort, 0, 0);
-    igTableHeadersRow();
+    igText(componentName);
     if (igIsItemHovered(0)) {
         igSetTooltip(ecs_get_fullpath(world, component));
     }
 
-    // Reflection info is stored as children of components
+    // early return if no meta info is available
+    if (!ecs_has(world, component, EcsMetaType)) {
+        igEndGroup();
+        return;
+    } else {
+        void *componentData = ecs_get_mut_id(world, e, component);
+        ecs_meta_cursor_t cur = ecs_meta_cursor(world, component, componentData);
+        ecsMetaInspector(world, &cur);
+    }
+    /*
+    igIndent(0);
+
+    ecs_meta_push(&cur);
+    // Reflection info is stored as children of Component entities
     ecs_iter_t children = ecs_children(world, component);
     while (ecs_children_next(&children)) {
         for (int i = 0; i < children.count; i++) {
             if (ecs_has(world, children.entities[i], EcsMember)) {
-                igTableNextRow(0, 0);
-                igTableSetColumnIndex(0);
-                igText(ecs_get_fullpath(world, ecs_get(world, children.entities[i], EcsMember)->type));
+                igPushID_Int(children.entities[i]);
+                ecs_entity_t type = ecs_get(world, children.entities[i], EcsMember)->type;
+                igText("%s (%s): ", ecs_get_name(world, children.entities[i]), ecs_get_name(world, type));
+                igSameLine(0, -1);
+                // igText(ecs_get_name(world, type));
+                // igSameLine(0, -1);
+                // MetaType component of type determines how to continue
+                ecs_type_kind_t kind = ecs_get(world, type, EcsMetaType)->kind;
+                switch (kind) {
+                    case EcsPrimitiveType:
+                        // Get primitive component kind
+                        true; // TODO: figure out IDE error from first statement. Caused by macro somehow?
+                        ecs_primitive_kind_t primKind = ecs_get(world, type, EcsPrimitive)->kind;
+                        primitiveInspector(world, primKind, ecs_meta_get_ptr(&cur), NULL); // TODO: pass in focusEntity
+                        ecs_meta_next(&cur);
+                        break;
+                    case EcsStructType:
+                        // recurse componentInspector
+                        // igText("Unhandled struct type");
+                        igText("%s: %s", ecs_meta_get_member(&cur), ecs_get_fullpath(world, type));
+                        ecs_meta_push(&cur);
+                        type = ecs_meta_get_type(&cur);
+                        igText("%s: %s", ecs_meta_get_member(&cur), ecs_get_fullpath(world, type));
+                        ecs_meta_pop(&cur);
+                        break;
+                    default:
+                        // TODO priority order: bitmask, enum, array, vector, opaque
+                        break;
+                }
+                igPopID();
             }
         }
     }
-    igEndTable();
+    ecs_meta_pop(&cur);
+
+    igUnindent(0);
+    */
+
+    igEndGroup();
 }
+
+void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor) {
+    ecs_entity_t type = ecs_meta_get_type(cursor);
+
+    igPushID_Int(type);
+    igIndent(0);
+    ecs_meta_push(cursor);
+
+    int i = 0;
+    do {
+        igPushID_Int(i);
+        type = ecs_meta_get_type(cursor);
+        if (type != 0) {
+            igText("%s: %s", ecs_meta_get_member(cursor), ecs_get_name(world, type));
+            ecs_type_kind_t kind = ecs_get(world, type, EcsMetaType)->kind;
+            switch (kind) {
+                case EcsPrimitiveType:
+                    igSameLine(0, -1);
+                    ecs_primitive_kind_t primKind = ecs_get(world, type, EcsPrimitive)->kind;
+                    primitiveInspector(world, primKind, ecs_meta_get_ptr(cursor), NULL); // TODO: pass in focusEntity
+                    break;
+                case EcsStructType:
+                    // recurse componentInspector
+                    ecsMetaInspector(world, cursor);
+                    break;
+                default:
+                    // TODO priority order: bitmask, enum, array, vector, opaque
+                    igText("Unhandled type kind");
+                    break;
+            }
+        }
+        igPopID();
+        i++;
+    } while (ecs_meta_try_next(cursor));
+
+    ecs_meta_pop(cursor);
+    igUnindent(0);
+    igPopID();
+}
+
+void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity) {
+    switch (kind) {
+        case EcsBool:
+            igCheckbox("##", field);
+        case EcsChar:
+            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%c", 0);
+            break;
+        case EcsByte:
+            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%x", 0);
+            break;
+        case EcsU8:
+            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsU16:
+            igInputScalar("##", ImGuiDataType_U16, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsU32:
+            igInputScalar("##", ImGuiDataType_U32, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsU64:
+            igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsI8:
+            igInputScalar("##", ImGuiDataType_S8, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsI16:
+            igInputScalar("##", ImGuiDataType_S16, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsI32:
+            igInputInt("##", field, 1, 10, 0);
+            break;
+        case EcsI64:
+            igInputScalar("##", ImGuiDataType_S32, field, NULL, NULL, NULL, 0);
+            break;
+        case EcsF32:
+            igDragFloat("##", field, 0.02f, -FLT_MAX, FLT_MAX, "%.3f", 0);
+            break;
+        case EcsF64:
+            igDragScalar("##", ImGuiDataType_Double, field, 0.02f, NULL, NULL, "%.6g", 0);
+            break;
+        case EcsUPtr:
+            igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, "%x", 0);
+            break;
+        case EcsIPtr:
+            igInputScalar("##", ImGuiDataType_S64, field, NULL, NULL, "%x", 0);
+            break;
+        case EcsString:
+            igText(field);
+            break;
+        case EcsEntity:
+            ecs_entity_t e = *(ecs_entity_t*)(field);
+            igText(ecs_get_fullpath(world, e));
+            if (focusEntity != NULL) {
+                igSameLine(0, -1);
+                if (igButton("Inspect", (ImVec2){0, 0})) {
+                    *focusEntity = e;
+                }
+            }
+            break;
+        default:
+            igText("Error: unhandled primitive type");
+            break;
+    }
+}
+
+
 
 void possessEntity(ecs_world_t *world, ecs_entity_t target) {
     // TODO: rethink this to work with Ego system

@@ -24383,6 +24383,35 @@ int ecs_meta_next(
     return 0;
 }
 
+bool ecs_meta_try_next(
+    ecs_meta_cursor_t *cursor)
+{
+    ecs_meta_scope_t *scope = flecs_meta_cursor_get_scope(cursor);
+    scope = flecs_meta_cursor_restore_scope(cursor, scope);
+    ecs_meta_type_op_t *op = flecs_meta_cursor_get_op(scope);
+
+    if (scope->is_collection) {
+        scope->elem_cur ++;
+        scope->op_cur = 0;
+
+        if (scope->opaque) {
+            return true;
+        }
+
+        if (scope->elem_cur >= get_elem_count(scope)) {
+            return false;
+        }
+        return true;
+    }
+
+    scope->op_cur += op->op_count;
+    if (scope->op_cur >= scope->op_count) {
+        return false;
+    }
+
+    return true;
+}
+
 int ecs_meta_elem(
     ecs_meta_cursor_t *cursor,
     int32_t elem)

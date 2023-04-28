@@ -12767,6 +12767,11 @@ FLECS_API
 int ecs_meta_next(
     ecs_meta_cursor_t *cursor);
 
+/** Try moving cursor to next field, return false if next field is out of bounds */
+FLECS_API
+bool ecs_meta_try_next(
+    ecs_meta_cursor_t *cursor);
+
 /** Move cursor to a element */
 FLECS_API
 int ecs_meta_elem(
