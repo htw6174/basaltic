@@ -54,6 +54,7 @@ static EcsInspectionContext modelInspector;
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
+void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic);
 // Returns number of entities in hierarchy, including the root
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen);
 bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected);
@@ -250,6 +251,15 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
 
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     igPushID_Ptr(world);
+
+    // Menu bar for common actions
+    if (igButton("New Entity", (ImVec2){0, 0})) {
+        igOpenPopup_Str("create_entity", 0);
+    }
+    if (igBeginPopup("create_entity", 0)) {
+        entityCreator(world, 0, ic);
+        igEndPopup();
+    }
 
     ImVec2 avail;
     igGetContentRegionAvail(&avail);
@@ -478,6 +488,22 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             }
         }
         igEndPopup();
+    }
+}
+
+void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic) {
+    static char name[256];
+
+    if (igIsWindowAppearing()) {
+        name[0] = '\0';
+        igSetKeyboardFocusHere(0);
+    }
+    // Name field, check for collisions in parent scope
+    bool nameSubmitted = igInputText("Name", name, 256, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL);
+    // Confirm/cancel
+    if (igButton("Confirm", (ImVec2){0, 0}) || nameSubmitted) {
+        ecs_new_from_path(world, parent, name);
+        igCloseCurrentPopup();
     }
 }
 
