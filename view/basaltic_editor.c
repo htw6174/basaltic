@@ -21,18 +21,24 @@
 #include "cimgui.h"
 #include "cimgui_impl.h"
 
+#define MAX_CUSTOM_QUERIES 4
 #define MAX_QUERY_EXPR_LENGTH 1024
+
+typedef struct {
+    ecs_query_t *query;
+    s32 queryPage;
+    s32 queryPageLength;
+    char queryExpr[MAX_QUERY_EXPR_LENGTH];
+    char queryExprError[MAX_QUERY_EXPR_LENGTH];
+} QueryContext;
 
 typedef struct {
     ecs_entity_t focusEntity;
     // TODO: add focus history, change focus by writing to / cycling through history. Add back/forward buttons or recently viewed list
     ecs_query_t *components;
     ecs_query_t *relationships;
-    ecs_query_t *query; // user defined query
-    s32 queryPageLength;
-    s32 queryPage;
-    char queryExpr[MAX_QUERY_EXPR_LENGTH];
-    char queryExprError[MAX_QUERY_EXPR_LENGTH];
+    // user defined queries
+    QueryContext customQueries[MAX_CUSTOM_QUERIES];
     char worldName[256]; // For providing a unique scope to ImGui fields
 } EcsInspectionContext;
 
@@ -52,20 +58,26 @@ static EcsInspectionContext modelInspector;
 
 /* ECS General-purpose */
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic);
-void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic);
+void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic);
+void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected);
+void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected);
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic);
-// Returns number of entities in hierarchy, including the root
+/** Displays an igInputText for [name]]. Returns true when [name] is set to a unique name in parent scope and submitted. When used within a popup, auto-focuses input field and closes popup when confirming. */
+bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t name_buf_size);
+/** Returns number of entities in hierarchy, including the root */
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen);
 bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected);
-bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_query_t *targetQuery, ecs_id_t *selected);
+bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *selected);
+/** Displays query results as a scrollable list of igSelectable. If filter is not NULL, filters list by entity name. Sets [selected] to id of selected item. Returns true when an item is clicked */
+bool entityList(ecs_world_t *world, ecs_iter_t *iter, ImGuiTextFilter *filter, ImVec2 size, s32 maxDisplayedResults, ecs_entity_t *selected);
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity);
 void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity);
-// If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value
+/** If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value */
 void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity);
-// Return entity name if it is named, otherwise return stringified ID (ID string is shared between calls, use immediately or copy to preserve)
+/** Return entity name if it is named, otherwise return stringified ID (ID string is shared between calls, use immediately or copy to preserve) */
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e);
-// Display entity name if it is named, otherwise display id
+/** Display entity name if it is named, otherwise display id */
 void entityLabel(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
@@ -87,13 +99,21 @@ void bc_setupEditor(void) {
     };
     viewInspector = (EcsInspectionContext){
         .worldName = "View",
-        .queryPageLength = 20,
-        .queryExpr = "Camera"
+        .customQueries = {
+            [0] = {.queryExpr = "Camera"},
+            [1] = {.queryExpr = "Pipeline"},
+            [2] = {.queryExpr = "Prefab"},
+            [3] = {.queryExpr = "flecs.system.System"},
+        }
     };
     modelInspector = (EcsInspectionContext){
         .worldName = "Model",
-        .queryPageLength = 20,
-        .queryExpr = "Position"
+        .customQueries = {
+            [0] = {.queryExpr = "Position"},
+            [1] = {.queryExpr = "basaltic.components.planes.Plane"},
+            [2] = {.queryExpr = "Prefab"},
+            [3] = {.queryExpr = "flecs.system.System"},
+        }
     };
 }
 
@@ -101,7 +121,6 @@ void bc_teardownEditor(void) {
     // TODO: nothing?
 }
 
-// TODO: untangle and replace everything to do with bc_GraphicsState
 void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
 {
     /*
@@ -263,17 +282,29 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
 
     ImVec2 avail;
     igGetContentRegionAvail(&avail);
-    if(igBeginChild_Str("Query", (ImVec2){avail.x * 0.5, 0}, true, ImGuiWindowFlags_MenuBar)) {
+    // Top third: tabs or columns for custom queries
+    if(igBeginChild_Str("Queries", (ImVec2){0, avail.y * 0.4}, true, ImGuiWindowFlags_MenuBar)) {
         if (igBeginMenuBar()) {
-            igText("Custom Query");
+            igText("Custom Queries");
             igEndMenuBar();
         }
-        ecsQueryInspector(world, ic);
+        ecsQueryColumns(world, ic);
+    }
+    igEndChild();
+
+    // Bottom-left third: Tree view of world
+    if(igBeginChild_Str("Tree", (ImVec2){avail.x * 0.5, 0}, true, ImGuiWindowFlags_MenuBar)) {
+        if (igBeginMenuBar()) {
+            igText("World Tree");
+            igEndMenuBar();
+        }
+        ecsTreeInspector(world, &ic->focusEntity);
     }
     igEndChild();
 
     igSameLine(0, -1);
 
+    // Bottom-right third: entity inspector
     if(igBeginChild_Str("Entity Inspector", (ImVec2){0, 0}, true, ImGuiWindowFlags_MenuBar)) {
         if (igBeginMenuBar()) {
             igText("Entity Inspector");
@@ -286,43 +317,62 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     igPopID();
 }
 
-void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic) {
+void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic) {
+    ImVec2 avail;
+    igGetContentRegionAvail(&avail);
+    for (int i = 0; i < MAX_CUSTOM_QUERIES; i++) {
+        igPushID_Int(i);
+        if(igBeginChild_Str("Custom Query", (ImVec2){avail.x / MAX_CUSTOM_QUERIES, 0}, true, 0)) {
+            ecsQueryInspector(world, &ic->customQueries[i], &ic->focusEntity);
+        }
+        igEndChild();
+        igPopID();
+        igSameLine(0, -1);
+    }
+}
+
+void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected) {
 
     // TODO: scope-based tree of entities
 
     // TODO: could evaluate expression after every keypress, but only create query when enter is pressed. Would allow completion hints
-    if (igInputText("Query", ic->queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-        ic->queryExprError[0] = '\0';
-        if (ic->query != NULL) {
-            ecs_query_fini(ic->query);
+    // NOTE: Flecs explorer's entity tree also includes these terms in every query, to alter entity display by property (last term means singleton): "?Module, ?Component, ?Tag, ?Prefab, ?Disabled, ?ChildOf(_, $This)"
+    if (igIsWindowAppearing() || igInputText("Query", qc->queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+        qc->queryExprError[0] = '\0';
+        if (qc->query != NULL) {
+            ecs_query_fini(qc->query);
         }
-        ic->query = ecs_query_new(world, ic->queryExpr);
-        if (ic->query == NULL) {
+        qc->query = ecs_query_new(world, qc->queryExpr);
+        if (qc->query == NULL) {
             // TODO: figure out if there is a way to get detailed expression error information from Flecs
-            strcpy(ic->queryExprError, "Error: invalid query expression");
+            strcpy(qc->queryExprError, "Error: invalid query expression");
         }
-        ic->queryPage = 0;
+        qc->queryPage = 0;
     }
-    if (ic->queryExprError[0] != '\0') {
-        igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, ic->queryExprError);
+    if (qc->queryExprError[0] != '\0') {
+        igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, qc->queryExprError);
     }
-    igInputInt("Results per page", &ic->queryPageLength, 1, 1, 0);
-    ic->queryPageLength = max_int(ic->queryPageLength, 1);
+    igInputInt("Results per page", &qc->queryPageLength, 1, 1, 0);
+    qc->queryPageLength = max_int(qc->queryPageLength, 10);
 
     // TODO: Put in a scroll area if list too long
-    if (ic->query != NULL) {
+    if (qc->query != NULL) {
         igPushID_Str("Query Results");
         u32 resultsCount = 0;
-        u32 minDisplayed = ic->queryPageLength * ic->queryPage;
-        u32 maxDisplayed = minDisplayed + ic->queryPageLength;
-        ecs_iter_t it = ecs_query_iter(world, ic->query);
+        u32 minDisplayed = qc->queryPageLength * qc->queryPage;
+        u32 maxDisplayed = minDisplayed + qc->queryPageLength;
+        ecs_iter_t it = ecs_query_iter(world, qc->query);
         while (ecs_query_next(&it)) {
             for (int i = 0; i < it.count; i++) {
-                //resultsCount += hierarchyInspector(world, it.entities[i], ic);
+                //resultsCount += hierarchyInspector(world, it.entities[i], qc);
                 if (resultsCount >= minDisplayed && resultsCount < maxDisplayed) {
-                    igPushID_Int(it.entities[i]);
-                    // TODO: instead of hierarchy inspector, use query fields to display table of filter term components
-                    hierarchyInspector(world, it.entities[i], &ic->focusEntity, false);
+                    ecs_entity_t e = it.entities[i];
+                    const char *name = getEntityLabel(world, e);
+                    igPushID_Int(e);
+                    // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
+                    if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
+                        *selected = e;
+                    }
                     igPopID();
                 }
                 resultsCount++;
@@ -330,13 +380,21 @@ void ecsQueryInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         }
         // TODO: after converting to table, add blank rows so other controls don't change position
         igValue_Uint("Results", resultsCount);
-        s32 pageCount = (s32)ceilf((float)resultsCount / ic->queryPageLength) - 1;
-        if (pageCount > 1) {
-            igSliderInt("Page", &ic->queryPage, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
+        s32 pageCount = (s32)ceilf((float)resultsCount / qc->queryPageLength) - 1;
+        if (pageCount > 0) {
+            if (igArrowButton("page_left", ImGuiDir_Left)) qc->queryPage--;
+            igSameLine(0, -1);
+            if (igArrowButton("page_right", ImGuiDir_Right)) qc->queryPage++;
+            igSameLine(0, -1);
+            igSliderInt("Page", &qc->queryPage, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
         }
-        ic->queryPage = min_int(ic->queryPage, pageCount);
+        qc->queryPage = min_int(qc->queryPage, pageCount);
         igPopID();
     }
+}
+
+void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected) {
+    hierarchyInspector(world, 0, selected, false);
 }
 
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
@@ -366,41 +424,28 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     }
     if (igBeginPopup("edit_entity_name", 0)) {
         static char newName[256];
-        static bool doesNameConflict;
         if (igIsWindowAppearing()) {
             strcpy(newName, currentName);
-            doesNameConflict = false;
-            igSetKeyboardFocusHere(0);
         }
-        const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll;
-        if (igInputText("##rename_entity", newName, 256, flags, NULL, NULL)) {
-            // Check if name matches existing entity in the same scope TODO
-            ecs_entity_t parent = ecs_get_target(world, e, EcsChildOf, 0);
-            ecs_entity_t existing = ecs_lookup_child(world, parent, newName);
-            if (existing == 0) {
-                ecs_set_name(world, e, newName);
-                igCloseCurrentPopup();
-            } else {
-                // Inform user that there is already a sibling with the same name
-                doesNameConflict = true;
-            }
-        }
-        if (doesNameConflict) {
-            igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, "Name must be unique within scope");
+        if (entityRenamer(world, ecs_get_target(world, e, EcsChildOf, 0), newName, 256)) {
+            ecs_set_name(world, e, newName);
         }
         igEndPopup();
     }
 
     // Display path if not in hierarchy root
     if (ecs_has_id(world, e, ecs_pair(EcsChildOf, EcsAny))) {
-        igSameLine(0, -1);
-        igPushStyleColor_Vec4(ImGuiCol_Text, (ImVec4){0.5, 0.5, 0.5, 1});
         // Remember to free string returned from ecs_get_fullpath
         char *path = ecs_get_fullpath(world, e);
-        igText(path);
+        igSameLine(0, -1);
+        igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, path);
         ecs_os_free(path);
-        igPopStyleColor(1);
     }
+    igSameLine(0, -1);
+    igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, "id: %u", e);
+    // TODO: detail info for entity flags?
+
+    // TODO: button to quick query for children of this entity
 
     // Current Components, Tags, Relationships
     const ecs_type_t *type = ecs_get_type(world, e);
@@ -475,14 +520,14 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     static ecs_id_t newPair = 0;
     if (igButton("Add Pair", (ImVec2){0, 0})) {
         if (ic->relationships == NULL) {
-            // create component query
+            // create relationshp query: could use union of all relationship properties, but Component || Tag seems to catch everything
             ic->relationships = ecs_query_new(world, "EcsComponent || EcsTag");
         }
         igOpenPopup_Str("add_pair_popup", 0);
         newPair = 0;
     }
     if (igBeginPopup("add_pair_popup", 0)) {
-        if (pairSelector(world, ic->relationships, ic->query, &newPair)) {
+        if (pairSelector(world, ic->relationships, &newPair)) {
             if (newPair != 0) {
                 ecs_add_id(world, e, newPair);
             }
@@ -493,18 +538,42 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
 
 void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic) {
     static char name[256];
-
+    // Within a popup, clear name when opening
     if (igIsWindowAppearing()) {
         name[0] = '\0';
+    }
+    if (entityRenamer(world, parent, name, 256)) {
+        ecs_new_from_path(world, parent, name);
+    }
+}
+
+bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t name_buf_size) {
+    static bool doesNameConflict;
+
+    // inputText should get default focus
+    if (igIsWindowAppearing()) {
+        doesNameConflict = false;
         igSetKeyboardFocusHere(0);
     }
-    // Name field, check for collisions in parent scope
-    bool nameSubmitted = igInputText("Name", name, 256, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL);
-    // Confirm/cancel
+    const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll;
+    bool nameSubmitted = igInputText("Name", name, name_buf_size, flags, NULL, NULL);
+
+    // Check for collisions in parent scope
     if (igButton("Confirm", (ImVec2){0, 0}) || nameSubmitted) {
-        ecs_new_from_path(world, parent, name);
-        igCloseCurrentPopup();
+        ecs_entity_t existing = ecs_lookup_child(world, parent, name);
+        if (existing == 0) {
+            igCloseCurrentPopup();
+            doesNameConflict = false;
+            return true;
+        } else {
+            // Inform user that there is already a sibling with the same name
+            doesNameConflict = true;
+        }
     }
+    if (doesNameConflict) {
+        igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, "Name must be unique within scope");
+    }
+    return false;
 }
 
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen) {
@@ -514,20 +583,29 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     if (defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
     if (node == *focus) flags |= ImGuiTreeNodeFlags_Selected;
 
-    ecs_iter_t children = ecs_children(world, node);
-    // Display as a leaf if no children
-    if (!ecs_iter_is_true(&children)) {
+    bool drawChildren = false;
+    ecs_iter_t children;
+    // Attempting to search children for some Flecs builtins (., $) will cause an error, and others have no reason to display normally (_, *). Ignored list here is the same as the set checked in flecs_get_builtin
+    if (node == EcsThis || node == EcsAny || node == EcsWildcard || node == EcsVariable) {
         flags |= ImGuiTreeNodeFlags_Leaf;
+    } else {
+        children = ecs_children(world, node);
+        // Display as a leaf if no children
+        if (ecs_iter_is_true(&children)) {
+            drawChildren = true;
+        } else {
+            flags |= ImGuiTreeNodeFlags_Leaf;
+        }
     }
 
-
+    // Note: leaf nodes are always *expanded*, not collapsed. Should skip iterating children, but still TreePop if leaf.
     bool expandNode = igTreeNodeEx_Str(getEntityLabel(world, node), flags);
     // If tree node was clicked, but not expanded, inspect node
     if (igIsItemClicked(ImGuiMouseButton_Left) && !igIsItemToggledOpen()) {
         *focus = node;
     }
 
-    if (expandNode) {
+    if (expandNode && drawChildren) {
         // Re-aquire iterator, because ecs_iter_is_true invalidates it
         children = ecs_children(world, node);
         while (ecs_children_next(&children)) {
@@ -535,6 +613,8 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
                 count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
             }
         }
+    }
+    if (expandNode) {
         igTreePop();
     }
     return count;
@@ -548,25 +628,12 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
         igSetKeyboardFocusHere(0);
     }
     static ImGuiTextFilter filter;
-    ImGuiTextFilter_Draw(&filter, "Filter", 0);
+    ImGuiTextFilter_Draw(&filter, "##", 0);
 
     // List filtered results
-    // TODO: better way to set size?
-    igBeginChild_Str("Entity Selector", (ImVec2){200, 250}, true, ImGuiWindowFlags_HorizontalScrollbar);
+    float itemHeight = igGetTextLineHeightWithSpacing();
     ecs_iter_t it = ecs_query_iter(world, query);
-    while (ecs_query_next(&it)) {
-        for (int i = 0; i < it.count; i++) {
-            ecs_entity_t e = it.entities[i];
-            const char *name = getEntityLabel(world, e);
-            if (ImGuiTextFilter_PassFilter(&filter, name, NULL)) {
-                // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Use flags to disable this behavior
-                if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
-                    *selected = e;
-                }
-            }
-        }
-    }
-    igEndChild();
+    entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 25, selected);
 
     igBeginDisabled(*selected == 0);
     if (igButton("Select", (ImVec2){0, 0})) {
@@ -583,25 +650,64 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
     return selectionMade;
 }
 
-bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_query_t *targetQuery, ecs_id_t *selected) {
+bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *selected) {
     // Show 2 entity selectors, preview relationship, return true when both are selected
     bool selectionMade = false;
     static ecs_entity_t relationship = 0;
     static ecs_entity_t target = 0;
+    float itemHeight = igGetTextLineHeightWithSpacing();
 
     igPushID_Str("rel");
     igBeginGroup();
-    entitySelector(world, relationshipQuery, &relationship);
+    // Set name filter
+    if (igIsWindowAppearing()) {
+        igSetKeyboardFocusHere(0);
+    }
+    static ImGuiTextFilter relationshipFilter;
+    ImGuiTextFilter_Draw(&relationshipFilter, "##", 0);
+    ecs_iter_t relationshipIter = ecs_query_iter(world, relationshipQuery);
+    entityList(world, &relationshipIter, &relationshipFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &relationship);
     igEndGroup();
     igPopID();
+
+    // Create term iterator for target based on OneOf property
+    static ecs_iter_t targetIter;
+    if (ecs_is_valid(world, relationship)) {
+        if (ecs_has_id(world, relationship, EcsOneOf)) {
+            targetIter = ecs_children(world, relationship);
+        } else if (ecs_has_pair(world, relationship, EcsOneOf, EcsAny)) {
+            targetIter = ecs_children(world, ecs_get_target(world, relationship, EcsOneOf, 0));
+        } else {
+            targetIter = ecs_term_iter(world, &(ecs_term_t){
+                .id = ecs_childof(0)
+            });
+        }
+    } else {
+        // TODO: maybe just make null, and if null use tree inspector instead. Otherwise target selector is only useful with OneOf tagged relationships
+        targetIter = ecs_term_iter(world, &(ecs_term_t){
+            .id = ecs_childof(0)
+        });
+    }
 
     igSameLine(0, -1);
 
     igPushID_Str("target");
     igBeginGroup();
-    entitySelector(world, targetQuery, &target);
+    static ImGuiTextFilter targetFilter;
+    ImGuiTextFilter_Draw(&targetFilter, "##", 0);
+    entityList(world, &targetIter, &targetFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &target);
     igEndGroup();
     igPopID();
+
+    if (relationship != 0) {
+        igText(getEntityLabel(world, relationship));
+        igSameLine(0, -1);
+    }
+    igText(":");
+    if (target != 0) {
+        igSameLine(0, -1);
+        igText(getEntityLabel(world, target));
+    }
 
     igBeginDisabled(relationship == 0 || target == 0);
     if (igButton("Select", (ImVec2){0, 0})) {
@@ -617,6 +723,40 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_query_
     }
 
     return selectionMade;
+}
+
+bool entityList(ecs_world_t *world, ecs_iter_t *iter, ImGuiTextFilter *filter, ImVec2 size, s32 maxDisplayedResults, ecs_entity_t *selected) {
+    bool anyClicked = false;
+    s32 fullCount = 0;
+    s32 displayedCount = 0;
+
+    igBeginChild_Str("Entity Selector", size, true, ImGuiWindowFlags_HorizontalScrollbar);
+    while (ecs_iter_next(iter)) {
+        for (int i = 0; i < iter->count; i++) {
+            if (displayedCount < maxDisplayedResults) {
+                ecs_entity_t e = iter->entities[i];
+                const char *name = getEntityLabel(world, e);
+                // TODO: make filter optional?
+                if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
+                    igPushID_Int(e); // Ensure that identical names in different scopes don't conflict
+                    // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
+                    if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
+                        *selected = e;
+                        anyClicked = true;
+                    }
+                    igPopID();
+                    displayedCount++;
+                }
+            }
+            fullCount++;
+        }
+    }
+    // FIXME: extremely minor, but this will display '0 more results' when fullCount is exactly maxDisplayedResults
+    if (displayedCount == maxDisplayedResults) {
+        igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", fullCount - maxDisplayedResults);
+    }
+    igEndChild();
+    return anyClicked;
 }
 
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity) {

@@ -39,6 +39,11 @@ void BasalticComponentsPlanesImport(ecs_world_t *world) {
     khash_t(WorldMap) *gm = kh_init(WorldMap);
     kh_resize(WorldMap, gm, HASH_MAP_DEFAULT_SIZE);
     ecs_singleton_set(world, SpatialStorage, {gm});
+
+    // TEST
+    // ecs_add_id(world, IsOn, EcsOneOf);
+    // Don't do this with the plane component, instead add all planes as children of IsOn
+    // ecs_add_pair(world, ecs_id(Plane), EcsChildOf, IsOn);
 }
 
 ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Position pos) {

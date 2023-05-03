@@ -39,16 +39,16 @@ void bc_view_setup(bc_WindowContext* wc) {
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
-#ifndef _WIN32
-// TODO: create a proper toggle for this in build settings
-#ifdef FLECS_REST
-    printf("Initializing flecs REST API\n");
-    ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
-    //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
-    //FlecsMonitorImport(vc.ecsWorld);
-    ecs_set_scope(vc.ecsWorld, 0);
-#endif
-#endif
+// #ifndef _WIN32
+// // TODO: create a proper toggle for this in build settings
+// #ifdef FLECS_REST
+//     printf("Initializing flecs REST API\n");
+//     ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
+//     //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
+//     //FlecsMonitorImport(vc.ecsWorld);
+//     ecs_set_scope(vc.ecsWorld, 0);
+// #endif
+// #endif
 
     vc.ui = bc_createUiState();
 }
