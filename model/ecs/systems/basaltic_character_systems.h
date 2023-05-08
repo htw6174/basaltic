@@ -7,6 +7,6 @@
 
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count);
 
-void BasalticSystemsCharactersImport(ecs_world_t *world);
+void BcSystemsCharactersImport(ecs_world_t *world);
 
 #endif // BASALTIC_CHARACTER_SYSTEMS_H_INCLUDED

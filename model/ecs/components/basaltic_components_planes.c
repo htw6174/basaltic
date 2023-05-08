@@ -9,8 +9,8 @@ ECS_COMPONENT_DECLARE(Destination);
 ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
 ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
 
-void BasalticComponentsPlanesImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticComponentsPlanes);
+void BcPlanesImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcPlanes);
 
     ECS_META_COMPONENT(world, SpatialStorage);
     ECS_META_COMPONENT(world, Plane);

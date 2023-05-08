@@ -40,7 +40,7 @@ extern ECS_COMPONENT_DECLARE(Destination);
 extern ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
 extern ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
 
-void BasalticComponentsPlanesImport(ecs_world_t *world);
+void BcPlanesImport(ecs_world_t *world);
 
 // TODO: these may not belong here, but it works for now (implementation depends on this header for the khash decleration)
 // Allows entities with (GridPosition, (IsOn, _)) to be located via hashmap

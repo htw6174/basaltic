@@ -4,8 +4,8 @@ ECS_TAG_DECLARE(OnModelChanged);
 
 ECS_DECLARE(ModelChangedPipeline);
 
-void BasalticPhasesViewImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticPhasesView);
+void BcviewPhasesImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcviewPhases);
 
     ECS_TAG_DEFINE(world, OnModelChanged);
 

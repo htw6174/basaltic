@@ -2,9 +2,9 @@
 
 ECS_TAG_DECLARE(Ego);
 
-void BasalticComponentsActorsImport(ecs_world_t *world) {
+void BcActorsImport(ecs_world_t *world) {
 
-    ECS_MODULE(world, BasalticComponentsActors);
+    ECS_MODULE(world, BcActors);
 
     ECS_TAG_DEFINE(world, Ego);
     ecs_add_id(world, Ego, EcsExclusive);

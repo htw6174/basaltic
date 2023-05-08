@@ -172,29 +172,28 @@ void DrawInstances(ecs_iter_t *it) {
     }
 }
 
-void BasalticSystemsViewDebugImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticSystemsViewDebug);
+void BcviewSystemsDebugImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcviewSystemsDebug);
 
-    // FIXME: need to be more careful about imports. Ran into an issue where a Model world query constructed here would match nothing, unless this import is done
-    ECS_IMPORT(world, BasalticComponentsPlanes);
-    ECS_IMPORT(world, BasalticComponentsView);
-    ECS_IMPORT(world, BasalticPhasesView);
+    ECS_IMPORT(world, Bcview);
+    ECS_IMPORT(world, BcviewPhases);
+    ECS_IMPORT(world, BcPlanes);
 
     // ECS_SYSTEM(world, InitDebugPipeline, EcsOnStart,
     //     [out] !Pipeline,
     //     [out] !QueryDesc,
-    //     [none] basaltic.components.view.DebugRender
+    //     [none] bcview.DebugRender
     // );
 
     ECS_OBSERVER(world, InitDebugPipeline, EcsOnAdd,
         [out] Pipeline,
         [out] !QueryDesc,
-        [none] basaltic.components.view.DebugRender
+        [none] bcview.DebugRender
     );
 
     ECS_OBSERVER(world, InitDebugBuffers, EcsOnAdd,
         [out] InstanceBuffer,
-        [none] basaltic.components.view.DebugRender
+        [none] bcview.DebugRender
     );
 
     ECS_SYSTEM(world, UpdateDebugBuffers, OnModelChanged,
@@ -202,7 +201,7 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
         [inout] InstanceBuffer,
         [in] Scale($),
         [in] ModelWorld($),
-        [none] basaltic.components.view.DebugRender
+        [none] bcview.DebugRender
     )
 
     // ECS_SYSTEM(world, DrawDebugPipeline, EcsOnUpdate,
@@ -211,12 +210,12 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
     //     [in] PVMatrix($),
     //     [none] ModelWorld($),
     //     [none] WrapInstanceOffsets($),
-    //     [none] basaltic.components.view.DebugRender,
+    //     [none] bcview.DebugRender,
     // );
 
     // TODO: use query variables to get the Pipeline component directly. For now, just check for the relationship and try to get the component
     ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
-        [in] (basaltic.components.view.RenderPipeline, _),
+        [in] (bcview.RenderPipeline, _),
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
@@ -244,6 +243,7 @@ void BasalticSystemsViewDebugImport(ecs_world_t *world) {
     ecs_add(world, debugInstancesDefault, InstanceBuffer);
     ecs_set(world, debugInstancesDefault, Elements, {24});
     // TODO: add behavior to make debugInstancesDefault(ModelQuery) a subquery of the original value, with this description
+    // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr on the pipeline, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
     ecs_set(world, debugInstancesDefault, QueryDesc, {
         .desc.filter.terms = {
             {.id = ecs_id(Position), .inout = EcsIn},

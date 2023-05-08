@@ -40,8 +40,8 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     newWorld->ecsWorld = ecs_init();
     //ecs_set_stage_count(newWorld->ecsWorld, 2);
     //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
-    ECS_IMPORT(newWorld->ecsWorld, BasalticComponents);
-    ECS_IMPORT(newWorld->ecsWorld, BasalticSystems);
+    ECS_IMPORT(newWorld->ecsWorld, Bc);
+    ECS_IMPORT(newWorld->ecsWorld, BcSystems);
 
     htw_ChunkMap *cm = bc_createTerrain(chunkCountX, chunkCountY);
     newWorld->centralPlane = ecs_set(newWorld->ecsWorld, 0, Plane, {cm});

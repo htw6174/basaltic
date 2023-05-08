@@ -186,10 +186,12 @@ void bc_revealMap(ecs_iter_t *it) {
     }
 }
 
-void BasalticSystemsCharactersImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticSystemsCharacters);
+void BcSystemsCharactersImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcSystemsCharacters);
 
-    ECS_IMPORT(world, BasalticComponents);
+    // ECS_IMPORT(world, Bc); // NOTE: this import does nothing, because `Bc` is a 'parent' path of `BcSystemsCharacters`
+    ECS_IMPORT(world, BcPlanes);
+    ECS_IMPORT(world, BcActors);
 
     ECS_TAG_DEFINE(world, BehaviorWander);
     ECS_TAG_DEFINE(world, BehaviorDescend);
@@ -200,14 +202,14 @@ void BasalticSystemsCharactersImport(ecs_world_t *world) {
     ECS_SYSTEM(world, bc_setWandererDestinations, EcsPreUpdate,
         [in] Position,
         [out] Destination,
-        [in] (basaltic.components.planes.IsOn, _),
+        [in] (bc.planes.IsOn, _),
         [none] BehaviorWander,
     );
 
     ECS_SYSTEM(world, bc_setDescenderDestinations, EcsPreUpdate,
         [in] Position,
         [out] Destination,
-        [in] (basaltic.components.planes.IsOn, _),
+        [in] (bc.planes.IsOn, _),
         [none] BehaviorDescend,
     );
 
@@ -227,23 +229,23 @@ void BasalticSystemsCharactersImport(ecs_world_t *world) {
     });
     ECS_SYSTEM(world, bc_revealMap, EcsPostUpdate,
         [in] Position,
-        [in] (basaltic.components.planes.IsOn, _),
-        [none] basaltic.components.PlayerVision
+        [in] (bc.planes.IsOn, _),
+        [none] bc.PlayerVision
     );
     //ECS_OBSERVER(world, characterMoved, EcsOnSet, Position, (IsOn, _));
-    ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (basaltic.components.planes.IsOn, _));
+    ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
 
     // TEST ecosystem behaviors
     ECS_SYSTEM(world, behaviorGraze, EcsPreUpdate,
         [in] Position,
         [out] Destination,
-        [in] (basaltic.components.planes.IsOn, _),
+        [in] (bc.planes.IsOn, _),
         BehaviorGrazer
     );
     ECS_SYSTEM(world, behaviorPredate, EcsPreUpdate,
         [in] Position,
         [out] Destination,
-        [in] (basaltic.components.planes.IsOn, _),
+        [in] (bc.planes.IsOn, _),
         BehaviorPredator
     );
 

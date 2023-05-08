@@ -94,13 +94,13 @@ void DestroyModelQueries(ecs_iter_t *it) {
     }
 }
 
-void BasalticSystemsViewImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticSystemsView);
+void BcviewSystemsImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcviewSystems);
 
-    ECS_IMPORT(world, BasalticComponentsView);
-    ECS_IMPORT(world, BasalticPhasesView);
-    ECS_IMPORT(world, BasalticSystemsViewDebug);
-    ECS_IMPORT(world, BasalticSystemsViewTerrain);
+    ECS_IMPORT(world, Bcview);
+    ECS_IMPORT(world, BcviewPhases);
+    ECS_IMPORT(world, BcviewSystemsDebug);
+    ECS_IMPORT(world, BcviewSystemsTerrain);
 
     // char *path = ecs_get_fullpath(world, TerrainRender);
     // printf("%s\n", path);
@@ -131,7 +131,7 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
     // Here, we tell Flecs' sync point scheduler that this system relies on a compontent with no source (as a standin for the ModelQuery pulled from the RenderPipeline relationship), to ensure that other systems which write to any ModelQuery are processed and flushed first
     ECS_SYSTEM(world, CreateSubQueries, OnModelChanged,
         [in] QueryDesc,
-        [in] (basaltic.components.view.RenderPipeline, _),
+        [in] (bcview.RenderPipeline, _),
         [in] ModelWorld($),
         [out] !ModelQuery,
         //[in] ModelQuery()

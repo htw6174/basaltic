@@ -11,8 +11,8 @@ ECS_TAG_DECLARE(AdvanceWeek);
 ECS_TAG_DECLARE(AdvanceMonth);
 ECS_TAG_DECLARE(AdvanceYear);
 
-void BasalticPhasesImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticPhases);
+void BcPhasesImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcPhases);
 
     ECS_TAG_DEFINE(world, Planning);
     ECS_TAG_DEFINE(world, Prep);

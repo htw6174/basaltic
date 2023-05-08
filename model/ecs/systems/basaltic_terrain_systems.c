@@ -50,14 +50,14 @@ void CleanEmptyRoots(ecs_iter_t *it) {
     }
 }
 
-void BasalticSystemsTerrainImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticSystemsTerrain);
+void BcSystemsTerrainImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcSystemsTerrain);
 
-    ECS_IMPORT(world, BasalticPhases);
-    ECS_IMPORT(world, BasalticComponentsPlanes);
+    ECS_IMPORT(world, BcPhases);
+    ECS_IMPORT(world, BcPlanes);
 
     ECS_SYSTEM(world, TerrainSeasonalStep, AdvanceHour, Plane);
-    ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, basaltic.components.planes.CellRoot);
+    ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, bc.planes.CellRoot);
 }
 
 void updateVegetation(bc_CellData *cellData) {

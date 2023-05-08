@@ -3,6 +3,6 @@
 
 #include "flecs.h"
 
-void BasalticSystemsTerrainImport(ecs_world_t *world);
+void BcSystemsTerrainImport(ecs_world_t *world);
 
 #endif // BASALTIC_TERRAIN_SYSTEMS_H_INCLUDED

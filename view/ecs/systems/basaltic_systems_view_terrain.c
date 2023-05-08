@@ -693,12 +693,12 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     }
 }
 
-void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticSystemsViewTerrain);
+void BcviewSystemsTerrainImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcviewSystemsTerrain);
 
-    ECS_IMPORT(world, BasalticComponentsPlanes);
-    ECS_IMPORT(world, BasalticComponentsView);
-    ECS_IMPORT(world, BasalticPhasesView);
+    // ECS_IMPORT(world, BcPlanes); // NOTE: don't worry about importing modules from the model, model components are guaranteed to be imported before any view systems (to keep component IDs identical between worlds)
+    ECS_IMPORT(world, Bcview);
+    ECS_IMPORT(world, BcviewPhases);
 
     ECS_SYSTEM(world, SetupPipelineHexTerrain, EcsOnStart,
                [in] RenderDistance($),
@@ -706,14 +706,14 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
                [out] !Mesh,
                [out] !QueryDesc,
                [out] !TerrainBuffer,
-               [none] basaltic.components.view.TerrainRender,
+               [none] bcview.TerrainRender,
     );
 
     ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
                [in] ModelQuery,
                [inout] TerrainBuffer,
                [none] ModelWorld($),
-               [none] basaltic.components.view.TerrainRender,
+               [none] bcview.TerrainRender,
     );
 
     ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
@@ -726,7 +726,7 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
                [out] HoveredCell($),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
-               [none] basaltic.components.view.TerrainRender,
+               [none] bcview.TerrainRender,
     );
 
     GLuint feedbackBuffer;

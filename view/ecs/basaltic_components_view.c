@@ -14,11 +14,11 @@ ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
 
 // TODO: consider rearranging module paths. It would be convenient if the view and model were at the same depth, with different top level names
-void BasalticComponentsViewImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticComponentsView);
+void BcviewImport(ecs_world_t *world) {
+    ECS_MODULE(world, Bcview);
 
-    ECS_IMPORT(world, BasalticComponents);
-    //ECS_IMPORT(world, BasalticComponentsPlanes);
+    // NOTE: Must have this import before any other definitions, to keep component IDs consistent between model and view
+    ECS_IMPORT(world, Bc);
 
     // Creating meta info for custom primitive types:
     // 1. Declare and Define a component for the type

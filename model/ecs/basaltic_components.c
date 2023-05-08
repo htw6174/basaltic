@@ -4,12 +4,12 @@
 
 ECS_TAG_DECLARE(PlayerVision);
 
-void BasalticComponentsImport(ecs_world_t *world) {
-    ECS_MODULE(world, BasalticComponents);
+void BcImport(ecs_world_t *world) {
+    ECS_MODULE(world, Bc);
 
-    ECS_IMPORT(world, BasalticPhases);
-    ECS_IMPORT(world, BasalticComponentsPlanes);
-    ECS_IMPORT(world, BasalticComponentsActors);
+    ECS_IMPORT(world, BcPhases);
+    ECS_IMPORT(world, BcPlanes);
+    ECS_IMPORT(world, BcActors);
 
     assert(ecs_id(Position) != 0);
 

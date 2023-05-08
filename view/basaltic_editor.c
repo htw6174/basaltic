@@ -13,8 +13,6 @@
 #include "basaltic_commandBuffer.h"
 #include "basaltic_components_view.h"
 #include "basaltic_components.h"
-#include "components/basaltic_components_planes.h"
-#include "components/basaltic_components_actors.h"
 #include "flecs.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -101,7 +99,7 @@ void bc_setupEditor(void) {
         .worldName = "View",
         .customQueries = {
             [0] = {.queryExpr = "Camera"},
-            [1] = {.queryExpr = "Pipeline"},
+            [1] = {.queryExpr = "Pipeline || InstanceBuffer"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System"},
         }
@@ -110,7 +108,7 @@ void bc_setupEditor(void) {
         .worldName = "Model",
         .customQueries = {
             [0] = {.queryExpr = "Position"},
-            [1] = {.queryExpr = "basaltic.components.planes.Plane"},
+            [1] = {.queryExpr = "bc.planes.Plane"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System"},
         }
@@ -332,9 +330,6 @@ void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic) {
 }
 
 void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected) {
-
-    // TODO: scope-based tree of entities
-
     // TODO: could evaluate expression after every keypress, but only create query when enter is pressed. Would allow completion hints
     // NOTE: Flecs explorer's entity tree also includes these terms in every query, to alter entity display by property (last term means singleton): "?Module, ?Component, ?Tag, ?Prefab, ?Disabled, ?ChildOf(_, $This)"
     if (igIsWindowAppearing() || igInputText("Query", qc->queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
@@ -478,6 +473,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             igSameLine(0, -1);
             if (igSmallButton("x")) {
                 ecs_remove_id(world, e, id);
+                // TODO: need to skip component inspector from here, otherwise pairs with data will get immediately re-added
             }
             if (ecs_has(world, first, EcsMetaType)) {
                 void *componentData = ecs_get_mut_id(world, e, id);
@@ -779,16 +775,40 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
     igSameLine(0, -1);
     if (igSmallButton("x")) {
         ecs_remove_id(world, e, component);
-    }
-
-    // early return if no meta info is available
-    if (!ecs_has(world, component, EcsMetaType)) {
+        // Early return; because this remove happens immediately, need to avoid unintended changes to this component
         igEndGroup();
         return;
-    } else {
+    }
+
+    // TODO: custom inspectors for specific component types, like QueryDesc. Is this the right place to handle this behavior?
+    if (component == ecs_id(QueryDesc)) {
+        igSameLine(0, -1);
+
+        //QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
+        // button opens input for new query expression, will create description from expression
+        if (igButton("Set Query Expression", (ImVec2){0, 0})) {
+            igOpenPopup_Str("query_expr", 0);
+        }
+        if (igBeginPopup("query_expr", 0)) {
+            static char queryExpr[MAX_QUERY_EXPR_LENGTH] = {0};
+            //static char queryExprError[MAX_QUERY_EXPR_LENGTH]; // Unneeded? not creating the query here, so might not get direct error feedback
+            // if (igIsWindowAppearing()) {
+            //     queryExpr[0] = '\0';
+            // }
+            if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+                //qd->desc.filter.expr = queryExpr;
+                ecs_set(world, e, QueryDesc, {.desc.filter.expr = queryExpr});
+                igCloseCurrentPopup();
+            }
+            igEndPopup();
+        }
+    } else if (ecs_has(world, component, EcsMetaType)) {
+        // NOTE: calling ecs_get_mut_id AFTER a call to ecs_remove_id will end up adding the removed component again, with default values
         void *componentData = ecs_get_mut_id(world, e, component);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, component, componentData);
         ecsMetaInspector(world, &cur, focusEntity);
+    } else {
+        // TODO: make it clear that this is a component with no meta info available, still show some basic params like size if possible
     }
 
     igEndGroup();

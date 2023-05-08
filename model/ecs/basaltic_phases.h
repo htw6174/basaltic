@@ -14,6 +14,6 @@ extern ECS_TAG_DECLARE(AdvanceWeek);
 extern ECS_TAG_DECLARE(AdvanceMonth);
 extern ECS_TAG_DECLARE(AdvanceYear);
 
-void BasalticPhasesImport(ecs_world_t *world);
+void BcPhasesImport(ecs_world_t *world);
 
 #endif // BASALTIC_PHASES_H_INCLUDED

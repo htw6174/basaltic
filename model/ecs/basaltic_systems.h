@@ -3,6 +3,6 @@
 
 #include "flecs.h"
 
-void BasalticSystemsImport(ecs_world_t *world);
+void BcSystemsImport(ecs_world_t *world);
 
 #endif // BASALTIC_SYSTEMS_H_INCLUDED

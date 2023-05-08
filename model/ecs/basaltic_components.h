@@ -8,6 +8,6 @@
 // TODO: find a home for this
 extern ECS_TAG_DECLARE(PlayerVision);
 
-void BasalticComponentsImport(ecs_world_t *world);
+void BcImport(ecs_world_t *world);
 
 #endif // BASALTIC_COMPONENTS_H_INCLUDED

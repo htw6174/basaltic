@@ -165,6 +165,6 @@ ECS_STRUCT(TerrainBuffer, {
 
 
 
-void BasalticComponentsViewImport(ecs_world_t *world);
+void BcviewImport(ecs_world_t *world);
 
 #endif // BASALTIC_COMPONENTS_VIEW_H_INCLUDED
