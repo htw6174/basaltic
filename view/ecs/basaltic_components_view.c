@@ -1,5 +1,6 @@
 #define BASALTIC_VIEW_IMPL
 #include "basaltic_components_view.h"
+#include "assert.h"
 
 ECS_COMPONENT_DECLARE(s32);
 ECS_COMPONENT_DECLARE(vec3);
@@ -8,11 +9,16 @@ ECS_COMPONENT_DECLARE(Scale);
 
 ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
+ECS_TAG_DECLARE(RenderPipeline);
 ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
 
+// TODO: consider rearranging module paths. It would be convenient if the view and model were at the same depth, with different top level names
 void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticComponentsView);
+
+    ECS_IMPORT(world, BasalticComponents);
+    //ECS_IMPORT(world, BasalticComponentsPlanes);
 
     // Creating meta info for custom primitive types:
     // 1. Declare and Define a component for the type
@@ -51,13 +57,19 @@ void BasalticComponentsViewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
     ECS_COMPONENT_DEFINE(world, Pipeline);
-    ECS_COMPONENT_DEFINE(world, Binding);
+
+    ECS_TAG_DEFINE(world, RenderPipeline);
+    //ecs_add_id(world, RenderPipeline, EcsOneOf);
+    ecs_add_id(world, RenderPipeline, EcsExclusive);
 
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
 
     ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
     ECS_COMPONENT_DEFINE(world, InstanceBuffer);
+    ECS_COMPONENT_DEFINE(world, Mesh);
+    ECS_COMPONENT_DEFINE(world, Elements);
+
     ECS_COMPONENT_DEFINE(world, FeedbackBuffer);
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 

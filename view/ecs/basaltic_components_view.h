@@ -3,6 +3,7 @@
 
 #include "htw_core.h"
 #include "basaltic_worldState.h"
+#include "basaltic_components.h"
 #include "ccVector.h"
 #include "sokol_gfx.h"
 #include "flecs.h"
@@ -112,11 +113,8 @@ ECS_STRUCT(Pipeline, {
     sg_pipeline pipeline;
 });
 
-ECS_STRUCT(Binding, {
-    sg_bindings binding;
-    s32 elements;
-    s32 instances;
-});
+// Relationship where the target is a Pipeline entity
+extern ECS_TAG_DECLARE(RenderPipeline);
 
 extern ECS_TAG_DECLARE(TerrainRender);
 extern ECS_TAG_DECLARE(DebugRender);
@@ -126,9 +124,25 @@ ECS_STRUCT(WrapInstanceOffsets, {
 });
 
 ECS_STRUCT(InstanceBuffer, {
+    sg_buffer buffer;
+    s32 instances;
     size_t size;
     void *data;
 });
+
+/** Immutable buffers */
+ECS_STRUCT(Mesh, {
+    sg_buffer vertexBuffers[SG_MAX_SHADERSTAGE_BUFFERS - 1]; // 0th vertex buffer reserved for instance buffer
+    sg_buffer indexBuffer;
+    s32 elements;
+});
+
+/** Standalone element count, used for shaders that generate their own geometry */
+ECS_STRUCT(Elements, {
+    s32 count;
+});
+
+// TODO: textures
 
 ECS_STRUCT(FeedbackBuffer, {
     u32 gluint;

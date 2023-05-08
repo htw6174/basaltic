@@ -62,11 +62,27 @@ void UniformCameraToPVMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, PVMatrix);
 }
 
-void CreateModelQueries(ecs_iter_t *it) {
-    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+void CreatePipelineQueries(ecs_iter_t *it) {
     QueryDesc *terms = ecs_field(it, QueryDesc, 1);
 
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
     for (int i = 0; i < it->count; i++) {
+
+        ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
+        ecs_set(it->world, it->entities[i], ModelQuery, {query});
+    }
+}
+
+void CreateSubQueries(ecs_iter_t *it) {
+    QueryDesc *terms = ecs_field(it, QueryDesc, 1);
+    ecs_id_t renderPipeline = ecs_field_id(it, 2);
+    const ModelQuery *existingQuery = ecs_get(it->world, ECS_PAIR_SECOND(renderPipeline), ModelQuery);
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        terms[i].desc.parent = existingQuery->query;
         ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
         ecs_set(it->world, it->entities[i], ModelQuery, {query});
     }
@@ -103,11 +119,22 @@ void BasalticSystemsViewImport(ecs_world_t *world) {
         [out] PVMatrix($)
     );
 
-    // After attaching to model, create queries in the model's ecs world
-    ECS_SYSTEM(world, CreateModelQueries, OnModelChanged,
+    // After attaching to model, create pipeline base queries in the model's ecs world
+    ECS_SYSTEM(world, CreatePipelineQueries, OnModelChanged,
         [in] QueryDesc,
         [in] ModelWorld($),
-        [out] !ModelQuery
+        [out] !ModelQuery,
+        [none] Pipeline
+    );
+
+    // Must create subqueries after creating pipeline queries. NOTE: Systems are run in definition order within a phase, but the RenderPipeline's 'parent' query won't actually be set until the phase is complete
+    // Here, we tell Flecs' sync point scheduler that this system relies on a compontent with no source (as a standin for the ModelQuery pulled from the RenderPipeline relationship), to ensure that other systems which write to any ModelQuery are processed and flushed first
+    ECS_SYSTEM(world, CreateSubQueries, OnModelChanged,
+        [in] QueryDesc,
+        [in] (basaltic.components.view.RenderPipeline, _),
+        [in] ModelWorld($),
+        [out] !ModelQuery,
+        //[in] ModelQuery()
     );
 
     // Remove queries after model is detached TODO: do this before detatching, so that queries can be cleaned up on the model?

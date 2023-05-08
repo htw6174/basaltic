@@ -32,6 +32,7 @@ void behaviorPredate(ecs_iter_t *it);
 // TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
     ecs_defer_begin(world);
+    ecs_set_scope(world, plane);
     const Plane *tm = ecs_get(world, plane, Plane);
     u32 maxX = tm->chunkMap->mapWidth;
     u32 maxY = tm->chunkMap->mapHeight;
@@ -58,6 +59,7 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
             ecs_add(world, newCharacter, BehaviorGrazer);
         }
     }
+    ecs_set_scope(world, 0);
     ecs_defer_end(world);
 }
 

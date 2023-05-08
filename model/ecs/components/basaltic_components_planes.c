@@ -78,8 +78,8 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
                 // FIXME: if 2 entities move onto the same cell in one update, 2 cellroots get created
                 ecs_defer_suspend(world);
                 ecs_entity_t newRoot = ecs_new(world, CellRoot);
+                ecs_add_id(world, newRoot, ecs_childof(plane));
                 ecs_defer_resume(world);
-                //ecs_set_name(world, newRoot, ""); // TODO: use pos to create unique name
                 ecs_add_pair(world, existing, EcsChildOf, newRoot);
                 ecs_add_pair(world, e, EcsChildOf, newRoot);
                 int absent;
@@ -105,11 +105,8 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
             // e is cell root, there will be no other entities in the cell after moving
             kh_del(WorldMap, wm, i);
         } else {
-            // Remove ChildOf relationship
-            ecs_entity_t parent = ecs_get_target(world, e, EcsChildOf, 0);
-            if (ecs_is_valid(world, parent)) {
-                ecs_remove_pair(world, e, EcsChildOf, parent);
-            }
+            // Restore plane as parent
+            ecs_add_pair(world, e, EcsChildOf, plane);
         }
     }
 }

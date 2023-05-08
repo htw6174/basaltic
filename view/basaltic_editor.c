@@ -393,8 +393,14 @@ void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selec
     }
 }
 
+// TODO: should limit max number of displayed entities. For now, make sure bulk creation happens in some scope
 void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected) {
-    hierarchyInspector(world, 0, selected, false);
+    ecs_iter_t it = ecs_children(world, 0);
+    while (ecs_children_next(&it)) {
+        for (int i = 0; i < it.count; i++) {
+            hierarchyInspector(world, it.entities[i], selected, false);
+        }
+    }
 }
 
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
@@ -433,6 +439,8 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         igEndPopup();
     }
 
+    igSameLine(0, -1);
+    igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, "id: %u", e);
     // Display path if not in hierarchy root
     if (ecs_has_id(world, e, ecs_pair(EcsChildOf, EcsAny))) {
         // Remember to free string returned from ecs_get_fullpath
@@ -441,8 +449,6 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, path);
         ecs_os_free(path);
     }
-    igSameLine(0, -1);
-    igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, "id: %u", e);
     // TODO: detail info for entity flags?
 
     // TODO: button to quick query for children of this entity

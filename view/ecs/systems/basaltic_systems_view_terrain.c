@@ -29,7 +29,7 @@ typedef struct {
     //int64_t aligner;
 } bc_TerrainCellData;
 
-sg_bindings createHexmapBindings(u32 *out_elementCount);
+Mesh createHexmapMesh(void);
 void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk);
 void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex);
 
@@ -38,7 +38,7 @@ void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 
  *
  * @param out_elementCount number of triangle indicies
  */
-sg_bindings createHexmapBindings(u32 *out_elementCount) {
+Mesh createHexmapMesh(void) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -74,7 +74,6 @@ sg_bindings createHexmapBindings(u32 *out_elementCount) {
     // assign model data
     size_t vertexDataSize = vertexSize * vertexCount;
     size_t indexDataSize = sizeof(u32) * triangleCount;
-    *out_elementCount = triangleCount;
 
     // hexagon model data
     static const float halfHeight = 0.433012701892;
@@ -384,9 +383,10 @@ sg_bindings createHexmapBindings(u32 *out_elementCount) {
     };
     sg_buffer ib = sg_make_buffer(&ibd);
 
-    return (sg_bindings){
-        .vertex_buffers[0] = vb,
-        .index_buffer = ib
+    return (Mesh) {
+        .vertexBuffers[0] = vb,
+        .indexBuffer = ib,
+        .elements = triangleCount
     };
 }
 
@@ -579,12 +579,11 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
     };
     sg_pipeline pip = sg_make_pipeline(&pd);
 
-    u32 elementCount;
-    sg_bindings bind = createHexmapBindings(&elementCount);
+    Mesh mesh = createHexmapMesh();
 
     for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], Pipeline, {pip});
-        ecs_set(it->world, it->entities[i], Binding, {.binding = bind, .elements = elementCount});
+        ecs_set_id(it->world, it->entities[i], ecs_id(Mesh), sizeof(mesh), &mesh);
         ecs_set(it->world, it->entities[i], QueryDesc, {
             .desc.filter.terms = {{
                 .id = ecs_id(Plane), .inout = EcsIn
@@ -625,9 +624,8 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
 }
 
 void UpdateHexTerrainBuffers(ecs_iter_t *it) {
-    Binding *binds = ecs_field(it, Binding, 1);
-    ModelQuery *queries = ecs_field(it, ModelQuery, 2);
-    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 3);
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 2);
 
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
@@ -649,7 +647,7 @@ void UpdateHexTerrainBuffers(ecs_iter_t *it) {
 
 void DrawPipelineHexTerrain(ecs_iter_t *it) {
     Pipeline *pips = ecs_field(it, Pipeline, 1);
-    Binding *binds = ecs_field(it, Binding, 2);
+    Mesh *mesh = ecs_field(it, Mesh, 2);
     TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 3);
     PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
     Mouse *mouse = ecs_field(it, Mouse, 5);
@@ -659,8 +657,13 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
     for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = mesh[i].vertexBuffers[0],
+            .index_buffer = mesh[i].indexBuffer
+        };
+
         sg_apply_pipeline(pips[i].pipeline);
-        sg_apply_bindings(&binds[i].binding);
+        sg_apply_bindings(&bind);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(mouse[i]));
 
@@ -677,12 +680,12 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             //if (glGetError()) printf("%x\n", glGetError());
 
             if (wraps != NULL) {
-                bc_drawWrapInstances(0, binds[i].elements, 1, 1, terrainBuffers[i].chunkPositions[c], wraps->offsets);
+                bc_drawWrapInstances(0, mesh[i].elements, 1, 1, terrainBuffers[i].chunkPositions[c], wraps->offsets);
             } else {
                 mat4x4 model;
                 mat4x4SetTranslation(model, terrainBuffers[i].chunkPositions[c]);
                 sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
-                sg_draw(0, binds[i].elements, 1);
+                sg_draw(0, mesh[i].elements, 1);
             }
         }
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
@@ -693,21 +696,20 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
 void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
     ECS_MODULE(world, BasalticSystemsViewTerrain);
 
+    ECS_IMPORT(world, BasalticComponentsPlanes);
     ECS_IMPORT(world, BasalticComponentsView);
     ECS_IMPORT(world, BasalticPhasesView);
-    ECS_IMPORT(world, BasalticComponentsPlanes);
 
     ECS_SYSTEM(world, SetupPipelineHexTerrain, EcsOnStart,
                [in] RenderDistance($),
                [out] !Pipeline,
-               [out] !Binding,
+               [out] !Mesh,
                [out] !QueryDesc,
                [out] !TerrainBuffer,
                [none] basaltic.components.view.TerrainRender,
     );
 
     ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
-               [in] Binding,
                [in] ModelQuery,
                [inout] TerrainBuffer,
                [none] ModelWorld($),
@@ -716,7 +718,7 @@ void BasalticSystemsViewTerrainImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
                [in] Pipeline,
-               [in] Binding,
+               [in] Mesh,
                [in] TerrainBuffer,
                [in] PVMatrix($),
                [in] Mouse($),

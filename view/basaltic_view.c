@@ -3,6 +3,7 @@
 #include "basaltic_editor.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
+#include "basaltic_components.h"
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
 #include "basaltic_systems_view.h"
@@ -33,6 +34,7 @@ void bc_view_setup(bc_WindowContext* wc) {
     assert(sg_isvalid());
 
     vc.ecsWorld = ecs_init();
+    ECS_IMPORT(vc.ecsWorld, BasalticComponents);
     ECS_IMPORT(vc.ecsWorld, BasalticComponentsView);
     ECS_IMPORT(vc.ecsWorld, BasalticPhasesView);
     ECS_IMPORT(vc.ecsWorld, BasalticSystemsView);
