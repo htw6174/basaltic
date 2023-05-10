@@ -6,6 +6,7 @@ ECS_COMPONENT_DECLARE(s32);
 ECS_COMPONENT_DECLARE(vec3);
 
 ECS_COMPONENT_DECLARE(Scale);
+ECS_COMPONENT_DECLARE(Color);
 
 ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
@@ -24,19 +25,29 @@ void BcviewImport(ecs_world_t *world) {
     // 1. Declare and Define a component for the type
     // 2. Use ecs_primitive to create meta info
     ECS_COMPONENT_DEFINE(world, s32);
-    ECS_COMPONENT_DEFINE(world, vec3);
 
     ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
     // NOTE: because Flecs also happens to use the name u32 for uint32_t prims, I don't need to create reflection data for it
     //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
-    ecs_struct(world, {.entity = ecs_id(vec3), .members = {
+
+    // Create one ecs_member_t array per vector type, reuse for each component type
+    ecs_member_t vec3Members[3] = {
         [0] = {.name = "x", .type = ecs_id(ecs_f32_t)},
         [1] = {.name = "y", .type = ecs_id(ecs_f32_t)},
         [2] = {.name = "z", .type = ecs_id(ecs_f32_t)},
+    };
+
+    ECS_COMPONENT_DEFINE(world, vec3);
+    ecs_struct(world, {.entity = ecs_id(vec3), .members = {
+        [0] = vec3Members[0],
+        [1] = vec3Members[1],
+        [2] = vec3Members[2]
     }});
 
     // TODO: figure out how to re-use vec3's struct_desc for Scale
     ECS_COMPONENT_DEFINE(world, Scale);
+
+    ECS_COMPONENT_DEFINE(world, Color);
 
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
@@ -59,7 +70,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Pipeline);
 
     ECS_TAG_DEFINE(world, RenderPipeline);
-    //ecs_add_id(world, RenderPipeline, EcsOneOf);
+    ecs_add_id(world, RenderPipeline, EcsOneOf);
     ecs_add_id(world, RenderPipeline, EcsExclusive);
 
     ECS_TAG_DEFINE(world, TerrainRender);
@@ -68,7 +79,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
     ECS_COMPONENT_DEFINE(world, InstanceBuffer);
     ECS_COMPONENT_DEFINE(world, Mesh);
-    ECS_COMPONENT_DEFINE(world, Elements);
+    ECS_META_COMPONENT(world, Elements);
 
     ECS_COMPONENT_DEFINE(world, FeedbackBuffer);
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);

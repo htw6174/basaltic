@@ -91,8 +91,8 @@ void InitDebugBuffers(ecs_iter_t *it) {
         };
         sg_buffer instanceBuffer = sg_make_buffer(&vbd);
 
-        //ecs_set(it->world, it->entities[i], Binding, {.binding = bind, .elements = 24, .instances = DEBUG_INSTANCE_COUNT});
         ecs_set(it->world, it->entities[i], InstanceBuffer, {.buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
+        ecs_set(it->world, it->entities[i], Elements, {24});
     }
 
 }
@@ -100,6 +100,8 @@ void InitDebugBuffers(ecs_iter_t *it) {
 void UpdateDebugBuffers(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 1);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
+    // Optional term, may be null
+    Color *colors = ecs_field(it, Color, 3);
 
     const vec3 *scale = ecs_singleton_get(it->world, Scale);
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
@@ -121,7 +123,7 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
                 htw_geo_getHexCellPositionSkewed(positions[m], &posX, &posY);
                 instanceData[instanceCount] = (DebugInstanceData){
                     .position = {.xyz = vec3MultiplyVector((vec3){{posX, posY, elevation}}, *scale), .__w = 1.0},
-                    .color = {{1.0, 0.0, 1.0, 1.0}},
+                    .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
                     .scale = 1.0
                 };
                 instanceCount++;
@@ -131,23 +133,6 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
         sg_update_buffer(instanceBuffers[i].buffer, &(sg_range){.ptr = instanceData, .size = instanceBuffers[i].size});
     }
 }
-
-/*
-void DrawDebugPipeline(ecs_iter_t *it) {
-    Pipeline *pips = ecs_field(it, Pipeline, 1);
-    Binding *binds = ecs_field(it, Binding, 2);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 3);
-
-    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
-
-    for (int i = 0; i < it->count; i++) {
-        sg_apply_pipeline(pips[i].pipeline);
-        sg_apply_bindings(&binds[i].binding);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
-
-        bc_drawWrapInstances(0, 24, binds[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
-    }
-}*/
 
 void DrawInstances(ecs_iter_t *it) {
     ecs_id_t renderPipeline = ecs_field_id(it, 1);
@@ -193,12 +178,14 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     ECS_OBSERVER(world, InitDebugBuffers, EcsOnAdd,
         [out] InstanceBuffer,
+        [out] ?Elements,
         [none] bcview.DebugRender
     );
 
     ECS_SYSTEM(world, UpdateDebugBuffers, OnModelChanged,
         [in] ModelQuery,
         [inout] InstanceBuffer,
+        [in] ?Color,
         [in] Scale($),
         [in] ModelWorld($),
         [none] bcview.DebugRender
@@ -234,6 +221,8 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_add_id(world, debugPipeline, DebugRender);
     ecs_add(world, debugPipeline, Pipeline);
     // OnAdd observer initializes Pipeline and adds QueryDesc, and makes the entity a child of RenderPipeline
+    // FIXME? To obey OneOf restriction when setting up default debug instances, need to set pipeline's parent here
+    ecs_add_pair(world, debugPipeline, EcsChildOf, RenderPipeline);
 
     // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
     // aka "Draw Query"
@@ -241,7 +230,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_add_id(world, debugInstancesDefault, DebugRender);
     ecs_add_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
     ecs_add(world, debugInstancesDefault, InstanceBuffer);
-    ecs_set(world, debugInstancesDefault, Elements, {24});
+    ecs_set(world, debugInstancesDefault, Color, {{0.0, 1.0, 1.0, 1.0}});
     // TODO: add behavior to make debugInstancesDefault(ModelQuery) a subquery of the original value, with this description
     // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr on the pipeline, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
     ecs_set(world, debugInstancesDefault, QueryDesc, {

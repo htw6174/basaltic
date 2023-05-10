@@ -20,6 +20,9 @@ extern ECS_COMPONENT_DECLARE(vec3);
 typedef vec3 Scale;
 extern ECS_COMPONENT_DECLARE(Scale);
 
+typedef vec4 Color;
+extern ECS_COMPONENT_DECLARE(Color);
+
 
 
 /* Connection to Model */

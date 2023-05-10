@@ -34,6 +34,7 @@ typedef struct {
     ecs_entity_t focusEntity;
     // TODO: add focus history, change focus by writing to / cycling through history. Add back/forward buttons or recently viewed list
     ecs_query_t *components;
+    ecs_query_t *tags;
     ecs_query_t *relationships;
     // user defined queries
     QueryContext customQueries[MAX_CUSTOM_QUERIES];
@@ -501,7 +502,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
 
     igSpacing();
 
-    // Add new Component, Tag, or Relationship
+    // Add Component
     static ecs_entity_t newComponent = 0;
     if (igButton("Add Component", (ImVec2){0, 0})) {
         if (ic->components == NULL) {
@@ -519,11 +520,34 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         }
         igEndPopup();
     }
+
+    igSameLine(0, -1);
+    // Add Tag
+    static ecs_entity_t newTag = 0;
+    if (igButton("Add Tag", (ImVec2){0, 0})) {
+        if (ic->tags == NULL) {
+            // create tag query (any entity, could be slow to evaluate)
+            ic->tags = ecs_query_new(world, "_");
+        }
+        igOpenPopup_Str("add_tag_popup", 0);
+        newTag = 0;
+    }
+    if (igBeginPopup("add_tag_popup", 0)) {
+        if (entitySelector(world, ic->tags, &newTag)) {
+            if (newTag != 0) {
+                ecs_add_id(world, e, newTag);
+            }
+        }
+        igEndPopup();
+    }
+
+    igSameLine(0, -1);
+    // Add pair
     static ecs_id_t newPair = 0;
     if (igButton("Add Pair", (ImVec2){0, 0})) {
         if (ic->relationships == NULL) {
-            // create relationshp query: could use union of all relationship properties, but Component || Tag seems to catch everything
-            ic->relationships = ecs_query_new(world, "EcsComponent || EcsTag");
+            // create relationshp query as union of all relationship properties. May still miss some entities that can be used as relationships, can handle these cases later with a more general purpose drag-and-drop relationship builder or something
+            ic->relationships = ecs_query_new(world, "EcsComponent || EcsTag || EcsFinal || EcsDontInherit || EcsAlwaysOverride || EcsTransitive || EcsReflexive || EcsAcyclic || EcsTraversable || EcsExclusive || EcsUnion || EcsSymmetric || EcsWith || EcsOneOf");
         }
         igOpenPopup_Str("add_pair_popup", 0);
         newPair = 0;
@@ -636,6 +660,11 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
     float itemHeight = igGetTextLineHeightWithSpacing();
     ecs_iter_t it = ecs_query_iter(world, query);
     entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 25, selected);
+
+    // TODO: make fullpath inspector method
+    char *path = ecs_get_fullpath(world, *selected);
+    igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, path);
+    ecs_os_free(path);
 
     igBeginDisabled(*selected == 0);
     if (igButton("Select", (ImVec2){0, 0})) {
@@ -795,6 +824,7 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
             // if (igIsWindowAppearing()) {
             //     queryExpr[0] = '\0';
             // }
+            // TODO: make input field larger
             if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
                 //qd->desc.filter.expr = queryExpr;
                 ecs_set(world, e, QueryDesc, {.desc.filter.expr = queryExpr});
@@ -802,6 +832,11 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
             }
             igEndPopup();
         }
+    } else if (component == ecs_id(Color)) {
+        igSameLine(0, -1);
+        // Color picker
+        Color *col = ecs_get_mut(world, e, Color);
+        igColorEdit4("##color_picker", col->v, ImGuiColorEditFlags_NoInputs);
     } else if (ecs_has(world, component, EcsMetaType)) {
         // NOTE: calling ecs_get_mut_id AFTER a call to ecs_remove_id will end up adding the removed component again, with default values
         void *componentData = ecs_get_mut_id(world, e, component);

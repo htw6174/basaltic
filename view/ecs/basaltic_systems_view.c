@@ -84,7 +84,9 @@ void CreateSubQueries(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         terms[i].desc.parent = existingQuery->query;
         ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
-        ecs_set(it->world, it->entities[i], ModelQuery, {query});
+        if (query != NULL) {
+            ecs_set(it->world, it->entities[i], ModelQuery, {query});
+        }
     }
 }
 
