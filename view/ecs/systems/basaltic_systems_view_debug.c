@@ -202,21 +202,24 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
     // aka "Draw Query"
-    ecs_entity_t debugInstancesDefault = ecs_set_name(world, 0, "DebugDrawPrefab");
-    ecs_add_id(world, debugInstancesDefault, EcsPrefab);
-    ecs_add_id(world, debugInstancesDefault, DebugRender);
+    ecs_entity_t debugPrefab = ecs_set_name(world, 0, "DebugDrawPrefab");
+    ecs_add_id(world, debugPrefab, EcsPrefab);
+    ecs_add_id(world, debugPrefab, DebugRender);
     //ecs_add_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
     // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
-    ecs_set(world, debugInstancesDefault, QueryDesc, {
+    ecs_set(world, debugPrefab, QueryDesc, {
         // .desc.filter.terms = {
         //     {.id = ecs_id(Position), .inout = EcsIn}, // NOTE: even if the header is included, if the correct module is not imported then entity IDs may default to 0, preventing them from becoming usable filter terms. The query builder Macros can help to detect this at runtime, but having a compile time check would be very helpful
         //     {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
         // }
         .desc.filter.expr = "Position, (bc.planes.IsOn, _)"
     });
-    ecs_set(world, debugInstancesDefault, Color, {{1.0, 0.0, 1.0, 1.0}});
-    ecs_override_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
-    ecs_override(world, debugInstancesDefault, InstanceBuffer); // NOTE: no need for a real instance buffer here, just want to add one to instances
-    ecs_override(world, debugInstancesDefault, QueryDesc);
-    ecs_override(world, debugInstancesDefault, Color);
+    ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
+    ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
+    ecs_override(world, debugPrefab, InstanceBuffer); // NOTE: no need for a real instance buffer here, just want to add one to instances
+    ecs_override(world, debugPrefab, QueryDesc);
+    ecs_override(world, debugPrefab, Color);
+
+    // Prefab instance
+    ecs_new_w_pair(world, EcsIsA, debugPrefab);
 }
