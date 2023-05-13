@@ -9,6 +9,8 @@
 void bc_setupEditor(void);
 void bc_teardownEditor(void);
 void bc_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui);
+void bc_editorOnModelStart(void);
+void bc_editorOnModelStop(void);
 
 
 #endif // BASALTIC_EDITOR_H_INCLUDED

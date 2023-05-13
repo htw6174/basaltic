@@ -82,20 +82,25 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     bc_WorldState *world = model == NULL ? NULL : model->world;
 
+    // TODO: get frame time here, pass instead of making flecs calculate it
+    ecs_progress(vc.ecsWorld, 0.0f);
+
     if (world != NULL) {
         if (*ecs_singleton_get(vc.ecsWorld, ModelLastRenderedStep) < world->step) {
             if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
+                // set model ecs world scope, to keep view's external tags/queries separate
+                ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
+                ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
+                ecs_set_scope(world->ecsWorld, viewScope);
                 // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
                 // TODO: could be useful to pass elapsed model steps as delta time
                 ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
+                ecs_set_scope(world->ecsWorld, oldScope);
                 SDL_SemPost(world->lock);
             }
         }
         ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {world->step});
     }
-
-    // TODO: get frame time here, pass instead of making flecs calculate it
-    ecs_progress(vc.ecsWorld, 0.0f);
 
     // TODO: return elapsed time in ms
     return 0;
@@ -115,10 +120,14 @@ void bc_view_onModelStart(bc_ModelData *model) {
     ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
     // NOTE: model advances to step 1 before it becomes 'ready' (i.e. before onModelStart is called). Setting the last rendered step to 0 tells the view that model data is out of date on the next frame after model start
     ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {0});
+
+    bc_editorOnModelStart();
 }
 
 void bc_view_onModelStop() {
     ecs_singleton_remove(vc.ecsWorld, ModelWorld);
+
+    bc_editorOnModelStop();
 }
 
 void bc_view_setupEditor() {

@@ -70,6 +70,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Pipeline);
 
     ECS_TAG_DEFINE(world, RenderPipeline);
+    ecs_add_id(world, RenderPipeline, EcsTraversable);
     ecs_add_id(world, RenderPipeline, EcsOneOf);
     ecs_add_id(world, RenderPipeline, EcsExclusive);
 

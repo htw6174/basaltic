@@ -105,15 +105,8 @@ void bc_setupEditor(void) {
             [3] = {.queryExpr = "flecs.system.System"},
         }
     };
-    modelInspector = (EcsInspectionContext){
-        .worldName = "Model",
-        .customQueries = {
-            [0] = {.queryExpr = "Position"},
-            [1] = {.queryExpr = "bc.planes.Plane"},
-            [2] = {.queryExpr = "Prefab"},
-            [3] = {.queryExpr = "flecs.system.System"},
-        }
-    };
+
+    modelInspector = (EcsInspectionContext){0};
 }
 
 void bc_teardownEditor(void) {
@@ -206,13 +199,34 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         /* Ensure the model isn't running before doing anything else */
         if (!bc_model_isRunning(model)) {
             if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+                // set model ecs world scope, to keep view's external tags/queries separate
+                ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
+                ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
+                ecs_set_scope(world->ecsWorld, viewScope);
                 modelWorldInspector(world, viewWorld);
                 ecsWorldInspector(world->ecsWorld, &modelInspector);
+                ecs_set_scope(world->ecsWorld, oldScope);
                 SDL_SemPost(world->lock);
             }
         }
     }
     igEnd();
+}
+
+void bc_editorOnModelStart(void) {
+    modelInspector = (EcsInspectionContext){
+        .worldName = "Model",
+        .customQueries = {
+            [0] = {.queryExpr = "Position"},
+            [1] = {.queryExpr = "bc.planes.Plane"},
+            [2] = {.queryExpr = "Prefab"},
+            [3] = {.queryExpr = "flecs.system.System"},
+        }
+    };
+}
+
+void bc_editorOnModelStop(void) {
+    modelInspector = (EcsInspectionContext){0};
 }
 
 // TODO: will this work with just the model's ecs world?
@@ -369,6 +383,14 @@ void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selec
                     if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
                         *selected = e;
                     }
+                    // TODO: should be its own function
+                    if (igBeginPopupContextItem("##context_menu", ImGuiPopupFlags_MouseButtonRight)) {
+                        if (igSelectable_Bool("Create Instance", false, 0, (ImVec2){0, 0})) {
+                            ecs_new_w_pair(world, EcsIsA, e);
+                        }
+                        // TODO: more context options
+                        igEndPopup();
+                    }
                     igPopID();
                 }
                 resultsCount++;
@@ -454,6 +476,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     for (int i = 0; i < type->count; i++) {
         ecs_id_t id = type->array[i];
         igPushID_Int(id);
+        // Pairs don't pass ecs_is_valid, so check for pair first
         if (ecs_id_is_pair(id)) {
             // TODO: dedicated relationship inspector
             ecs_id_t first = ecs_pair_first(world, id);
@@ -474,27 +497,30 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             igSameLine(0, -1);
             if (igSmallButton("x")) {
                 ecs_remove_id(world, e, id);
-                // TODO: need to skip component inspector from here, otherwise pairs with data will get immediately re-added
-            }
-            if (ecs_has(world, first, EcsMetaType)) {
+                // need to skip component inspector from here, otherwise pairs with data will get immediately re-added
+            } else if (ecs_has(world, first, EcsMetaType)) {
                 void *componentData = ecs_get_mut_id(world, e, id);
                 ecs_meta_cursor_t cur = ecs_meta_cursor(world, first, componentData);
                 ecsMetaInspector(world, &cur, &ic->focusEntity);
             }
-
-        } else if (ecs_has(world, id, EcsComponent)) {
-            componentInspector(world, e, id, &ic->focusEntity);
+        } else if (ecs_is_valid(world, id)) {
+            if (ecs_has(world, id, EcsComponent)) {
+                componentInspector(world, e, id, &ic->focusEntity);
+            } else {
+                // TODO: dedicated tag inspector
+                entityLabel(world, id);
+                igSameLine(0, -1);
+                if (igSmallButton("?")) {
+                    ic->focusEntity = id;
+                }
+                igSameLine(0, -1);
+                if (igSmallButton("x")) {
+                    ecs_remove_id(world, e, id);
+                }
+            }
         } else {
-            // TODO: dedicated tag inspector
-            entityLabel(world, id);
-            igSameLine(0, -1);
-            if (igSmallButton("?")) {
-                ic->focusEntity = id;
-            }
-            igSameLine(0, -1);
-            if (igSmallButton("x")) {
-                ecs_remove_id(world, e, id);
-            }
+            // Type may contain an invalid ID which is still meaningful (e.g. component override)
+            igText("Unknown type: %u %x", id, id >> 32);
         }
         igPopID();
     }
@@ -835,8 +861,9 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
     } else if (component == ecs_id(Color)) {
         igSameLine(0, -1);
         // Color picker
+        static ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_PickerHueWheel;
         Color *col = ecs_get_mut(world, e, Color);
-        igColorEdit4("##color_picker", col->v, ImGuiColorEditFlags_NoInputs);
+        igColorEdit4("##color_picker", col->v, flags);
     } else if (ecs_has(world, component, EcsMetaType)) {
         // NOTE: calling ecs_get_mut_id AFTER a call to ecs_remove_id will end up adding the removed component again, with default values
         void *componentData = ecs_get_mut_id(world, e, component);
@@ -996,6 +1023,7 @@ void possessEntity(ecs_world_t *world, ecs_entity_t target) {
     // Way of doing this that doesn't rely on storing a reference to the 'active character' in uistate: use filters and systems
     // When switching control, first remove PlayerControlled tag from all entities. Then add the tag to target entity
     if (ecs_is_valid(world, target)) {
+        ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){.id = ecs_pair(Ego, EcsAny)});
         ecs_filter_t *pcFilter = ecs_filter(world, {
             .terms = {
                 {ecs_pair(Ego, EcsAny)}
@@ -1008,7 +1036,8 @@ void possessEntity(ecs_world_t *world, ecs_entity_t target) {
                 ecs_remove_pair(world, fit.entities[i], Ego, 0);
             }
         }
-        ecs_set_pair(world, target, Ego, 0);
+        ecs_set_pair(world, target, Ego, 0); // TODO: can't have a relationship where the target is 0; should create some kind of 'blank' ego for non-ai controlled characters
+        ecs_remove_pair(world, target, Ego, 0);
         ecs_add(world, target, PlayerVision);
         ecs_defer_end(world);
 

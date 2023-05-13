@@ -9,6 +9,7 @@
 
 const size_t DEBUG_INSTANCE_COUNT = 1024;
 
+// TODO: make a more general instance data struct. This style of instanced rendering will be used for most draw queries. Can add to this slightly for more versatility (single axis rotation etc.), and add consistancy to the fields required for filling instance buffers (Position, (IsOn _))
 typedef struct {
     vec4 position;
     vec4 color;
@@ -67,12 +68,6 @@ void InitDebugPipeline(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         ecs_add_pair(it->world, it->entities[i], EcsChildOf, RenderPipeline);
         ecs_set(it->world, it->entities[i], Pipeline, {pip});
-        ecs_set(it->world, it->entities[i], QueryDesc, {
-            .desc.filter.terms = {
-                {.id = ecs_id(Position), .inout = EcsIn},
-                {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
-            }
-        });
     }
 }
 
@@ -135,21 +130,19 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
 }
 
 void DrawInstances(ecs_iter_t *it) {
-    ecs_id_t renderPipeline = ecs_field_id(it, 1);
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
     Elements *eles = ecs_field(it, Elements, 3);
     PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
-    const Pipeline *pipeline = ecs_get(it->world, ECS_PAIR_SECOND(renderPipeline), Pipeline);
-
     for (int i = 0; i < it->count; i++) {
         sg_bindings bind = {
             .vertex_buffers[0] = ibs[0].buffer
         };
 
-        sg_apply_pipeline(pipeline->pipeline);
+        sg_apply_pipeline(pipelines[i].pipeline);
         sg_apply_bindings(&bind);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
 
@@ -162,17 +155,9 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
-    ECS_IMPORT(world, BcPlanes);
-
-    // ECS_SYSTEM(world, InitDebugPipeline, EcsOnStart,
-    //     [out] !Pipeline,
-    //     [out] !QueryDesc,
-    //     [none] bcview.DebugRender
-    // );
 
     ECS_OBSERVER(world, InitDebugPipeline, EcsOnAdd,
         [out] Pipeline,
-        [out] !QueryDesc,
         [none] bcview.DebugRender
     );
 
@@ -191,22 +176,13 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [none] bcview.DebugRender
     )
 
-    // ECS_SYSTEM(world, DrawDebugPipeline, EcsOnUpdate,
-    //     [in] Pipeline,
-    //     [in] Binding,
-    //     [in] PVMatrix($),
-    //     [none] ModelWorld($),
-    //     [none] WrapInstanceOffsets($),
-    //     [none] bcview.DebugRender,
-    // );
-
-    // TODO: use query variables to get the Pipeline component directly. For now, just check for the relationship and try to get the component
+    // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
     ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
-        [in] (bcview.RenderPipeline, _),
+        [in] Pipeline(up(bcview.RenderPipeline)),
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
-        [none] ModelWorld($),
+        //[none] ModelWorld($),
         [none] WrapInstanceOffsets($),
     );
 
@@ -220,24 +196,27 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugPipeline");
     ecs_add_id(world, debugPipeline, DebugRender);
     ecs_add(world, debugPipeline, Pipeline);
-    // OnAdd observer initializes Pipeline and adds QueryDesc, and makes the entity a child of RenderPipeline
-    // FIXME? To obey OneOf restriction when setting up default debug instances, need to set pipeline's parent here
+    // OnAdd observer initializes Pipeline and makes the entity a child of RenderPipeline
+    // FIXME? To obey OneOf restriction when setting up debug prefab, need to set pipeline's parent here
     ecs_add_pair(world, debugPipeline, EcsChildOf, RenderPipeline);
 
     // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
     // aka "Draw Query"
-    ecs_entity_t debugInstancesDefault = ecs_set_name(world, 0, "DebugInstancesDefault");
+    ecs_entity_t debugInstancesDefault = ecs_set_name(world, 0, "DebugDrawPrefab");
+    ecs_add_id(world, debugInstancesDefault, EcsPrefab);
     ecs_add_id(world, debugInstancesDefault, DebugRender);
-    ecs_add_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
-    ecs_add(world, debugInstancesDefault, InstanceBuffer);
-    ecs_set(world, debugInstancesDefault, Color, {{0.0, 1.0, 1.0, 1.0}});
-    // TODO: add behavior to make debugInstancesDefault(ModelQuery) a subquery of the original value, with this description
-    // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr on the pipeline, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
+    //ecs_add_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
+    // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
     ecs_set(world, debugInstancesDefault, QueryDesc, {
-        .desc.filter.terms = {
-            {.id = ecs_id(Position), .inout = EcsIn},
-            {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn},
-            {.id = ecs_id(PlayerVision), .inout = EcsIn} // NOTE: even if the header is included, if the correct module is not imported then entity IDs may default to 0, preventing them from becoming usable filter terms. The query builder Macros can help to detect this at runtime, but having a compile time check would be very helpful
-        }
+        // .desc.filter.terms = {
+        //     {.id = ecs_id(Position), .inout = EcsIn}, // NOTE: even if the header is included, if the correct module is not imported then entity IDs may default to 0, preventing them from becoming usable filter terms. The query builder Macros can help to detect this at runtime, but having a compile time check would be very helpful
+        //     {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
+        // }
+        .desc.filter.expr = "Position, (bc.planes.IsOn, _)"
     });
+    ecs_set(world, debugInstancesDefault, Color, {{1.0, 0.0, 1.0, 1.0}});
+    ecs_override_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
+    ecs_override(world, debugInstancesDefault, InstanceBuffer); // NOTE: no need for a real instance buffer here, just want to add one to instances
+    ecs_override(world, debugInstancesDefault, QueryDesc);
+    ecs_override(world, debugInstancesDefault, Color);
 }

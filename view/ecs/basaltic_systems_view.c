@@ -62,7 +62,7 @@ void UniformCameraToPVMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, PVMatrix);
 }
 
-void CreatePipelineQueries(ecs_iter_t *it) {
+void CreateModelQueries(ecs_iter_t *it) {
     QueryDesc *terms = ecs_field(it, QueryDesc, 1);
 
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
@@ -76,13 +76,14 @@ void CreatePipelineQueries(ecs_iter_t *it) {
 
 void CreateSubQueries(ecs_iter_t *it) {
     QueryDesc *terms = ecs_field(it, QueryDesc, 1);
-    ecs_id_t renderPipeline = ecs_field_id(it, 2);
-    const ModelQuery *existingQuery = ecs_get(it->world, ECS_PAIR_SECOND(renderPipeline), ModelQuery);
+    ModelQuery *baseQueries = ecs_field(it, ModelQuery, 2);
+    //ecs_id_t renderPipeline = ecs_field_id(it, 2);
+    //const ModelQuery *existingQuery = ecs_get(it->world, ECS_PAIR_SECOND(renderPipeline), ModelQuery);
 
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
     for (int i = 0; i < it->count; i++) {
-        terms[i].desc.parent = existingQuery->query;
+        terms[i].desc.parent = baseQueries[i].query;
         ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
         if (query != NULL) {
             ecs_set(it->world, it->entities[i], ModelQuery, {query});
@@ -90,9 +91,16 @@ void CreateSubQueries(ecs_iter_t *it) {
     }
 }
 
-void DestroyModelQueries(ecs_iter_t *it) {
+void RemoveModelQueries(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         ecs_remove(it->world, it->entities[i], ModelQuery);
+    }
+}
+
+void DestroyModelQueries(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    for (int i = 0; i < it->count; i++) {
+        ecs_query_fini(queries[i].query);
     }
 }
 
@@ -121,28 +129,30 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] PVMatrix($)
     );
 
-    // After attaching to model, create pipeline base queries in the model's ecs world
-    ECS_SYSTEM(world, CreatePipelineQueries, OnModelChanged,
+    ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
         [in] QueryDesc,
         [in] ModelWorld($),
         [out] !ModelQuery,
-        [none] Pipeline
     );
 
-    // Must create subqueries after creating pipeline queries. NOTE: Systems are run in definition order within a phase, but the RenderPipeline's 'parent' query won't actually be set until the phase is complete
-    // Here, we tell Flecs' sync point scheduler that this system relies on a compontent with no source (as a standin for the ModelQuery pulled from the RenderPipeline relationship), to ensure that other systems which write to any ModelQuery are processed and flushed first
-    ECS_SYSTEM(world, CreateSubQueries, OnModelChanged,
+    // Must create subqueries after creating parent queries, Flecs' scheduler *should* handle this automatically because of the [out] ModelQuery above and [in] ModelQuery term here
+    ECS_SYSTEM(world, CreateSubQueries, EcsOnLoad,
         [in] QueryDesc,
-        [in] (bcview.RenderPipeline, _),
+        [in] ModelQuery(parent),
         [in] ModelWorld($),
         [out] !ModelQuery,
-        //[in] ModelQuery()
     );
 
-    // Remove queries after model is detached TODO: do this before detatching, so that queries can be cleaned up on the model?
-    ECS_SYSTEM(world, DestroyModelQueries, EcsOnLoad,
+    // Remove query references after model is detached, the queries themselves are cleaned up automatically by Flecs
+    ECS_SYSTEM(world, RemoveModelQueries, EcsOnLoad,
         [out] ModelQuery,
         [none] !ModelWorld($)
+    );
+
+    // Call fini on Model queries only while Model world still exists
+    ECS_OBSERVER(world, DestroyModelQueries, EcsOnRemove,
+        ModelQuery,
+        [none] ModelWorld($)
     );
 
     // A system with no query will run once per frame. However, an end of frame call is already being handled by the core engine. Something like this might be useful for starting and ending individual render passes

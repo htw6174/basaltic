@@ -151,6 +151,7 @@ ECS_STRUCT(FeedbackBuffer, {
     u32 gluint;
 });
 
+// NOTE: can tell parser to ignore members after a certain line by adding ECS_PRIVATE
 ECS_STRUCT(TerrainBuffer, {
     u32 gluint;
     // Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
