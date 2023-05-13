@@ -1,8 +1,8 @@
 # Basaltic
 
-A narrow-focus engine built for turn based games on a hexagonal grid
+A narrow-focus engine and reference game, built for turn based games on a hexagonal grid
 
-Built on C99 with Vulkan, SDL2, and ImGui
+Built on C99 with Sokol, SDL2, ImGui, and Flecs
 
 ## Startup options
 
@@ -16,29 +16,35 @@ Basaltic supports these program parameters:
 
 - Start with the editor (ImGui interface) enabled. By default the editor is disabled, and can be toggled with `/~
 
-By default Basaltic will launch to your game's main menu screen. These options allow changing startup behavior:
+By default Basaltic will launch to a main menu screen (TODO). These options allow changing startup behavior:
 
--n SEED
+-n SEED X Y
 
-- Automatically start a new game with world seed SEED
+- Automatically start a new game with world seed SEED and chunk dimensions [X, Y]
 
 -l PATH
 
-- Load the save file at PATH
+- Load the save file at PATH (TODO)
 
 -c
 
-- Load the most recent save in the configured save directory
+- Load the most recent save in the configured save directory (TODO)
 
 
 ## Building from source
 
-Basaltic is intended to be cross-platform, but has so far only been tested on Linux. If you are able to build and run on Windows, please let me know!
+Basaltic is designed to be cross-platform and should work on any device that supports OpenGL 4.5 or higher. Currently it has only been tested on Linux and Windows 10. If you would like support for another platform, please let me know!
 
-Because Vulkan is a requirement for this engine, it will not work on OSX.
+The included CMake config can generate makefiles for Windows (with MinGW) and Linux.
 
-Use cmake with the included CMakeLists.txt to generate makefiles and compile shaders. You may need to change the library path for htw_libs depending on where you placed the library binary
+Requires development libraries for SDL2. On Linux, installing SDL2 with your package manager *should* allow CMake to find it automatically. On Windows, I recommend getting the latest mingw zip from here: https://github.com/libsdl-org/SDL/releases
 
-Requires development libraries for Vulkan, SDL2, Freetype2, and htw_libs (https://github.com/htw6174/htw-libs)
+Requires Sokol and htw_libs. Clone this repository with `--recurse-submodules` or clone directly from https://github.com/htw6174/htw-libs and https://github.com/floooh/sokol into the corresponding directories in this repository.
+- cimgui is not included as a submodule because it is precompiled with the appropriate backends (SDL+OpenGL), and the compiled libraries for Linux and Windows are distributed here. This will probably change in the future to allow easier switching of backends
+- Flecs is not included as a submodule because it requires a few small changes for this project
+
+On Windows, you will need to tell CMake where SDL2 and MinGW are installed. Do this by setting `SDL2_DIR` and `MINGW_PATH` in the project root's CMakeLists.txt
+- `SDL2_DIR` should be the directory where cmake config files are stored, and will look like `(...)/SDL2-2.26.4/x86_64-w64-mingw32/lib/cmake/SDL2`
+- `MINGW_PATH` should be the directory with mingw.exe, and will look like `(...)/bin/mingw`
 
 More info at [basalitc.neocities.org](https://basaltic.neocities.org/)

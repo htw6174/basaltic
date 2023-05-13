@@ -10,16 +10,15 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
 add_executable(basaltic WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c)
 
-# find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake and /usr/share/cmake/Modules/FindVulkan.cmake (or equivalent)
+# find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake
 # .cmake files under /usr/lib/cmake can be located this way to load variables
 if(NOT DEFINED SDL2_DIR OR SDL2_DIR STREQUAL "SDL2_DIR-NOTFOUND")
     # *NOTE*: Change this to match your SDL cmake config directory
     set(SDL2_DIR "D:/Programming/sdk/SDL2-2.26.4/x86_64-w64-mingw32/lib/cmake/SDL2")
 endif()
 find_package(SDL2 REQUIRED)
-find_package(Vulkan REQUIRED)
 
-# TODO: build cimgui with sdl+vulkan backend, optionally static link. For now will use prebuilt libs
+# TODO: build cimgui with sdl+opengl backend, optionally static link. For now will use prebuilt libs
 #set(IMGUI_STATIC "yes")
 #add_subdirectory(cimgui)
 #set(BACKENDS_FOLDER "cimgui/imgui/backends/")
@@ -52,10 +51,10 @@ add_subdirectory(view)
 #endif()
 
 # SDL2_INCLUDE_DIRS and SDL2_LIBRARIES are defined in /usr/lib/cmake/SDL2/SDL2Config.cmake (included with most SDL installations)
-target_include_directories(basaltic PRIVATE include/ htw-libs/ model/ view/ cimgui/ ${SDL2_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS})
+target_include_directories(basaltic PRIVATE include/ htw-libs/ model/ view/ cimgui/ ${SDL2_INCLUDE_DIRS})
 
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(basaltic PRIVATE -lm htw basaltic_model basaltic_view SDL2::SDL2 SDL2::SDL2main Vulkan::Vulkan ${IMGUI_LIB})
+target_link_libraries(basaltic PRIVATE -lm htw basaltic_model basaltic_view SDL2::SDL2 SDL2::SDL2main ${IMGUI_LIB})
 
 # Set output directories
 set_target_properties(basaltic htw basaltic_model basaltic_view
