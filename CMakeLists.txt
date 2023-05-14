@@ -10,6 +10,12 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
 add_executable(basaltic WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c)
 
+#if(WIN32)
+#    add_library(GLEW SHARED IMPORTED)
+#    # *NOTE*: Change this to your copy of glew
+#    set_target_properties(GLEW PROPERTIES IMPORTED_LOCATION ${MINGW_PATH}/bin/glew32.dll)
+#endif()
+
 # find_package should locate /usr/lib/cmake/SDL2/SDL2Config.cmake
 # .cmake files under /usr/lib/cmake can be located this way to load variables
 if(NOT DEFINED SDL2_DIR OR SDL2_DIR STREQUAL "SDL2_DIR-NOTFOUND")
@@ -64,7 +70,16 @@ set_target_properties(basaltic htw basaltic_model basaltic_view
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
         )
 
+
 if(WIN32)
+    # *NOTE*: change this to match your MinGW install / IDE
+    set(MINGW_PATH "D:/Programs/mingw64")
+    #find_library(GLEW glew32 REQUIRED)
+    set(GLEW ${MINGW_PATH}/bin/glew32.dll)
+    # link glew for opengl, and winsock for Flecs' REST API
+    target_link_libraries(basaltic_view PRIVATE ${GLEW})
+    target_link_libraries(basaltic PRIVATE ws2_32)
+    # on Windows, need to include some other binaries with .exe
     add_custom_command(TARGET basaltic POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> ${IMGUI_LIB} ${CMAKE_BINARY_DIR}/bin)
 endif()
@@ -78,7 +93,5 @@ install(FILES ${PROJECT_SOURCE_DIR}/credits.md DESTINATION ${CMAKE_INSTALL_PREFI
 install(FILES ${PROJECT_BINARY_DIR}/imgui.ini DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${IMGUI_LIB} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 if(WIN32)
-    # *NOTE*: change this to match your MinGW install / IDE
-    set(MINGW_PATH "C:/Program Files/JetBrains/CLion 2023.1/bin/mingw")
-    install(FILES $<TARGET_FILE:SDL2::SDL2> ${MINGW_PATH}/bin/libstdc++-6.dll ${MINGW_PATH}/bin/libgcc_s_seh-1.dll ${MINGW_PATH}/bin/libwinpthread-1.dll DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+    install(FILES $<TARGET_FILE:SDL2::SDL2> ${GLEW} ${MINGW_PATH}/bin/libstdc++-6.dll ${MINGW_PATH}/bin/libgcc_s_seh-1.dll ${MINGW_PATH}/bin/libwinpthread-1.dll DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 endif()

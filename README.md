@@ -44,7 +44,9 @@ Requires Sokol and htw_libs. Clone this repository with `--recurse-submodules` o
 - Flecs is not included as a submodule because it requires a few small changes for this project
 
 On Windows, you will need to tell CMake where SDL2 and MinGW are installed. Do this by setting `SDL2_DIR` and `MINGW_PATH` in the project root's CMakeLists.txt
-- `SDL2_DIR` should be the directory where cmake config files are stored, and will look like `(...)/SDL2-2.26.4/x86_64-w64-mingw32/lib/cmake/SDL2`
-- `MINGW_PATH` should be the directory with mingw.exe, and will look like `(...)/bin/mingw`
+- `SDL2_DIR` should be the directory where cmake config files are stored, and will look like `(...)/x86_64-w64-mingw32/lib/cmake/SDL2`
+- `MINGW_PATH` should be the root mingw directory which contains bin/include/lib directories, and will look like `(...)/mingw` or `(...)/mingw64`
+
+On Windows, you will need GLEW. I set this up by adding it to my mingw installation, copying the dll to `mingw/bin` and the header to `mingw/x86_64-w64-mingw32/include/GL`. If you use a different setup, make sure to change how GLEW is set in CMake
 
 More info at [basalitc.neocities.org](https://basaltic.neocities.org/)

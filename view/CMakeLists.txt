@@ -21,9 +21,10 @@ add_custom_target(shaders ALL
 add_dependencies(basaltic_view shaders)
 
 find_package(SDL2 REQUIRED)
+
 find_package(OpenGL REQUIRED)
 
 # TODO: any way to avoid including model/ecs explicitly?
 target_include_directories(basaltic_view PRIVATE ../htw-libs ../include ../cimgui ../model ../model/ecs ${SDL2_INCLUDE_DIRS} ${OPENGL_gl_LIBRARY})
 
-target_link_libraries(basaltic_view PRIVATE htw SDL2::SDL2 OpenGL::OpenGL)
+target_link_libraries(basaltic_view PRIVATE htw SDL2::SDL2 OpenGL::GL)

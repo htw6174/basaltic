@@ -6,8 +6,12 @@
 #include "htw_core.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
+#ifdef _WIN32
+#include <GL/glew.h>
+#else
 #define GL_GLEXT_PROTOTYPES
-#include "GL/gl.h"
+#include <GL/gl.h>
+#endif
 
 typedef struct {
     vec3 position;
@@ -32,6 +36,15 @@ typedef struct {
 Mesh createHexmapMesh(void);
 void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk);
 void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex);
+
+void GlCheck(void);
+
+void GlCheck(void) {
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        printf("GL ERROR: %x\n", err);
+    }
+}
 
 /**
  * @brief Creates featureless hexagonal tile surface geometry, detail is added later by shaders
@@ -595,7 +608,12 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
 
         u32 chunkBufferCellCount = (bc_chunkSize * bc_chunkSize) + (2 * bc_chunkSize) + 1;
-        size_t bufferSize = chunkBufferCellCount * renderedChunkCount * sizeof(bc_CellData);
+        size_t bufferPerChunkSize = chunkBufferCellCount * sizeof(bc_CellData);
+        // determine and apply alignment
+        GLint ssboAlign = 0;
+        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &ssboAlign);
+        bufferPerChunkSize = htw_align(bufferPerChunkSize, ssboAlign);
+        size_t bufferSize = bufferPerChunkSize * renderedChunkCount;
 
         GLuint terrainBuffer;
         glGenBuffers(1, &terrainBuffer);
@@ -615,6 +633,7 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
             .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
             .loadedChunks = loadedChunks,
             .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
+            .bufferPerChunkSize = bufferPerChunkSize,
             .chunkBufferCellCount = chunkBufferCellCount,
             .data = malloc(bufferSize)
         });
@@ -673,9 +692,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
             sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
 
-            size_t range = terrainBuffers[i].chunkBufferCellCount * sizeof(bc_CellData);
+            size_t range = terrainBuffers[i].bufferPerChunkSize;
             size_t offset = c * range;
+            // FIXME: probably an alignment issue here, produces an error when c is odd (offset is not a multiple of 16)
             glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
+            GlCheck();
 
             //if (glGetError()) printf("%x\n", glGetError());
 
@@ -688,8 +709,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
                 sg_draw(0, mesh[i].elements, 1);
             }
         }
+        GlCheck();
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
+        GlCheck();
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
+        GlCheck();
     }
 }
 

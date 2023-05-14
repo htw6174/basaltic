@@ -12,7 +12,3 @@ target_include_directories(basaltic_model PUBLIC ../htw-libs ../include ecs ${SD
 add_subdirectory(ecs)
 
 target_link_libraries(basaltic_model PRIVATE htw SDL2::SDL2)
-
-if(WIN32)
-    target_link_libraries(basaltic_model PRIVATE ws2_32)
-endif()

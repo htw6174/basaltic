@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <unistd.h>
+#include <SDL2/SDL.h>
 #include "basaltic_super.h"
 #include "htw_core.h"
 

@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdbool.h>
+#include <float.h>
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"

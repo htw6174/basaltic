@@ -1,6 +1,9 @@
 #include "basaltic_window.h"
 #include "htw_core.h"
 #include "SDL2/SDL.h"
+#ifdef _WIN32
+#include <GL/glew.h>
+#endif
 
 static SDL_Window *createWindow(u32 width, u32 height);
 
@@ -22,6 +25,13 @@ bc_WindowContext *bc_createWindow(u32 width, u32 height) {
         printf("Failed to activate GL Context: %s\n", SDL_GetError());
     }
     wc->glContext = glc;
+
+#ifdef _WIN32
+    GLenum error = glewInit();
+    if (error != GLEW_OK) {
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(error));
+    }
+#endif
 
     return wc;
 }

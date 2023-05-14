@@ -161,6 +161,8 @@ ECS_STRUCT(TerrainBuffer, {
     s32 *closestChunks;
     s32 *loadedChunks;
     vec3 *chunkPositions;
+    // Size and offset multiplier used when binding buffer ranges
+    size_t bufferPerChunkSize;
     // Size of the data buffered for each draw call; length of data array is chunkBufferCellCount * renderedChunkCount
     // NOTE: this is greater than the number of cells in a chunk, also includes adjacent chunk data
     size_t chunkBufferCellCount;
