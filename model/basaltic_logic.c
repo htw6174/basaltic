@@ -38,6 +38,7 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     printf("Initializing flecs in sanitizing mode. Expect a significant slowdown.\n");
 #endif
     newWorld->ecsWorld = ecs_init();
+    ecs_set_threads(newWorld->ecsWorld, 4);
     //ecs_set_stage_count(newWorld->ecsWorld, 2);
     //newWorld->readonlyWorld = ecs_get_stage(newWorld->ecsWorld, 1);
     ECS_IMPORT(newWorld->ecsWorld, Bc);

@@ -1,5 +1,6 @@
 #include "basaltic_character_systems.h"
 #include "basaltic_components.h"
+#include "basaltic_phases.h"
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
 #include "basaltic_character.h"
@@ -190,6 +191,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_MODULE(world, BcSystemsCharacters);
 
     // ECS_IMPORT(world, Bc); // NOTE: this import does nothing, because `Bc` is a 'parent' path of `BcSystemsCharacters`
+    ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
     ECS_IMPORT(world, BcActors);
 
@@ -199,35 +201,34 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, BehaviorPredator);
 
     // TODO: replace behavior tags with Ego relationship
-    ECS_SYSTEM(world, bc_setWandererDestinations, EcsPreUpdate,
+    // TODO: change IsOn field, use Plane(up(bc.planes.IsOn)) instead
+    // - NOTE: should ask about or profile this; could cause the query to switch to per-instance iteration instead, which may negatively effect performance. Tradeoff is that access to the Plane is faster?
+    ECS_SYSTEM(world, bc_setWandererDestinations, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
         [none] BehaviorWander,
     );
 
-    ECS_SYSTEM(world, bc_setDescenderDestinations, EcsPreUpdate,
+    ECS_SYSTEM(world, bc_setDescenderDestinations, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
         [none] BehaviorDescend,
     );
 
-    //ECS_SYSTEM(world, bc_moveCharacters, EcsOnUpdate, [out] Position, [in] Destination, [in] (IsOn, _));
-    ecs_entity_t ecs_id(bc_moveCharacters) = ecs_system(world, {
-        .entity = ecs_entity(world, {
-            .name = "bc_moveCharacters",
-            .add = { ecs_dependson(EcsOnUpdate) }
-        }),
-        .query.filter.terms = {
-            { .id = ecs_id(Position), .inout = EcsOut },
-            { .id = ecs_id(Destination), .inout = EcsIn },
-            { .id = ecs_pair(IsOn, EcsAny), .inout = EcsIn },
-        },
-        .callback = bc_moveCharacters,
-        .no_readonly = true // disable readonly mode for this system
+    ECS_SYSTEM(world, bc_moveCharacters, Execution,
+        [out] Position,
+        [in] Destination,
+        [in] (bc.planes.IsOn, _));
+
+    // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
+    ecs_system(world, {
+        .entity = bc_moveCharacters,
+        .no_readonly = true
     });
-    ECS_SYSTEM(world, bc_revealMap, EcsPostUpdate,
+
+    ECS_SYSTEM(world, bc_revealMap, Resolution,
         [in] Position,
         [in] (bc.planes.IsOn, _),
         [none] bc.PlayerVision
@@ -236,24 +237,32 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
 
     // TEST ecosystem behaviors
-    ECS_SYSTEM(world, behaviorGraze, EcsPreUpdate,
+    ECS_SYSTEM(world, behaviorGraze, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
         BehaviorGrazer
     );
-    ECS_SYSTEM(world, behaviorPredate, EcsPreUpdate,
+    ecs_system(world, {
+        .entity = behaviorGraze,
+        .multi_threaded = true
+    });
+
+    ECS_SYSTEM(world, behaviorPredate, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
         BehaviorPredator
     );
+    ecs_system(world, {
+        .entity = behaviorPredate,
+        .multi_threaded = true
+    });
 
     ECS_SYSTEM(world, SurfaceSpawn, EcsOnStart,
         [in] Plane
     );
 
-    // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
     ecs_system(world, {
         .entity = SurfaceSpawn,
         .no_readonly = true
