@@ -86,7 +86,7 @@ endif()
 
 # install
 install(TARGETS basaltic RUNTIME DESTINATION bin LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
-install(DIRECTORY ${PROJECT_BINARY_DIR}/shaders_bin DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(DIRECTORY ${PROJECT_BINARY_DIR}/view/shaders DESTINATION ${CMAKE_INSTALL_PREFIX}/view)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/licenses DESTINATION ${CMAKE_INSTALL_PREFIX})
 install(FILES ${PROJECT_SOURCE_DIR}/credits.md DESTINATION ${CMAKE_INSTALL_PREFIX})
 # Install imgui.ini; may want to keep a separate development and release version?

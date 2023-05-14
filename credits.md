@@ -1,7 +1,6 @@
 Libraries used in, but not distributed with, this project:
-[Vulkan](https://www.vulkan.org/)
+[Sokol](https://github.com/floooh/sokol)
 [SDL2](https://www.libsdl.org/)
-[Freetype](https://freetype.org/)
 
 Libraries redistributed with this project:
 [stb_image_write by Sean Barrett](https://github.com/nothings/stb)
