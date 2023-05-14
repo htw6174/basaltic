@@ -516,7 +516,7 @@ void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 
     bc_CellData *cell = bc_getCellByIndex(chunkMap, topRightChunk, 0);
     cellData[edgeDataIndex] = *cell;
 
-    size_t chunkDataSize = terrain->chunkBufferCellCount *  sizeof(bc_CellData);
+    size_t chunkDataSize = terrain->bufferPerChunkSize;
     size_t chunkDataOffset = chunkDataSize * subBufferIndex;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrain->gluint);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, chunkDataOffset, chunkDataSize, cellData);
