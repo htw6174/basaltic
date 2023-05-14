@@ -3,17 +3,13 @@
 #include "basaltic_phases.h"
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
+#include "components/basaltic_components_wildlife.h"
 #include "basaltic_character.h"
 #include "basaltic_worldState.h"
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
 #include "flecs.h"
-
-ECS_TAG_DECLARE(BehaviorWander);
-ECS_TAG_DECLARE(BehaviorDescend);
-ECS_TAG_DECLARE(BehaviorGrazer);
-ECS_TAG_DECLARE(BehaviorPredator);
 
 // TEST: random movement behavior, pick any adjacent tile to move to
 void bc_setWandererDestinations(ecs_iter_t *it);
@@ -26,9 +22,9 @@ void characterCreated(ecs_iter_t *it);
 void characterMoved(ecs_iter_t *it);
 void characterDestroyed(ecs_iter_t *it);
 
-// TEST: simple ecosystem behaviors
-void behaviorGraze(ecs_iter_t *it);
-void behaviorPredate(ecs_iter_t *it);
+void egoBehaviorWander(ecs_iter_t *it);
+void egoBehaviorGrazer(ecs_iter_t *it);
+void egoBehaviorPredator(ecs_iter_t *it);
 
 // TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
@@ -52,12 +48,18 @@ void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
         ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
         // TEST
         if (i % 32 == 0) {
-            ecs_add(world, newCharacter, BehaviorPredator);
+            ecs_add_pair(world, newCharacter, Ego, EgoPredator);
+            ecs_add_pair(world, newCharacter, Diet, Meat);
             ecs_add(world, newCharacter, PlayerVision);
+        } else if (i % 8 == 0) {
+            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
+            ecs_add_pair(world, newCharacter, Diet, Fruit);
         } else if (i % 4 == 0) {
-            ecs_add(world, newCharacter, BehaviorGrazer);
+            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
+            ecs_add_pair(world, newCharacter, Diet, Foliage);
         } else {
-            ecs_add(world, newCharacter, BehaviorGrazer);
+            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
+            ecs_add_pair(world, newCharacter, Diet, Grasses);
         }
     }
     ecs_set_scope(world, 0);
@@ -82,7 +84,7 @@ void SurfaceSpawn(ecs_iter_t *it) {
     }
 }
 
-void bc_setWandererDestinations(ecs_iter_t *it) {
+void egoBehaviorWander(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
     ecs_entity_t tmEnt = ecs_field_id(it, 3);
@@ -194,33 +196,22 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
     ECS_IMPORT(world, BcActors);
+    ECS_IMPORT(world, BcWildlife);
 
-    ECS_TAG_DEFINE(world, BehaviorWander);
-    ECS_TAG_DEFINE(world, BehaviorDescend);
-    ECS_TAG_DEFINE(world, BehaviorGrazer);
-    ECS_TAG_DEFINE(world, BehaviorPredator);
-
-    // TODO: replace behavior tags with Ego relationship
     // TODO: change IsOn field, use Plane(up(bc.planes.IsOn)) instead
     // - NOTE: should ask about or profile this; could cause the query to switch to per-instance iteration instead, which may negatively effect performance. Tradeoff is that access to the Plane is faster?
-    ECS_SYSTEM(world, bc_setWandererDestinations, Planning,
+    ECS_SYSTEM(world, egoBehaviorWander, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
-        [none] BehaviorWander,
-    );
-
-    ECS_SYSTEM(world, bc_setDescenderDestinations, Planning,
-        [in] Position,
-        [out] Destination,
-        [in] (bc.planes.IsOn, _),
-        [none] BehaviorDescend,
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
     );
 
     ECS_SYSTEM(world, bc_moveCharacters, Execution,
         [out] Position,
         [in] Destination,
-        [in] (bc.planes.IsOn, _));
+        [in] (bc.planes.IsOn, _)
+    );
 
     // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
     ecs_system(world, {
@@ -236,26 +227,27 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     //ECS_OBSERVER(world, characterMoved, EcsOnSet, Position, (IsOn, _));
     ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
 
-    // TEST ecosystem behaviors
-    ECS_SYSTEM(world, behaviorGraze, Planning,
+    // wildlife behaviors
+    // NOTE: would like to have a better way to access tags, paths are still getting verbose; for OneOf relationships, need to remember that relationship path is always start of tag fullpath
+    ECS_SYSTEM(world, egoBehaviorGrazer, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
-        BehaviorGrazer
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoGrazer),
     );
     ecs_system(world, {
-        .entity = behaviorGraze,
+        .entity = egoBehaviorGrazer,
         .multi_threaded = true
     });
 
-    ECS_SYSTEM(world, behaviorPredate, Planning,
+    ECS_SYSTEM(world, egoBehaviorPredator, Planning,
         [in] Position,
         [out] Destination,
         [in] (bc.planes.IsOn, _),
-        BehaviorPredator
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoPredator),
     );
     ecs_system(world, {
-        .entity = behaviorPredate,
+        .entity = egoBehaviorPredator,
         .multi_threaded = true
     });
 
@@ -289,7 +281,7 @@ void characterDestroyed(ecs_iter_t *it) {
     }
 }
 
-void behaviorGraze(ecs_iter_t *it) {
+void egoBehaviorGrazer(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
     ecs_entity_t tmEnt = ecs_field_id(it, 3);
@@ -341,7 +333,7 @@ void behaviorGraze(ecs_iter_t *it) {
     }
 }
 
-void behaviorPredate(ecs_iter_t *it) {
+void egoBehaviorPredator(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
     ecs_entity_t tmEnt = ecs_field_id(it, 3);
@@ -367,7 +359,7 @@ void behaviorPredate(ecs_iter_t *it) {
             // TODO: Descend tree. for now, only pick out lone grazers (stragglers)
             ecs_entity_t root = plane_GetRootEntity(it->world, tmEnt, worldCoord);
             if (ecs_is_valid(it->world, root)) {
-                if (ecs_has(it->world, root, BehaviorGrazer)) {
+                if (ecs_has_pair(it->world, root, Ego, EgoGrazer)) {
                     // Apply destination
                     destinations[i] = worldCoord;
                     inPersuit = true;

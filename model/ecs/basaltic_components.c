@@ -1,6 +1,6 @@
 #include "basaltic_components.h"
-#include "flecs.h"
 #include "basaltic_phases.h"
+#include "flecs.h"
 
 ECS_TAG_DECLARE(PlayerVision);
 
@@ -10,8 +10,7 @@ void BcImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
     ECS_IMPORT(world, BcActors);
-
-    assert(ecs_id(Position) != 0);
+    ECS_IMPORT(world, BcWildlife);
 
     ECS_TAG_DEFINE(world, PlayerVision);
 

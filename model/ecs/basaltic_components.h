@@ -4,6 +4,7 @@
 #include "flecs.h"
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
+#include "components/basaltic_components_wildlife.h"
 
 // TODO: find a home for this
 extern ECS_TAG_DECLARE(PlayerVision);
