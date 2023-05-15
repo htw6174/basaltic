@@ -221,5 +221,28 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_override(world, debugPrefab, Color);
 
     // Prefab instance
-    ecs_new_w_pair(world, EcsIsA, debugPrefab);
+    // TEST: different colors for each diet type
+    ecs_entity_t meatVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
+    ecs_set(world, meatVis, Color, {{0.7, 0.0, 0.0, 1.0}});
+    ecs_set(world, meatVis, QueryDesc, {
+        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"
+    });
+
+    ecs_entity_t fruitVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
+    ecs_set(world, fruitVis, Color, {{0.7, 0.0, 0.7, 1.0}});
+    ecs_set(world, fruitVis, QueryDesc, {
+        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"
+    });
+
+    ecs_entity_t foliageVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
+    ecs_set(world, foliageVis, Color, {{0.0, 0.7, 0.7, 1.0}});
+    ecs_set(world, foliageVis, QueryDesc, {
+        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"
+    });
+
+    ecs_entity_t grassVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
+    ecs_set(world, grassVis, Color, {{0.0, 0.7, 0.0, 1.0}});
+    ecs_set(world, grassVis, QueryDesc, {
+        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
+    });
 }
