@@ -5,6 +5,7 @@
 #include "sokol_gfx.h"
 #include "ccVector.h"
 
+// TODO: issue with this approach is that it prevents the model matrix uniform block from using any other uniforms (so only 4/16 slots are used). Bad if I need many uniforms
 static void bc_drawWrapInstances(int base_element, int num_elements, int num_instances, int modelMatrixUniformBlockIndex, vec3 position, const vec3 *offsets);
 
 static void bc_drawWrapInstances(int base_element, int num_elements, int num_instances, int modelMatrixUniformBlockIndex, vec3 position, const vec3 *offsets) {

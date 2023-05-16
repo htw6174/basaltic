@@ -83,6 +83,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Elements);
 
     ECS_COMPONENT_DEFINE(world, FeedbackBuffer);
+    ECS_COMPONENT_DEFINE(world, DataTexture);
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 
     //ecs_singleton_add(world, ModelWorld);

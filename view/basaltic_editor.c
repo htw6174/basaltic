@@ -82,6 +82,7 @@ void entityLabel(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
+void cellInspector(ecs_world_t *world, ecs_entity_t plane, u32 chunkIndex, u32 cellIndex, ecs_entity_t *focusEntity);
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
@@ -117,14 +118,6 @@ void bc_teardownEditor(void) {
 void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
 {
     /*
-    igBegin("Options", NULL, 0);
-
-    const HoveredCell *hc = ecs_singleton_get(viewWorld, HoveredCell);
-    igValue_Uint("Hovered cell", hc->cellIndex);
-    igValue_Uint("Hovered chunk", hc->chunkIndex);
-
-    igSpacing();
-
     if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
         // TODO: custom inspector for ECS enum components
         // if (igButton("Enable All", (ImVec2){0, 0})) {
@@ -136,8 +129,6 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         // bitmaskToggle("Geometry", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_GEOMETRY);
         // bitmaskToggle("Color", &worldInfo->visibilityOverrideBits, BC_TERRAIN_VISIBILITY_COLOR);
     }
-
-    igEnd();
     */
 
     igBegin("View Inspector", NULL, 0);
@@ -232,41 +223,25 @@ void bc_editorOnModelStop(void) {
 
 // TODO: will this work with just the model's ecs world?
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
-    // TODO: replace with view focused plane
     ecs_entity_t focusedPlane = ecs_singleton_get(viewEcsWorld, FocusPlane)->entity;
     htw_ChunkMap *cm = ecs_get(world->ecsWorld, focusedPlane, Plane)->chunkMap;
 
     const HoveredCell *hovered = ecs_singleton_get(viewEcsWorld, HoveredCell);
     const SelectedCell *selected = ecs_singleton_get(viewEcsWorld, SelectedCell);
 
-    if (igCollapsingHeader_TreeNodeFlags("Cell Info", 0)) {
-        htw_geo_GridCoord hoveredCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, hovered->chunkIndex, hovered->cellIndex);
-        coordInspector("Hovered cell coordinates", hoveredCellCoord);
-        //htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, ui->selectedChunkIndex, ui->selectedCellIndex);
-        //coordInspector("Selected cell coordinates", selectedCellCoord);
-        igSpacing();
+    static bool inspectSelected = false;
+    igCheckbox("Show Selected Cell Info", &inspectSelected);
 
-        bc_CellData *hoveredCell = bc_getCellByIndex(cm, hovered->chunkIndex, hovered->cellIndex);
-        igText("Cell info:");
-        igValue_Int("Height", hoveredCell->height);
-        igValue_Int("Temperature", hoveredCell->temperature);
-        igValue_Int("Nutrients", hoveredCell->nutrient);
-        igValue_Int("Rainfall", hoveredCell->rainfall);
-        igValue_Int("Vegetation", hoveredCell->vegetation);
+    u32 chunk, cell;
+    if (inspectSelected) {
+        chunk = selected->chunkIndex;
+        cell = selected->cellIndex;
+    } else {
+        chunk = hovered->chunkIndex;
+        cell = hovered->cellIndex;
     }
 
-    if (igCollapsingHeader_TreeNodeFlags("Cell Contents", 0)) {
-        htw_geo_GridCoord selectedCellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, selected->chunkIndex, selected->cellIndex);
-
-        u32 entityCountHere = 0;
-        ecs_entity_t selectedRoot = plane_GetRootEntity(world->ecsWorld, focusedPlane, selectedCellCoord);
-        if (selectedRoot != 0) {
-            if (ecs_is_valid(world->ecsWorld, selectedRoot)) {
-                entityCountHere += hierarchyInspector(world->ecsWorld, selectedRoot, &modelInspector.focusEntity, true);
-            }
-        }
-        igValue_Uint("Entities here", entityCountHere);
-    }
+    cellInspector(world->ecsWorld, focusedPlane, chunk, cell, &modelInspector.focusEntity);
 
     // Misc options
     if (igButton("Take control of random character", (ImVec2){0, 0})) {
@@ -279,6 +254,37 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     if (igButton("Focus on selected cell", (ImVec2){0, 0})) {
         // TODO: modify this function to take Camera, ChunkMap, and GridCoord
         //bc_focusCameraOnCell(ui, selectedCellCoord);
+    }
+}
+
+void cellInspector(ecs_world_t *world, ecs_entity_t plane, u32 chunkIndex, u32 cellIndex, ecs_entity_t *focusEntity) {
+    htw_ChunkMap *cm = ecs_get(world, plane, Plane)->chunkMap;
+
+    htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, cellIndex);
+    coordInspector("Cell coordinates", cellCoord);
+
+    if (igCollapsingHeader_TreeNodeFlags("Cell Data", ImGuiTreeNodeFlags_DefaultOpen)) {
+        igSpacing();
+
+        bc_CellData *cellData = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+        igText("Cell info:");
+        igValue_Int("Height", cellData->height);
+        igValue_Int("Temperature", cellData->temperature);
+        igValue_Int("Nutrients", cellData->nutrient);
+        igValue_Int("Rainfall", cellData->rainfall);
+        igValue_Int("Vegetation", cellData->vegetation);
+    }
+
+    if (igCollapsingHeader_TreeNodeFlags("Cell Entities", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+        u32 entityCountHere = 0;
+        ecs_entity_t selectedRoot = plane_GetRootEntity(world, plane, cellCoord);
+        if (selectedRoot != 0) {
+            if (ecs_is_valid(world, selectedRoot)) {
+                entityCountHere += hierarchyInspector(world, selectedRoot, focusEntity, true);
+            }
+        }
+        igValue_Uint("Entities here", entityCountHere);
     }
 }
 

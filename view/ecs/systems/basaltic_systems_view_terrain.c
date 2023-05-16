@@ -15,9 +15,14 @@
 
 typedef struct {
     vec3 position;
-    u16 cellIndex;
-    u16 unused;
+    u16 localX;
+    u16 localY;
 } bc_HexmapVertexData;
+
+typedef struct {
+    vec4 position;
+    vec2 rootCoord;
+} chunkInstanceData;
 
 // Compressed version of bc_CellData used for rendering
 // TODO: deprecated, only go back to this if video memory starts to become an issue
@@ -36,6 +41,14 @@ typedef struct {
 Mesh createHexmapMesh(void);
 void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk);
 void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex);
+
+void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex);
+
+void InitTerrainInstances(ecs_iter_t *it);
+void UpdateTerrainInstances(ecs_iter_t *it);
+
+void InitTerrainDataTexture(ecs_iter_t *it);
+void UpdateTerrainDataTexture(ecs_iter_t *it);
 
 void GlCheck(void);
 
@@ -125,7 +138,8 @@ Mesh createHexmapMesh(void) {
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
                 bc_HexmapVertexData newVertex = {
                     .position = pos,
-                    .cellIndex = c
+                    .localX = x,
+                    .localY = y
                 };
                 vertexData[vIndex++] = newVertex;
             }
@@ -271,7 +285,8 @@ Mesh createHexmapMesh(void) {
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
             bc_HexmapVertexData newVertex = {
                 .position = pos,
-                .cellIndex = c3
+                .localX = x + 1,
+                .localY = y
             };
             vertexData[vIndex++] = newVertex;
         }
@@ -329,7 +344,8 @@ Mesh createHexmapMesh(void) {
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
             bc_HexmapVertexData newVertex = {
                 .position = pos,
-                .cellIndex = c3
+                .localX = x,
+                .localY = y + 1
             };
             vertexData[vIndex++] = newVertex;
         }
@@ -351,7 +367,9 @@ Mesh createHexmapMesh(void) {
             vec3 pos = vec3Add(hexagonPositions[5], (vec3){{posX, posY, 0.0}});
             bc_HexmapVertexData newVertex = {
                 .position = pos,
-                .cellIndex = baseCell + width
+                //.cellIndex = baseCell + width
+                .localX = x + 1,
+                .localY = y + 1
             };
             vertexData[vIndex++] = newVertex;
             // redefine p3 and p4
@@ -522,6 +540,34 @@ void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, chunkDataOffset, chunkDataSize, cellData);
 }
 
+void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex) {
+    const u32 width = bc_chunkSize;
+    const u32 height = bc_chunkSize;
+
+    // Find bottom-left corner of image region to update
+    htw_geo_GridCoord startTexel = htw_geo_chunkAndCellToGridCoordinates(chunkMap, chunkIndex, 0);
+    // Convert texel coord to data buffer location
+    size_t texelIndex = (startTexel.y * dataTexture->width) + startTexel.x;
+    void *texHead = dataTexture->data + (texelIndex * dataTexture->formatSize);
+
+    // get primary chunk data
+    for (s32 y = 0; y < height; y++) {
+        for (s32 x = 0; x < width; x++) {
+            u32 c = x + (y * width);
+            bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
+            s32 texelData[4] = {
+                cell->height,
+                cell->temperature,
+                cell->vegetation,
+                cell->rainfall
+            };
+            memcpy(texHead + (x * dataTexture->formatSize), &texelData, sizeof(texelData));
+        }
+        // Advance to next row of texture
+        texHead += dataTexture->width * dataTexture->formatSize;
+    }
+}
+
 void SetupPipelineHexTerrain(ecs_iter_t *it) {
     RenderDistance *rd = ecs_field(it, RenderDistance, 1);
 
@@ -541,8 +587,14 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         .size = sizeof(ModelMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
-            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4}
         }
+    };
+
+    sg_shader_image_desc vsdDataImage = {
+        .name = "terrain",
+        .image_type = SG_IMAGETYPE_2D,
+        .sampler_type = SG_SAMPLERTYPE_SINT
     };
 
     // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
@@ -565,6 +617,7 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
     sg_shader_desc tsd = {
         .vs.uniform_blocks[0] = vsdGlobal,
         .vs.uniform_blocks[1] = vsdLocal,
+        .vs.images[0] = vsdDataImage,
         .vs.source = vert,
         .fs.uniform_blocks[0] = fsdGlobal,
         .fs.uniform_blocks[1] = fsdLocal,
@@ -578,9 +631,12 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
     sg_pipeline_desc pd = {
         .shader = terrainShader,
         .layout = {
+            .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
             .attrs = {
-                [0].format = SG_VERTEXFORMAT_FLOAT3,
-                [1].format = SG_VERTEXFORMAT_USHORT2N
+                [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
+                [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
+                [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
+                [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
             }
         },
         .index_type = SG_INDEXTYPE_UINT32,
@@ -664,21 +720,134 @@ void UpdateHexTerrainBuffers(ecs_iter_t *it) {
     }
 }
 
+void InitTerrainInstances(ecs_iter_t *it) {
+    size_t instanceDataSize = sizeof(chunkInstanceData) * 9; // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
+
+    for (int i = 0; i < it->count; i++) {
+        // TODO: Make component destructor to free memory
+        chunkInstanceData *instanceData = malloc(instanceDataSize);
+
+        sg_buffer_desc vbd = {
+            .type = SG_BUFFERTYPE_VERTEXBUFFER,
+            .usage = SG_USAGE_DYNAMIC,
+            .size = instanceDataSize
+        };
+        sg_buffer instanceBuffer = sg_make_buffer(&vbd);
+
+        ecs_set(it->world, it->entities[i], InstanceBuffer, {.buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
+    }
+}
+
+void UpdateTerrainInstances(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        chunkInstanceData *instanceData = instanceBuffers[i].data;
+        u32 instanceCount = 0;
+
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Plane *planes = ecs_field(&mit, Plane, 1);
+            for (int m = 0; m < mit.count; m++) {
+                htw_ChunkMap *cm = planes[m].chunkMap;
+                for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
+                    float x, y;
+                    htw_geo_getChunkRootPosition(cm, c, &x, &y);
+                    htw_geo_GridCoord rootCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, 0);
+                    instanceData[instanceCount] = (chunkInstanceData){
+                        .position = {{x, y, 0.0, 1.0}},
+                        .rootCoord = {{rootCoord.x, rootCoord.y}}
+                    };
+                    instanceCount++;
+                }
+            }
+        }
+        instanceBuffers[i].instances = instanceCount;
+        sg_update_buffer(instanceBuffers[i].buffer, &(sg_range){.ptr = instanceData, .size = instanceBuffers[i].size});
+    }
+}
+
+void InitTerrainDataTexture(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Plane *planes = ecs_field(&mit, Plane, 1);
+            for (int m = 0; m < mit.count; m++) {
+                htw_ChunkMap *cm = planes[m].chunkMap;
+
+                u32 texWidth = bc_chunkSize * cm->chunkCountX;
+                u32 texHeight = bc_chunkSize * cm->chunkCountY;
+
+                sg_image_desc desc = {
+                    .width = texWidth,
+                    .height = texHeight,
+                    .usage = SG_USAGE_DYNAMIC,
+                    .pixel_format = SG_PIXELFORMAT_RGBA32SI,
+                    .min_filter = SG_FILTER_NEAREST,
+                    .mag_filter = SG_FILTER_NEAREST
+                };
+
+                size_t formatSize = sizeof(s32[4]);
+                size_t texSize = texWidth * texHeight * formatSize;
+                void *texHostData = malloc(texSize);
+
+                ecs_set(it->world, it->entities[i], DataTexture, {sg_make_image(&desc), texWidth, texHeight, texHostData, texSize, formatSize});
+            }
+        }
+    }
+}
+
+// TODO need to refine the structure here; either each terrain renderer should correspond to exactly one Plane, or they need a way to generalize to several Planes (=several data textures)
+void UpdateTerrainDataTexture(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    DataTexture *dataTextures = ecs_field(it, DataTexture, 2);
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Plane *planes = ecs_field(&mit, Plane, 1);
+            for (int m = 0; m < mit.count; m++) {
+                htw_ChunkMap *cm = planes[m].chunkMap;
+                DataTexture dt = dataTextures[i];
+                for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
+                    updateDataTextureChunk(cm, &dt, c);
+                }
+
+                sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
+            }
+        }
+    }
+}
+
 void DrawPipelineHexTerrain(ecs_iter_t *it) {
-    Pipeline *pips = ecs_field(it, Pipeline, 1);
-    Mesh *mesh = ecs_field(it, Mesh, 2);
-    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 3);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
-    Mouse *mouse = ecs_field(it, Mouse, 5);
-    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, 6);
-    HoveredCell *hovered = ecs_field(it, HoveredCell, 7);
+    int f = 0;
+    Pipeline *pips = ecs_field(it, Pipeline, ++f);
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, ++f);
+    Mesh *mesh = ecs_field(it, Mesh, ++f);
+    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, ++f);
+    DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
+    Mouse *mouse = ecs_field(it, Mouse, ++f);
+    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
+    HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
     for (int i = 0; i < it->count; i++) {
         sg_bindings bind = {
-            .vertex_buffers[0] = mesh[i].vertexBuffers[0],
-            .index_buffer = mesh[i].indexBuffer
+            .vertex_buffers[0] = instanceBuffers[i].buffer,
+            .vertex_buffers[1] = mesh[i].vertexBuffers[0],
+            .index_buffer = mesh[i].indexBuffer,
+            .vs_images[0] = dataTextures[i].image
         };
 
         sg_apply_pipeline(pips[i].pipeline);
@@ -688,32 +857,26 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
 
-        for (int c = 0; c < terrainBuffers[i].renderedChunkCount; c++) {
-            u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
-            sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
-
-            size_t range = terrainBuffers[i].bufferPerChunkSize;
-            size_t offset = c * range;
-            // FIXME: probably an alignment issue here, produces an error when c is odd (offset is not a multiple of 16)
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
-            GlCheck();
-
-            //if (glGetError()) printf("%x\n", glGetError());
-
-            if (wraps != NULL) {
-                bc_drawWrapInstances(0, mesh[i].elements, 1, 1, terrainBuffers[i].chunkPositions[c], wraps->offsets);
-            } else {
-                mat4x4 model;
-                mat4x4SetTranslation(model, terrainBuffers[i].chunkPositions[c]);
-                sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
-                sg_draw(0, mesh[i].elements, 1);
-            }
+        if (wraps != NULL) {
+            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+        } else {
+            mat4x4 model;
+            mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+            sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
-        GlCheck();
+
+        // for (int c = 0; c < terrainBuffers[i].renderedChunkCount; c++) {
+        //     u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
+        //     sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
+        //
+        //     size_t range = terrainBuffers[i].bufferPerChunkSize;
+        //     size_t offset = c * range;
+        //     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
+        // }
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
-        GlCheck();
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
-        GlCheck();
     }
 }
 
@@ -733,17 +896,45 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
-    ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
+    // ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
+    //            [in] ModelQuery,
+    //            [inout] TerrainBuffer,
+    //            [none] ModelWorld($),
+    //            [none] bcview.TerrainRender,
+    // );
+
+    ECS_SYSTEM(world, InitTerrainInstances, EcsOnUpdate,
+               [out] !InstanceBuffer,
+               [none] bcview.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, UpdateTerrainInstances, OnModelChanged,
                [in] ModelQuery,
-               [inout] TerrainBuffer,
+               [out] InstanceBuffer,
+               [none] ModelWorld($),
+               [none] bcview.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, InitTerrainDataTexture, OnModelChanged,
+               [in] ModelQuery,
+               [out] !DataTexture,
+               [none] ModelWorld($),
+               [none] bcview.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, UpdateTerrainDataTexture, OnModelChanged,
+               [in] ModelQuery,
+               [inout] DataTexture,
                [none] ModelWorld($),
                [none] bcview.TerrainRender,
     );
 
     ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
                [in] Pipeline,
+               [in] InstanceBuffer,
                [in] Mesh,
                [in] TerrainBuffer,
+               [in] DataTexture,
                [in] PVMatrix($),
                [in] Mouse($),
                [in] FeedbackBuffer($),

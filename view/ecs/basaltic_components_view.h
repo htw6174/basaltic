@@ -151,6 +151,15 @@ ECS_STRUCT(FeedbackBuffer, {
     u32 gluint;
 });
 
+ECS_STRUCT(DataTexture, {
+    sg_image image;
+    u32 width;
+    u32 height;
+    void *data;
+    size_t size;
+    size_t formatSize; // Unfortunately Sokol doesn't provide a way to get size from format, so have to compute it by hand
+});
+
 // NOTE: can tell parser to ignore members after a certain line by adding ECS_PRIVATE
 ECS_STRUCT(TerrainBuffer, {
     u32 gluint;

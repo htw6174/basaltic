@@ -56,6 +56,7 @@ vec3 randColor(float seed) {
 void main()
 {
 	// compute normal from position deriviatives
+	// NOTE: computing normlas in the pixel shader alone restricts you to flat shading; smooth shading requires information about neighboring verticies. If adding neighboring tile info anyway, could compute per vertex normals in vert shader?
 	vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
 
 	vec2 windowPos = gl_FragCoord.xy;
