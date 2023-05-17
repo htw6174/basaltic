@@ -31,7 +31,8 @@ layout(location = 4) in vec2 in_localCoord; // For compatability, this is a u16 
 
 out vec4 inout_color;
 out vec3 inout_pos;
-flat out uint inout_cellIndex;
+flat out ivec2 inout_cellCoord;
+//flat out uint inout_cellIndex;
 
 float rand(float x) {
     return fract(sin(x) * 43758.5453123);
@@ -45,19 +46,34 @@ ivec4 terrainFetch(ivec2 coord) {
 
 void main()
 {
-    inout_cellIndex = 0; //uint(65535.0 * in_cellIndex);
+    //inout_cellIndex = uint(65535.0 * in_cellIndex);
 
     // unpack terrain data
-    // TEST: texel samples
-    ivec2 cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 65535.0);
-    ivec4 cd = terrainFetch(cellCoord);
+    inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 65535.0);
+    ivec4 cd = terrainFetch(inout_cellCoord);
 
     // get neighboring cell data
     ivec4 offsets = sampleOffsets[int(floor(in_neighborWeight))];
-    ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
-    ivec4 cdr = terrainFetch(cellCoord + ivec2(offsets.z, offsets.w));
+    ivec4 cdl = terrainFetch(inout_cellCoord + ivec2(offsets.x, offsets.y));
+    ivec4 cdr = terrainFetch(inout_cellCoord + ivec2(offsets.z, offsets.w));
 
-    int elevation = (cd.r + cdl.r + cdr.r) / 3;
+    // If either neighbor is close enough, make elevation average of self and neighbors
+    int slopeLeft = cdl.r - cd.r;
+    int slopeRight = cdr.r - cd.r;
+    float tweakLeft = abs(slopeLeft) < 2 ? 0.5 : 0.0;
+    float tweakRight = abs(slopeRight) < 2 ? 0.5 : 0.0;
+
+    float h = cd.r;
+    float hl = cdl.r;
+    float hr = cdr.r;
+
+    float avgLeft = mix(h, hl, tweakLeft);
+    float avgRight = mix(h, hr, tweakRight);
+
+    float elevation = mix(avgLeft, avgRight, 0.5);
+    //float avg = (cd.r + cdl.r + cdr.r) / 3;
+    //float elevation = mix(float(cd.r), avg, tweak);
+    //int elevation = (cd.r + cdl.r + cdr.r) / 3;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;

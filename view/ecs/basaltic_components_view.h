@@ -80,14 +80,29 @@ ECS_STRUCT(FocusPlane, {
     ecs_entity_t entity;
 });
 
+// TODO: consider adding a flag to this, reset every frame and only set in shader feedback if any cell is hovered
 ECS_STRUCT(HoveredCell, {
-    u32 chunkIndex;
-    u32 cellIndex;
+    s32 x;
+    s32 y;
 });
 
 ECS_STRUCT(SelectedCell, {
-    u32 chunkIndex;
-    u32 cellIndex;
+    s32 x;
+    s32 y;
+});
+
+ECS_STRUCT(TerrainBrush, {
+    s32 value;
+    s32 radius;
+    // TODO: repeat modes
+    // TODO: brush types
+    // TODO: data layer
+    // - TODO: bitmask brush for bitmask layers
+});
+
+ECS_STRUCT(DirtyChunkBuffer, {
+    u32 count;
+    u32 *chunks;
 });
 
 
@@ -128,9 +143,9 @@ ECS_STRUCT(WrapInstanceOffsets, {
 
 ECS_STRUCT(InstanceBuffer, {
     s32 instances;
+    ECS_PRIVATE;
     size_t size;
     void *data;
-    ECS_PRIVATE;
     sg_buffer buffer;
 });
 

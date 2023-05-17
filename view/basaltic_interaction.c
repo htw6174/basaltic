@@ -16,11 +16,14 @@ static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
+void editTerrain(ecs_world_t *world);
+
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             selectCell(world);
+            editTerrain(world);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
             advanceStep(commandBuffer);
@@ -170,7 +173,7 @@ static void translateCamera(ecs_world_t *world, Camera camDelta) {
 
 static void selectCell(ecs_world_t *world) {
     const HoveredCell *hovered = ecs_singleton_get(world, HoveredCell);
-    ecs_singleton_set(world, SelectedCell, {.chunkIndex = hovered->chunkIndex, .cellIndex = hovered->cellIndex});
+    ecs_singleton_set(world, SelectedCell, {.x = hovered->x, .y = hovered->y});
 }
 
 static void advanceStep(bc_CommandBuffer commandBuffer) {
@@ -192,4 +195,22 @@ static void pauseStep(bc_CommandBuffer commandBuffer) {
         .commandType = BC_COMMAND_TYPE_STEP_PAUSE,
     };
     bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
+}
+
+void editTerrain(ecs_world_t *world) {
+    const TerrainBrush *tb = ecs_singleton_get(world, TerrainBrush);
+    const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
+    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
+
+    ecs_entity_t focusPlane = ecs_singleton_get(world, FocusPlane)->entity;
+    ecs_world_t *modelWorld = ecs_singleton_get(world, ModelWorld)->world;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+
+    bc_CellData *cd = htw_geo_getCell(cm, cellCoord);
+    cd->height += tb->value;
+
+    // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
+    DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
+    u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
+    dirty->chunks[dirty->count++] = chunk;
 }

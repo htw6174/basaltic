@@ -82,7 +82,7 @@ void entityLabel(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
-void cellInspector(ecs_world_t *world, ecs_entity_t plane, u32 chunkIndex, u32 cellIndex, ecs_entity_t *focusEntity);
+void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity);
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
@@ -232,16 +232,14 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     static bool inspectSelected = false;
     igCheckbox("Show Selected Cell Info", &inspectSelected);
 
-    u32 chunk, cell;
+    htw_geo_GridCoord focusCoord;
     if (inspectSelected) {
-        chunk = selected->chunkIndex;
-        cell = selected->cellIndex;
+        focusCoord = *(htw_geo_GridCoord*)selected;
     } else {
-        chunk = hovered->chunkIndex;
-        cell = hovered->cellIndex;
+        focusCoord = *(htw_geo_GridCoord*)hovered;
     }
 
-    cellInspector(world->ecsWorld, focusedPlane, chunk, cell, &modelInspector.focusEntity);
+    cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity);
 
     // Misc options
     if (igButton("Take control of random character", (ImVec2){0, 0})) {
@@ -257,16 +255,15 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     }
 }
 
-void cellInspector(ecs_world_t *world, ecs_entity_t plane, u32 chunkIndex, u32 cellIndex, ecs_entity_t *focusEntity) {
+void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity) {
     htw_ChunkMap *cm = ecs_get(world, plane, Plane)->chunkMap;
 
-    htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, cellIndex);
-    coordInspector("Cell coordinates", cellCoord);
+    coordInspector("Cell coordinates", coord);
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Data", ImGuiTreeNodeFlags_DefaultOpen)) {
         igSpacing();
 
-        bc_CellData *cellData = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+        bc_CellData *cellData = htw_geo_getCell(cm, coord);
         igText("Cell info:");
         igValue_Int("Height", cellData->height);
         igValue_Int("Temperature", cellData->temperature);
@@ -278,7 +275,7 @@ void cellInspector(ecs_world_t *world, ecs_entity_t plane, u32 chunkIndex, u32 c
     if (igCollapsingHeader_TreeNodeFlags("Cell Entities", ImGuiTreeNodeFlags_DefaultOpen)) {
 
         u32 entityCountHere = 0;
-        ecs_entity_t selectedRoot = plane_GetRootEntity(world, plane, cellCoord);
+        ecs_entity_t selectedRoot = plane_GetRootEntity(world, plane, coord);
         if (selectedRoot != 0) {
             if (ecs_is_valid(world, selectedRoot)) {
                 entityCountHere += hierarchyInspector(world, selectedRoot, focusEntity, true);

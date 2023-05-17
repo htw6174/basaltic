@@ -62,6 +62,8 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, FocusPlane);
     ECS_META_COMPONENT(world, HoveredCell);
     ECS_META_COMPONENT(world, SelectedCell);
+    ECS_META_COMPONENT(world, TerrainBrush);
+    ECS_META_COMPONENT(world, DirtyChunkBuffer);
 
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
@@ -114,6 +116,8 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, FocusPlane, {0});
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
+    ecs_singleton_set(world, TerrainBrush, {.value = 1, .radius = 1});
+    ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count
 
     // Global uniforms
     ecs_singleton_add(world, Pointer);

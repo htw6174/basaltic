@@ -49,6 +49,7 @@ void UpdateTerrainInstances(ecs_iter_t *it);
 
 void InitTerrainDataTexture(ecs_iter_t *it);
 void UpdateTerrainDataTexture(ecs_iter_t *it);
+void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it);
 
 void GlCheck(void);
 
@@ -770,6 +771,33 @@ void UpdateTerrainDataTexture(ecs_iter_t *it) {
     }
 }
 
+void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    DataTexture *dataTextures = ecs_field(it, DataTexture, 2);
+    DirtyChunkBuffer *dirty = ecs_field(it, DirtyChunkBuffer, 3);
+    // singleton
+    ecs_world_t *modelWorld = ecs_field(it, ModelWorld, 4)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        if (dirty[i].count > 0) {
+            ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+            while (ecs_query_next(&mit)) {
+                Plane *planes = ecs_field(&mit, Plane, 1);
+                for (int m = 0; m < mit.count; m++) {
+                    htw_ChunkMap *cm = planes[m].chunkMap;
+                    DataTexture dt = dataTextures[i];
+                    for (int c = 0; c < (dirty[i].count); c++) {
+                        updateDataTextureChunk(cm, &dt, dirty[i].chunks[c]);
+                    }
+                    sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
+                }
+            }
+        }
+        dirty[i].count = 0;
+    }
+}
+
+// TODO: restrict number of instances drawn, add LOD meshes and draw different instances for each LOD
 void DrawPipelineHexTerrain(ecs_iter_t *it) {
     int f = 0;
     Pipeline *pips = ecs_field(it, Pipeline, ++f);
@@ -808,15 +836,6 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
-        // for (int c = 0; c < terrainBuffers[i].renderedChunkCount; c++) {
-        //     u32 chunkIndex = terrainBuffers[i].loadedChunks[c];
-        //     sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(chunkIndex));
-        //
-        //     size_t range = terrainBuffers[i].bufferPerChunkSize;
-        //     size_t offset = c * range;
-        //     glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, terrainBuffers[i].gluint, offset, range);
-        // }
-
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
     }
@@ -853,21 +872,29 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_SYSTEM(world, UpdateTerrainInstances, OnModelChanged,
                [in] ModelQuery,
                [out] InstanceBuffer,
-               [none] ModelWorld($),
+               [in] ModelWorld($),
                [none] bcview.TerrainRender,
     );
 
     ECS_SYSTEM(world, InitTerrainDataTexture, OnModelChanged,
                [in] ModelQuery,
                [out] !DataTexture,
-               [none] ModelWorld($),
+               [in] ModelWorld($),
                [none] bcview.TerrainRender,
     );
 
     ECS_SYSTEM(world, UpdateTerrainDataTexture, OnModelChanged,
                [in] ModelQuery,
                [inout] DataTexture,
-               [none] ModelWorld($),
+               [in] ModelWorld($),
+               [none] bcview.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, UpdateTerrainDataTextureDirtyChunks, EcsOnUpdate,
+               [in] ModelQuery,
+               [inout] DataTexture,
+               [inout] DirtyChunkBuffer($),
+               [in] ModelWorld($),
                [none] bcview.TerrainRender,
     );
 

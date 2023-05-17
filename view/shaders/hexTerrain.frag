@@ -30,7 +30,8 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 
 in vec4 inout_color;
 in vec3 inout_pos;
-flat in uint inout_cellIndex;
+flat in ivec2 inout_cellCoord;
+//flat in uint inout_cellIndex;
 
 out vec4 out_color;
 
@@ -62,8 +63,8 @@ void main()
 	vec2 windowPos = gl_FragCoord.xy;
 	float mouseDist = distance(windowPos, mousePosition);
 	if (mouseDist < 1.0) {
-		FeedbackBuffer.hoveredChunk = chunkIndex;
-		FeedbackBuffer.hoveredCell = inout_cellIndex;
+		FeedbackBuffer.hoveredChunk = inout_cellCoord.x;
+		FeedbackBuffer.hoveredCell = inout_cellCoord.y;
 	}
 
 	//float cliff = 1.0 - normal.z;
