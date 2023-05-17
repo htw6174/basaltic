@@ -15,6 +15,7 @@
 
 typedef struct {
     vec3 position;
+    float neighborWeight;
     u16 localX;
     u16 localY;
 } bc_HexmapVertexData;
@@ -138,6 +139,7 @@ Mesh createHexmapMesh(void) {
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
                 bc_HexmapVertexData newVertex = {
                     .position = pos,
+                    .neighborWeight = v,
                     .localX = x,
                     .localY = y
                 };
@@ -285,6 +287,7 @@ Mesh createHexmapMesh(void) {
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
             bc_HexmapVertexData newVertex = {
                 .position = pos,
+                .neighborWeight = hexPosIndex,
                 .localX = x + 1,
                 .localY = y
             };
@@ -344,6 +347,7 @@ Mesh createHexmapMesh(void) {
             vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
             bc_HexmapVertexData newVertex = {
                 .position = pos,
+                .neighborWeight = hexPosIndex,
                 .localX = x,
                 .localY = y + 1
             };
@@ -368,6 +372,7 @@ Mesh createHexmapMesh(void) {
             bc_HexmapVertexData newVertex = {
                 .position = pos,
                 //.cellIndex = baseCell + width
+                .neighborWeight = 5,
                 .localX = x + 1,
                 .localY = y + 1
             };
@@ -636,7 +641,8 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
                 [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
                 [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
                 [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
-                [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
+                [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
+                [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
             }
         },
         .index_type = SG_INDEXTYPE_UINT32,
