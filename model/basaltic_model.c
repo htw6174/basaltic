@@ -18,11 +18,10 @@ void bc_model_argsToStartSettings(int argc, char *argv[], bc_ModelSetupSettings 
                 strcpy(destinationSettings->seed, argv[i]);
                 break;
             case 1:
-                // TODO: convert whole string to int, cap to max chunk dimensions. Right now will only take first digit
-                destinationSettings->width = charToInt(argv[i][0]);
+                destinationSettings->width = htw_strToInt(argv[i]);
                 break;
             case 2:
-                destinationSettings->height = charToInt(argv[i][0]);
+                destinationSettings->height = htw_strToInt(argv[i]);
                 break;
             default:
                 break;

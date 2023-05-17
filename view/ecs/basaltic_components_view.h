@@ -127,10 +127,11 @@ ECS_STRUCT(WrapInstanceOffsets, {
 });
 
 ECS_STRUCT(InstanceBuffer, {
-    sg_buffer buffer;
     s32 instances;
     size_t size;
     void *data;
+    ECS_PRIVATE;
+    sg_buffer buffer;
 });
 
 /** Immutable buffers */
@@ -160,9 +161,9 @@ ECS_STRUCT(DataTexture, {
     size_t formatSize; // Unfortunately Sokol doesn't provide a way to get size from format, so have to compute it by hand
 });
 
+// TODO: purpose of this has changed since removing SSBO. Consider renaming or moving this data
 // NOTE: can tell parser to ignore members after a certain line by adding ECS_PRIVATE
 ECS_STRUCT(TerrainBuffer, {
-    u32 gluint;
     // Radius of visible chunks around the camera center. 1 = only chunk containing camera is visible; 2 = 3x3 area; 3 = 5x5 area; etc.
     u32 renderedChunkRadius;
     u32 renderedChunkCount;
@@ -170,12 +171,6 @@ ECS_STRUCT(TerrainBuffer, {
     s32 *closestChunks;
     s32 *loadedChunks;
     vec3 *chunkPositions;
-    // Size and offset multiplier used when binding buffer ranges
-    size_t bufferPerChunkSize;
-    // Size of the data buffered for each draw call; length of data array is chunkBufferCellCount * renderedChunkCount
-    // NOTE: this is greater than the number of cells in a chunk, also includes adjacent chunk data
-    size_t chunkBufferCellCount;
-    bc_CellData *data;
 });
 
 

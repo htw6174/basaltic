@@ -78,7 +78,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, DebugRender);
 
     ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
-    ECS_COMPONENT_DEFINE(world, InstanceBuffer);
+    ECS_META_COMPONENT(world, InstanceBuffer);
     ECS_COMPONENT_DEFINE(world, Mesh);
     ECS_META_COMPONENT(world, Elements);
 

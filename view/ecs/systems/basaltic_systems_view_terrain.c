@@ -40,8 +40,7 @@ typedef struct {
 } bc_TerrainCellData;
 
 Mesh createHexmapMesh(void);
-void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk);
-void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex);
+void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
 void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex);
 
@@ -426,7 +425,7 @@ Mesh createHexmapMesh(void) {
     };
 }
 
-void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 centerChunk) {
+void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -492,57 +491,8 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
         htw_geo_getChunkRootPosition(chunkMap, loadedChunks[c], &chunkX, &chunkY);
         terrain->chunkPositions[c] = (vec3){{chunkX, chunkY, 0.0}};
         // TODO: only update chunk if freshly visible or has pending updates
-        updateHexmapDataBuffer(chunkMap, terrain, loadedChunks[c], c);
+        updateDataTextureChunk(chunkMap, dataTexture, loadedChunks[c]);
     }
-}
-
-void updateHexmapDataBuffer(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, u32 chunkIndex, u32 subBufferIndex) {
-    const u32 width = bc_chunkSize;
-    const u32 height = bc_chunkSize;
-    htw_Chunk *chunk = &chunkMap->chunks[chunkIndex];
-
-    bc_CellData *cellData = terrain->data + (terrain->chunkBufferCellCount * subBufferIndex);
-
-    // get primary chunk data
-    for (s32 y = 0; y < height; y++) {
-        for (s32 x = 0; x < width; x++) {
-            u32 c = x + (y * width);
-            bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
-            cellData[c] = *cell;
-        }
-    }
-
-    u32 edgeDataIndex = width * height;
-    // get chunk data from chunk at x + 1
-    u32 rightChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){1, 0});
-    chunk = &chunkMap->chunks[rightChunk];
-    for (s32 y = 0; y < height; y++) {
-        u32 c = edgeDataIndex + y; // right edge of this row
-        bc_CellData *cell = bc_getCellByIndex(chunkMap, rightChunk, y * chunkMap->chunkSize);
-        cellData[c] = *cell;
-    }
-    edgeDataIndex += height;
-
-    // get chunk data from chunk at y + 1
-    u32 topChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){0, 1});
-    chunk = &chunkMap->chunks[topChunk];
-    for (s32 x = 0; x < width; x++) {
-        u32 c = edgeDataIndex + x;
-        bc_CellData *cell = bc_getCellByIndex(chunkMap, topChunk, x);
-        cellData[c] = *cell;
-    }
-    edgeDataIndex += width;
-
-    // get chunk data from chunk at x+1, y+1 (only one cell)
-    u32 topRightChunk = htw_geo_getChunkIndexAtOffset(chunkMap, chunkIndex, (htw_geo_GridCoord){1, 1});
-    chunk = &chunkMap->chunks[topRightChunk];
-    bc_CellData *cell = bc_getCellByIndex(chunkMap, topRightChunk, 0);
-    cellData[edgeDataIndex] = *cell;
-
-    size_t chunkDataSize = terrain->bufferPerChunkSize;
-    size_t chunkDataOffset = chunkDataSize * subBufferIndex;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrain->gluint);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, chunkDataOffset, chunkDataSize, cellData);
 }
 
 void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex) {
@@ -669,35 +619,19 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         u32 visibilityDiameter = (visibilityRadius * 2) - 1;
         u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
 
-        u32 chunkBufferCellCount = (bc_chunkSize * bc_chunkSize) + (2 * bc_chunkSize) + 1;
-        size_t bufferPerChunkSize = chunkBufferCellCount * sizeof(bc_CellData);
-        // determine and apply alignment
-        GLint ssboAlign = 0;
-        glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &ssboAlign);
-        bufferPerChunkSize = htw_align(bufferPerChunkSize, ssboAlign);
-        size_t bufferSize = bufferPerChunkSize * renderedChunkCount;
-
-        GLuint terrainBuffer;
-        glGenBuffers(1, &terrainBuffer);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, terrainBuffer);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, bufferSize, NULL, GL_DYNAMIC_DRAW);
-
         s32 *loadedChunks = calloc(renderedChunkCount, sizeof(u32));
         // Initialize loaded chunks to those closest to the origin. TODO: this is related to an issue where initially filling loaded chunks takes several calls to updateTerrainVisibleChunks. This fixes the issue when renderedChunkCount == total chunk count
         for (int c = 0; c < renderedChunkCount; c++) {
             loadedChunks[c] = c;
         }
 
+        // TODO: consider replacing entirely with data texture
         ecs_set(it->world, it->entities[i], TerrainBuffer, {
-            .gluint = terrainBuffer,
             .renderedChunkRadius = visibilityRadius,
             .renderedChunkCount = renderedChunkCount,
             .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
             .loadedChunks = loadedChunks,
             .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
-            .bufferPerChunkSize = bufferPerChunkSize,
-            .chunkBufferCellCount = chunkBufferCellCount,
-            .data = malloc(bufferSize)
         });
     }
 
@@ -707,6 +641,7 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
 void UpdateHexTerrainBuffers(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 1);
     TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 2);
+    DataTexture *dataTextures = ecs_field(it, DataTexture, 3);
 
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
@@ -720,14 +655,14 @@ void UpdateHexTerrainBuffers(ecs_iter_t *it) {
 
                 // TODO: correctly determine center chunk from camera focus
                 u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, 0.0f, 0.0f);
-                updateTerrainVisibleChunks(cm, &terrainBuffers[i], centerChunk);
+                updateTerrainVisibleChunks(cm, &terrainBuffers[i], &dataTextures[i], centerChunk);
             }
         }
     }
 }
 
 void InitTerrainInstances(ecs_iter_t *it) {
-    size_t instanceDataSize = sizeof(chunkInstanceData) * 9; // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
+    size_t instanceDataSize = sizeof(chunkInstanceData) * 64 * 64; // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
 
     for (int i = 0; i < it->count; i++) {
         // TODO: Make component destructor to free memory
@@ -802,6 +737,7 @@ void InitTerrainDataTexture(ecs_iter_t *it) {
 
                 size_t formatSize = sizeof(s32[4]);
                 size_t texSize = texWidth * texHeight * formatSize;
+                // TODO: destructor
                 void *texHostData = malloc(texSize);
 
                 ecs_set(it->world, it->entities[i], DataTexture, {sg_make_image(&desc), texWidth, texHeight, texHostData, texSize, formatSize});
