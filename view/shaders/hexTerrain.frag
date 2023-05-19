@@ -77,7 +77,7 @@ void main()
 
 	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
 
-	//out_color = vec4(litColor, 1.0);
+	out_color = vec4(litColor, 1.0);
 	//out_color = inout_color;
-	out_color = vec4(normal, 1.0);
+	//out_color = vec4(normal, 1.0);
 }

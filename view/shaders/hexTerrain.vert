@@ -5,9 +5,7 @@
 //#include "uniforms.h"
 
 // Left-hand neighbor in xy, right-hand neighbor in zw
-ivec4 sampleOffsets[7] = ivec4[](
-    // for verticies that shouldn't be affected by neighboring tiles, helps avoid branching
-    ivec4(0, 0, 0, 0),
+ivec4 sampleOffsets[6] = ivec4[](
     // Begins from samples used for north vertex, in clockwise order
     ivec4(-1, 1, 0, 1),
     ivec4(0, 1, 1, 0),
@@ -22,9 +20,7 @@ const float hexStepX = 1.0; // X distance between cells in the same row
 const float hexStepXY = 0.5; // X distance from a cell to its neighbor 1 row up or down
 
 // Left-hand neighbor in xy, right-hand neighbor in zw
-vec4 neighborPositions[7] = vec4[](
-    // for verticies that shouldn't be affected by neighboring tiles, helps avoid branching
-    vec4(0.0, 0.0, 0.0, 0.0),
+vec4 neighborPositions[6] = vec4[](
     // Begins from samples used for north vertex, in clockwise order
     vec4(-hexStepXY, hexStepY, hexStepXY, hexStepY),
     vec4(hexStepXY, hexStepY, hexStepX, 0.0),
@@ -65,16 +61,37 @@ ivec4 terrainFetch(ivec2 coord) {
 }
 
 float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
-    neighborhood = max(1, neighborhood);
     ivec4 cd = terrainFetch(cellCoord);
     ivec4 offsets = sampleOffsets[neighborhood];
     ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
     ivec4 cdr = terrainFetch(cellCoord + ivec2(offsets.z, offsets.w));
 
+    // create sharp cliffs
+    // warp barycentric space along one axis if slope in that direction is high enough
+    int slopeLeft = cdl.r - cd.r;
+    int slopeRight = cdr.r - cd.r;
+    bool remapLeft = abs(slopeLeft) > 2;
+    bool remapRight = abs(slopeRight) > 2;
+
+    float slopeFactor = 0.25;
+
+    // Moving in affine space can be considered to be with respect to one coordinate (x), and will cause a change in the other 2 coordinates (y & z) whose sum is equal to the change in x. The ratio of y change to z change [0..1] tells the direction of motion: in cartesian space, within 30 degrees to either side of the x axis.
+    // Find remapping difference for y and z seperately. x delta is their sum
+    float yRange = 1.0 - barycentric.z; // range limited by invariant axis; must also compress back to this range after smoothstep
+    float yRemapped = remapLeft ? smoothstep(slopeFactor, yRange - slopeFactor, barycentric.y) * yRange : barycentric.y;
+
+    float zRange = 1.0 - barycentric.y;
+    float zRemapped = remapRight ? smoothstep(slopeFactor, zRange - slopeFactor, barycentric.z) * zRange : barycentric.z;
+
+    float xDelta = (barycentric.y - yRemapped) + (barycentric.z - zRemapped);
+    barycentric = vec3(barycentric.x + xDelta, yRemapped, zRemapped);
+
     // Use barycentric coord to interpolate samples
     float height = (cd.r * barycentric.x) + (cdl.r * barycentric.y) + (cdr.r * barycentric.z);
 
+    // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
+    // TODO/FIXME: need to remap these samples seperately after adding planck? Adjacent faces with sharp differences look too similar. Could be fixed by just adding more geometry.
     const float planck = 0.01;
     // Right-hand rule for cross product results - index finger, towards cdr
     vec3 bary1 = vec3(barycentric.x - planck, barycentric.y, barycentric.z + planck);
@@ -88,8 +105,9 @@ float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     // get sample positions as cartesian coordinates
     // in the special case of an equilateral triangle, this is easy to find. cartesian distance == (barycentric distance * grid scale)
     // still need to rotate vectors according to sample cell's direction; == -(neighborhood - 2) * [60 deg, 30 deg]
-    float rot1 = (3.14159 / 3.0) * -(neighborhood - 2);
-    float rot2 = (3.14159 / 3.0) * -(neighborhood - 3);
+    // More general formula : https://www.iue.tuwien.ac.at/phd/nentchev/node26.html#eq:lambda_representation_2D_xy
+    float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
+    float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
     vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (h1 - height) * 0.2); // TODO: provide terrain scale as uniform, multiply in
     vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (h2 - height) * 0.2);
 
@@ -110,35 +128,8 @@ void main()
     // get neighboring cell data
     int neighborhood = int(floor(in_neighborWeight));
 
-//     // If either neighbor is close enough, make elevation average of self and neighbors
-//     int slopeLeft = cdl.r - cd.r;
-//     int slopeRight = cdr.r - cd.r;
-//     float tweakLeft = abs(slopeLeft) < 2 ? 0.5 : 0.0;
-//     float tweakRight = abs(slopeRight) < 2 ? 0.5 : 0.0;
-//
-//     float h = cd.r;
-//     float hl = cdl.r;
-//     float hr = cdr.r;
-//
-//     float avgLeft = mix(h, hl, tweakLeft);
-//     float avgRight = mix(h, hr, tweakRight);
-//
-//     float elevation = mix(avgLeft, avgRight, 0.5);
-
     float elevation = height(in_position, in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
-
-    //float avg = (cd.r + cdl.r + cdr.r) / 3;
-    //float elevation = mix(float(cd.r), avg, tweak);
-    //int elevation = (cd.r + cdl.r + cdr.r) / 3;
-
-//     float neighborDist = 0.1;
-//     vec3 vertNeighbor_b = vec3(offsets.x * neighborDist, offsets.y * neighborDist, hl);
-//     vec3 vertNeighbor_a = vec3(offsets.z * neighborDist, offsets.w * neighborDist, hr);
-//
-//     vec3 tan_b = vertNeighbor_b - in_position;
-//     vec3 tan_a = vertNeighbor_a - in_position;
-//     inout_norm = normalize(cross(tan_a, tan_b));
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
@@ -164,7 +155,5 @@ void main()
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
 
     //inout_color = vec4(1.0, 0.0, 0.0, 1.0);
-    //inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
-    inout_color = vec4(in_barycentric, 1.0);
-    //inout_color = vec4(in_rootCoord.x / 192.0, in_rootCoord.y / 192.0, 0.0, 1.0);
+    inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
 }

@@ -64,6 +64,7 @@ void GlCheck(void) {
     }
 }
 
+// could use simpler 2d only version but w/e
 vec3 barycentric(vec2 p, vec2 left, vec2 right) {
     //vec2 v0 = vec2Subtract(b, a), v1 = vec2Subtract(c, a), v2 = vec2Subtract(p, a);
     vec2 v0 = left, v1 = right, v2 = p;
@@ -80,13 +81,9 @@ vec3 barycentric(vec2 p, vec2 left, vec2 right) {
 }
 
 vec3 getHexVertBarycentric(float x, float y, int neighborhoodIndex) {
-    if (neighborhoodIndex == 0) {
-        return (vec3){{1.0, 0.0, 0.0}};
-    }
     float x1, y1, x2, y2;
-    neighborhoodIndex += HEX_DIRECTION_COUNT;
-    htw_geo_GridCoord leftCoord = htw_geo_hexGridDirections[(neighborhoodIndex - 2) % HEX_DIRECTION_COUNT];
-    htw_geo_GridCoord rightCoord = htw_geo_hexGridDirections[(neighborhoodIndex - 1) % HEX_DIRECTION_COUNT];
+    htw_geo_GridCoord leftCoord = htw_geo_hexGridDirections[(neighborhoodIndex + 5) % HEX_DIRECTION_COUNT];
+    htw_geo_GridCoord rightCoord = htw_geo_hexGridDirections[neighborhoodIndex];
     htw_geo_getHexCellPositionSkewed(leftCoord, &x1, &y1);
     htw_geo_getHexCellPositionSkewed(rightCoord, &x2, &y2);
     return barycentric((vec2){{x, y}}, (vec2){{x1, y1}}, (vec2){{x2, y2}});
@@ -169,10 +166,11 @@ Mesh createHexmapMesh(void) {
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
+                int neighborhood = max_int(0, v - 1);
                 bc_HexmapVertexData newVertex = {
                     .position = pos,
-                    .neighborWeight = v,
-                    .barycentric = getHexVertBarycentric(hexagonPositions[v].x, hexagonPositions[v].y, v),
+                    .neighborWeight = neighborhood,
+                    .barycentric = getHexVertBarycentric(hexagonPositions[v].x, hexagonPositions[v].y, neighborhood),
                     .localX = x,
                     .localY = y
                 };
@@ -451,6 +449,9 @@ Mesh createHexmapMesh(void) {
         .data.size = indexDataSize
     };
     sg_buffer ib = sg_make_buffer(&ibd);
+
+    free(vertexData);
+    free(triData);
 
     return (Mesh) {
         .vertexBuffers[0] = vb,

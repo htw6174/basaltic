@@ -56,15 +56,21 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
     if (useMouse) {
         // get mouse state
-        s32 x, y;
+        s32 x, y, deltaX, deltaY;
         Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
         const Pointer *p = ecs_singleton_get(world, Pointer);
-        ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
+
+        deltaX = x - p->x;
+        deltaY = y - p->y;
+        bool mouseMoved = deltaX != 0 || deltaY != 0;
 
         const HoveredCell *currentHover = ecs_singleton_get(world, HoveredCell);
         const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(Pointer), Previous, HoveredCell);
 
-        if (currentHover->x != prevHover->x || currentHover->y != prevHover->y) {
+        bool hoverChanged = currentHover->x != prevHover->x || currentHover->y != prevHover->y;
+
+        // Should only do this if mouse also moved this frame; prevents jittering on cell edges, and unintentional edits where lowering terrain changes the hovered cell
+        if (mouseMoved && hoverChanged) {
             // Hovered cell changed
             // TODO: onClick and onHoverChanged should usually do the same thing
             if (mouseStateMask & SDL_BUTTON_LMASK) {
@@ -75,6 +81,7 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
             }
         }
 
+        ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
         ecs_set_pair_second(world, ecs_id(Pointer), Previous, HoveredCell, {currentHover->x, currentHover->y});
     }
 
