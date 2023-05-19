@@ -86,7 +86,7 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
             for (int i = 0; i < cellsPerChunk; i++) {
                 bc_CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
-                float baseNoise = htw_geo_simplex(cm, cellCoord, seed, 8, 16);
+                float baseNoise = htw_geo_simplex(cm, cellCoord, seed, 8, 8);
                 float nutrientNoise = htw_geo_simplex(cm, cellCoord, seed + 1, 4, 16);
                 float rainNoise = htw_geo_simplex(cm, cellCoord, seed + 2, 4, 4);
                 s32 grad = remap_int(cellCoord.y, 0, cm->mapHeight, 0, 255);

@@ -6,11 +6,9 @@
 #include "htw_core.h"
 #include "sokol_gfx.h"
 
-// Unused; maybe have a more general input->uniform system?
 void UniformPointerToMouse(ecs_iter_t *it) {
     Pointer *pointers = ecs_field(it, Pointer, 1);
     const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
-    const Mouse *mouse = ecs_singleton_get(it->world, Mouse);
 
     // TODO: need any special handling for multiple pointer inputs? For now just override with last pointer
     for (int i = 0; i < it->count; i++) {

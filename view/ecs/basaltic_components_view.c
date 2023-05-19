@@ -10,6 +10,8 @@ ECS_COMPONENT_DECLARE(Color);
 
 ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
+ECS_TAG_DECLARE(Previous);
+
 ECS_TAG_DECLARE(RenderPipeline);
 ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
@@ -54,6 +56,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, QueryDesc);
     ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
+    ECS_TAG_DEFINE(world, Previous);
     ECS_META_COMPONENT(world, Pointer);
     ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
@@ -119,8 +122,11 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, TerrainBrush, {.value = 1, .radius = 1});
     ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count
 
-    // Global uniforms
+    // Input
     ecs_singleton_add(world, Pointer);
+    ecs_add_pair(world, ecs_id(Pointer), Previous, ecs_id(HoveredCell));
+
+    // Global uniforms
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, PVMatrix);
 

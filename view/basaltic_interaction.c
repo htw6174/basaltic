@@ -16,18 +16,18 @@ static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
-void editTerrain(ecs_world_t *world);
+void editTerrain(ecs_world_t *world, float strength);
 
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            selectCell(world);
-            editTerrain(world);
+            //selectCell(world);
+            editTerrain(world, 1.0);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
-            advanceStep(commandBuffer);
-            //editMap(commandBuffer, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+            //advanceStep(commandBuffer);
+            editTerrain(world, -1.0);
         }
     }
     if (useKeyboard && e->type == SDL_KEYDOWN) {
@@ -58,7 +58,24 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
         // get mouse state
         s32 x, y;
         Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
-        ecs_singleton_set(world, Pointer, {x, y});
+        const Pointer *p = ecs_singleton_get(world, Pointer);
+        ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
+
+        const HoveredCell *currentHover = ecs_singleton_get(world, HoveredCell);
+        const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(Pointer), Previous, HoveredCell);
+
+        if (currentHover->x != prevHover->x || currentHover->y != prevHover->y) {
+            // Hovered cell changed
+            // TODO: onClick and onHoverChanged should usually do the same thing
+            if (mouseStateMask & SDL_BUTTON_LMASK) {
+                editTerrain(world, 1.0);
+            }
+            if (mouseStateMask & SDL_BUTTON_RMASK) {
+                editTerrain(world, -1.0);
+            }
+        }
+
+        ecs_set_pair_second(world, ecs_id(Pointer), Previous, HoveredCell, {currentHover->x, currentHover->y});
     }
 
     // camera
@@ -197,7 +214,7 @@ static void pauseStep(bc_CommandBuffer commandBuffer) {
     bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
 }
 
-void editTerrain(ecs_world_t *world) {
+void editTerrain(ecs_world_t *world, float strength) {
     const TerrainBrush *tb = ecs_singleton_get(world, TerrainBrush);
     const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
     htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
@@ -207,7 +224,7 @@ void editTerrain(ecs_world_t *world) {
     htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
     bc_CellData *cd = htw_geo_getCell(cm, cellCoord);
-    cd->height += tb->value;
+    cd->height += tb->value * strength;
 
     // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
     DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);

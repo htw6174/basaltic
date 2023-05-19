@@ -101,7 +101,7 @@ void bc_setupEditor(void) {
     viewInspector = (EcsInspectionContext){
         .worldName = "View",
         .customQueries = {
-            [0] = {.queryExpr = "Camera"},
+            [0] = {.queryExpr = "TerrainBrush"},
             [1] = {.queryExpr = "Pipeline || InstanceBuffer"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System"},

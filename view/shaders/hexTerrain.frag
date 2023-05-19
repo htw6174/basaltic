@@ -30,6 +30,7 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 
 in vec4 inout_color;
 in vec3 inout_pos;
+in vec3 inout_normal;
 flat in ivec2 inout_cellCoord;
 //flat in uint inout_cellIndex;
 
@@ -58,7 +59,8 @@ void main()
 {
 	// compute normal from position deriviatives
 	// NOTE: computing normlas in the pixel shader alone restricts you to flat shading; smooth shading requires information about neighboring verticies. If adding neighboring tile info anyway, could compute per vertex normals in vert shader?
-	vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	//vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	vec3 normal = inout_normal;
 
 	vec2 windowPos = gl_FragCoord.xy;
 	float mouseDist = distance(windowPos, mousePosition);
@@ -75,7 +77,7 @@ void main()
 
 	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
 
-	out_color = vec4(litColor, 1.0);
+	//out_color = vec4(litColor, 1.0);
 	//out_color = inout_color;
-	//out_color = vec4(normal, 1.0);
+	out_color = vec4(normal, 1.0);
 }

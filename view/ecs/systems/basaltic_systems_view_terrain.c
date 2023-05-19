@@ -16,6 +16,7 @@
 typedef struct {
     vec3 position;
     float neighborWeight;
+    vec3 barycentric;
     u16 localX;
     u16 localY;
 } bc_HexmapVertexData;
@@ -39,6 +40,9 @@ typedef struct {
     //int64_t aligner;
 } bc_TerrainCellData;
 
+vec3 barycentric(vec2 p, vec2 left, vec2 right);
+vec3 getHexVertBarycentric(float x, float y, int neighborhoodIndex);
+
 Mesh createHexmapMesh(void);
 void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
@@ -58,6 +62,34 @@ void GlCheck(void) {
     if (err != GL_NO_ERROR) {
         printf("GL ERROR: %x\n", err);
     }
+}
+
+vec3 barycentric(vec2 p, vec2 left, vec2 right) {
+    //vec2 v0 = vec2Subtract(b, a), v1 = vec2Subtract(c, a), v2 = vec2Subtract(p, a);
+    vec2 v0 = left, v1 = right, v2 = p;
+    float d00 = vec2DotProduct(v0, v0);
+    float d01 = vec2DotProduct(v0, v1);
+    float d11 = vec2DotProduct(v1, v1);
+    float d20 = vec2DotProduct(v2, v0);
+    float d21 = vec2DotProduct(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+    float v = (d11 * d20 - d01 * d21) / denom;
+    float w = (d00 * d21 - d01 * d20) / denom;
+    float u = 1.0f - v - w;
+    return (vec3){{u, v, w}};
+}
+
+vec3 getHexVertBarycentric(float x, float y, int neighborhoodIndex) {
+    if (neighborhoodIndex == 0) {
+        return (vec3){{1.0, 0.0, 0.0}};
+    }
+    float x1, y1, x2, y2;
+    neighborhoodIndex += HEX_DIRECTION_COUNT;
+    htw_geo_GridCoord leftCoord = htw_geo_hexGridDirections[(neighborhoodIndex - 2) % HEX_DIRECTION_COUNT];
+    htw_geo_GridCoord rightCoord = htw_geo_hexGridDirections[(neighborhoodIndex - 1) % HEX_DIRECTION_COUNT];
+    htw_geo_getHexCellPositionSkewed(leftCoord, &x1, &y1);
+    htw_geo_getHexCellPositionSkewed(rightCoord, &x2, &y2);
+    return barycentric((vec2){{x, y}}, (vec2){{x1, y1}}, (vec2){{x2, y2}});
 }
 
 /**
@@ -140,6 +172,7 @@ Mesh createHexmapMesh(void) {
                 bc_HexmapVertexData newVertex = {
                     .position = pos,
                     .neighborWeight = v,
+                    .barycentric = getHexVertBarycentric(hexagonPositions[v].x, hexagonPositions[v].y, v),
                     .localX = x,
                     .localY = y
                 };
@@ -593,7 +626,8 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
                 [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
                 [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
                 [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
-                [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
+                [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
+                [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
             }
         },
         .index_type = SG_INDEXTYPE_UINT32,

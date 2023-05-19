@@ -7,5 +7,5 @@ void BcSystemsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcSystems);
 
     ECS_IMPORT(world, BcSystemsTerrain);
-    ECS_IMPORT(world, BcSystemsCharacters);
+    //ECS_IMPORT(world, BcSystemsCharacters);
 }

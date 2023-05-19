@@ -46,6 +46,9 @@ extern ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 /* User Interface */
 
+extern ECS_TAG_DECLARE(Previous); // Relationship where target is previous value of a component
+
+// Pixel coordinates directly from SDL; origin at top-left
 ECS_STRUCT(Pointer, {
     s32 x;
     s32 y;
@@ -114,6 +117,7 @@ ECS_STRUCT(WindowSize, {
     float y;
 });
 
+// Pixel coordinates formatted for shader uniform use; origin at bottom-left
 ECS_STRUCT(Mouse, {
     float x;
     float y;
