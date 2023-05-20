@@ -39,7 +39,7 @@ uniform isampler2D terrain;
 layout(location = 0) in vec4 in_chunkPosition; // NOTE: this has a 1.0 w component built in. Remember not to add to other w components!
 layout(location = 1) in vec2 in_rootCoord;
 // per-vertex
-layout(location = 2) in vec3 in_position;
+layout(location = 2) in vec2 in_position;
 layout(location = 3) in float in_neighborWeight; // integral part is index into sampleOffsets, fractional part is weight from left to right sample
 layout(location = 4) in vec3 in_barycentric;
 layout(location = 5) in vec2 in_localCoord; // For compatability, this is a u16 normalized to a float. Multiply by 2e16 to restore.
@@ -47,11 +47,25 @@ layout(location = 5) in vec2 in_localCoord; // For compatability, this is a u16 
 out vec4 inout_color;
 out vec3 inout_pos;
 out vec3 inout_normal;
+out vec2 inout_uv;
 flat out ivec2 inout_cellCoord;
 //flat out uint inout_cellIndex;
 
 float rand(float x) {
     return fract(sin(x) * 43758.5453123);
+}
+
+vec3 remapBarycentric(vec3 barycentric, float yFactor, float zFactor, float inset) {
+    // Moving in affine space can be considered to be with respect to one coordinate (x), and will cause a change in the other 2 coordinates (y & z) whose sum is equal to the change in x. The ratio of y change to z change [0..1] tells the direction of motion: in cartesian space, within 30 degrees to either side of the x axis.
+    // Find remapping difference for y and z seperately. x delta is their sum
+    float yRange = 1.0 - barycentric.z; // range limited by invariant axis; must also compress back to this range after smoothstep
+    float yRemapped = mix(barycentric.y, smoothstep(inset, yRange - inset, barycentric.y) * yRange, yFactor);
+
+    float zRange = 1.0 - barycentric.y;
+    float zRemapped = mix(barycentric.z, smoothstep(inset, zRange - inset, barycentric.z) * zRange, zFactor);
+
+    float xDelta = (barycentric.y - yRemapped) + (barycentric.z - zRemapped);
+    return vec3(barycentric.x + xDelta, yRemapped, zRemapped);
 }
 
 ivec4 terrainFetch(ivec2 coord) {
@@ -60,7 +74,7 @@ ivec4 terrainFetch(ivec2 coord) {
     return texelFetch(terrain, (coord + wrap) % wrap, 0);
 }
 
-float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
+float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cd = terrainFetch(cellCoord);
     ivec4 offsets = sampleOffsets[neighborhood];
     ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
@@ -70,33 +84,35 @@ float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     // warp barycentric space along one axis if slope in that direction is high enough
     int slopeLeft = cdl.r - cd.r;
     int slopeRight = cdr.r - cd.r;
-    bool remapLeft = abs(slopeLeft) > 2;
-    bool remapRight = abs(slopeRight) > 2;
+    float remapLeft = abs(slopeLeft) > 2 ? 1.0 : 0.0;
+    float remapRight = abs(slopeRight) > 2 ? 1.0 : 0.0;
 
-    float slopeFactor = 0.25;
+    float slopeFactor = 0.1;
 
-    // Moving in affine space can be considered to be with respect to one coordinate (x), and will cause a change in the other 2 coordinates (y & z) whose sum is equal to the change in x. The ratio of y change to z change [0..1] tells the direction of motion: in cartesian space, within 30 degrees to either side of the x axis.
-    // Find remapping difference for y and z seperately. x delta is their sum
-    float yRange = 1.0 - barycentric.z; // range limited by invariant axis; must also compress back to this range after smoothstep
-    float yRemapped = remapLeft ? smoothstep(slopeFactor, yRange - slopeFactor, barycentric.y) * yRange : barycentric.y;
+    vec2 p1 = vec2(0.0, 0.0);
+    vec2 p2 = neighborPositions[neighborhood].xy;
+    vec2 p3 = neighborPositions[neighborhood].zw;
 
-    float zRange = 1.0 - barycentric.y;
-    float zRemapped = remapRight ? smoothstep(slopeFactor, zRange - slopeFactor, barycentric.z) * zRange : barycentric.z;
+    vec2 cart = ((p1 - p3) * barycentric.x) + ((p2 - p3) * barycentric.y) + p3;
 
-    float xDelta = (barycentric.y - yRemapped) + (barycentric.z - zRemapped);
-    barycentric = vec3(barycentric.x + xDelta, yRemapped, zRemapped);
+    //barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
 
     // Use barycentric coord to interpolate samples
     float height = (cd.r * barycentric.x) + (cdl.r * barycentric.y) + (cdr.r * barycentric.z);
 
     // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
-    // TODO/FIXME: need to remap these samples seperately after adding planck? Adjacent faces with sharp differences look too similar. Could be fixed by just adding more geometry.
-    const float planck = 0.01;
+    const float planck = 0.001;
     // Right-hand rule for cross product results - index finger, towards cdr
     vec3 bary1 = vec3(barycentric.x - planck, barycentric.y, barycentric.z + planck);
     // middle finger, towards cdl
     vec3 bary2 = vec3(barycentric.x - planck, barycentric.y + planck, barycentric.z);
+    // Home cell relative cartesian position of samples
+    vec2 cart1 = ((p1 - p3) * bary1.x) + ((p2 - p3) * bary1.y) + p3;
+    vec2 cart2 = ((p1 - p3) * bary2.x) + ((p2 - p3) * bary2.y) + p3;
+    // must remap after adding planck for accurate slope
+    //bary1 = remapBarycentric(bary1, remapLeft, remapRight, slopeFactor);
+    //bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
 
     // interpolate nearby samples
     float h1 = (cd.r * bary1.x) + (cdl.r * bary1.y) + (cdr.r * bary1.z);
@@ -106,13 +122,21 @@ float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     // in the special case of an equilateral triangle, this is easy to find. cartesian distance == (barycentric distance * grid scale)
     // still need to rotate vectors according to sample cell's direction; == -(neighborhood - 2) * [60 deg, 30 deg]
     // More general formula : https://www.iue.tuwien.ac.at/phd/nentchev/node26.html#eq:lambda_representation_2D_xy
-    float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
-    float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
-    vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (h1 - height) * 0.2); // TODO: provide terrain scale as uniform, multiply in
-    vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (h2 - height) * 0.2);
+    //float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
+    //float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
+    // TODO: validate that the tangent's endpoint actually transforms back into a sensible spot in cartesian space. May need to use different transformation
+    // Get distance from vertex
+    // TODO
+    vec3 tangent = vec3(cart1 - cart, (h1 - height) * 0.2);
+    vec3 bitangent = vec3(cart2 - cart, (h2 - height) * 0.2);
+    //vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (h1 - height) * 0.2); // TODO: provide terrain scale as uniform, multiply in
+    //vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (h2 - height) * 0.2);
 
     // approximate vertex normal from cross product - thumb
     inout_normal = normalize(cross(tangent, bitangent));
+
+    // TEST: see what this looks like
+    inout_color = vec4(inout_normal, 1.0);
 
     return height;
 }
@@ -120,6 +144,7 @@ float height(vec3 pos, vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 void main()
 {
     //inout_cellIndex = uint(65535.0 * in_cellIndex);
+    inout_uv = in_barycentric.yz;
 
     // unpack terrain data
     inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 65535.0);
@@ -128,7 +153,7 @@ void main()
     // get neighboring cell data
     int neighborhood = int(floor(in_neighborWeight));
 
-    float elevation = height(in_position, in_barycentric, inout_cellCoord, neighborhood);
+    float elevation = height(in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
@@ -142,7 +167,7 @@ void main()
     //float wiggle = round( sin(rand(gl_VertexID))) * 0.5;
     //float wiggle = cd.r;
 
-    vec3 unscaledPosition = in_position + vec3(0.0, 0.0, elevation);
+    vec3 unscaledPosition = vec3(in_position, elevation);
     //vec4 localPosition = vec4(unscaledPosition * WorldInfo.gridToWorld, 1.0);
     //vec3 unscaledPosition = in_position + vec3(0.0, 0.0, (65535.0 / 256.0) * in_cellIndex);
     vec3 localPosition = unscaledPosition * vec3(1.0, 1.0, 0.2);
@@ -154,6 +179,6 @@ void main()
 
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
 
-    //inout_color = vec4(1.0, 0.0, 0.0, 1.0);
-    inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
+    //inout_color = vec4(in_barycentric, 1.0);
+    //inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
 }

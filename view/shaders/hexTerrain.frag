@@ -31,6 +31,7 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 in vec4 inout_color;
 in vec3 inout_pos;
 in vec3 inout_normal;
+in vec2 inout_uv;
 flat in ivec2 inout_cellCoord;
 //flat in uint inout_cellIndex;
 
@@ -75,9 +76,13 @@ void main()
 
 	vec3 litColor = inout_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 
+// 	// TEST: display white outline on every cell
+// 	float edgeDist = min(inout_uv.x, inout_uv.y);
+// 	litColor = edgeDist > 0.25 && edgeDist < 0.27 ? vec3(1.0, 1.0, 1.0) : litColor;
+
 	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
 
-	out_color = vec4(litColor, 1.0);
-	//out_color = inout_color;
+	//out_color = vec4(litColor, 1.0);
+	out_color = inout_color;
 	//out_color = vec4(normal, 1.0);
 }

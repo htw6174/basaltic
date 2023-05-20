@@ -14,7 +14,7 @@
 #endif
 
 typedef struct {
-    vec3 position;
+    vec2 position;
     float neighborWeight;
     vec3 barycentric;
     u16 localX;
@@ -41,9 +41,10 @@ typedef struct {
 } bc_TerrainCellData;
 
 vec3 barycentric(vec2 p, vec2 left, vec2 right);
-vec3 getHexVertBarycentric(float x, float y, int neighborhoodIndex);
+vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
 
 Mesh createHexmapMesh(void);
+Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
 void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
 void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex);
@@ -80,13 +81,176 @@ vec3 barycentric(vec2 p, vec2 left, vec2 right) {
     return (vec3){{u, v, w}};
 }
 
-vec3 getHexVertBarycentric(float x, float y, int neighborhoodIndex) {
+vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex) {
     float x1, y1, x2, y2;
     htw_geo_GridCoord leftCoord = htw_geo_hexGridDirections[(neighborhoodIndex + 5) % HEX_DIRECTION_COUNT];
     htw_geo_GridCoord rightCoord = htw_geo_hexGridDirections[neighborhoodIndex];
     htw_geo_getHexCellPositionSkewed(leftCoord, &x1, &y1);
     htw_geo_getHexCellPositionSkewed(rightCoord, &x2, &y2);
-    return barycentric((vec2){{x, y}}, (vec2){{x1, y1}}, (vec2){{x2, y2}});
+    return barycentric(pos, (vec2){{x1, y1}}, (vec2){{x2, y2}});
+}
+
+Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
+
+    // Setup
+    const u32 cellCount = width * height;
+
+    // Extra 2 per cell along the bottom edge, extra 1 per cell along the left and right edges
+    const u32 edgeVertexCount = 2 * (width + height);
+    const u32 edgeSubdivVertCount = edgeVertexCount * pow(4, subdivisions); // TODO: not sure about this formula
+    // Total vert count per interior cell: 3 for home tri + ((3 + 6) owned edges per cell * (pow(2, subdivisions) - 1) extra verts per original edge) + (6 hextants * (number of new interior verts per subdivision = [0, 0, 3, 18, ???]))
+    // progresses: 3, 12, 48, ???
+    // is it really as simple as 3 * pow(4, subdiv)? Makes sense in the infinite plane case: 6 tris around every vert, 3 verts for every tri -> verts = tris / 2
+    //static const u32 fudge[] = {0, 0, 3, 18};
+    //const u32 perCellSubdivVertCount = 3 + ((3 + 6) * (pow(2, subdivisions) - 1)) + (6 * (fudge[subdivisions]));
+    //const u32 perCellSubdivVertCount = 3 + (subdivisions * (6 + 3)) + (6 * 3 * (u32)pow(4, subdivisions - 1));
+    const u32 vertsPerHex = 3 * pow(4, subdivisions);
+    const u32 vertexCount = (cellCount * vertsPerHex) + edgeSubdivVertCount;
+    // 6 base tris, each subdivision splits each tri in 4
+    const u32 trisPerHex = 6 * pow(4, subdivisions);
+    const u32 triangleCount = trisPerHex * cellCount;
+    const u32 elesPerHex = trisPerHex * 3;
+    const u32 elementCount = elesPerHex * cellCount;
+
+    // useful constants; based on distance between 2 adjacent hex centers == 1
+    static const float outerRadius = 0.57735026919; // = sqrt(0.75) * (2.0 / 3.0));
+    static const float innerRadius = 0.5;
+    static const float halfEdge = outerRadius / 2;
+    static const vec2 hexagonPositions[] = {
+        { {0.0, 0.0} }, // center
+        { {0.0, outerRadius} }, // top middle, runs clockwise
+        { {innerRadius, halfEdge} },
+        { {innerRadius, -halfEdge} },
+        { {0.0, -outerRadius} },
+        { {-innerRadius, -halfEdge} },
+        { {-innerRadius, halfEdge} },
+    };
+
+    // TEST
+    printf("Creating tri grid mesh:\n- %u subdivisions\n- %u verts\n- %u tris\n", subdivisions, vertexCount, triangleCount);
+
+    size_t vertexBufferSize = vertexCount * sizeof(bc_HexmapVertexData);
+    size_t elementBufferSize = elementCount * sizeof(u32);
+    bc_HexmapVertexData *verts = calloc(1, vertexBufferSize);
+    u32 *elements = calloc(1, elementBufferSize);
+
+    // Fill in mesh
+    u32 vIndex = 0;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            u32 c = x + (y * width); // current cell index
+            // vertex data
+            // create 3 new verts per cell for the 'home tri'
+            htw_geo_GridCoord cellCoord = {x, y};
+            float posX, posY;
+            htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
+            vec2 cellPos = (vec2){{posX, posY}};
+            for (int v = 0; v < 3; v++) {
+                vec2 pos = hexagonPositions[v];
+                int neighborhood = max_int(0, v - 1);
+                bc_HexmapVertexData newVertex = {
+                    .position = vec2Add(pos, cellPos),
+                    .neighborWeight = neighborhood,
+                    .barycentric = getHexVertBarycentric(pos, neighborhood),
+                    .localX = x,
+                    .localY = y
+                };
+                verts[vIndex++] = newVertex;
+            }
+            // create vert in the center of each edge
+            // lines emerging from center:
+            for (int v = 0; v < 6; v++) {
+                vec2 pos1 = hexagonPositions[0];
+                vec2 pos2 = hexagonPositions[v + 1];
+                vec2 pos = vec2Mix(pos1, pos2, 0.5);
+                int neighborhood = v;
+                bc_HexmapVertexData newVertex = {
+                    .position = vec2Add(pos, cellPos),
+                    .neighborWeight = neighborhood,
+                    .barycentric = getHexVertBarycentric(pos, neighborhood),
+                    .localX = x,
+                    .localY = y
+                };
+                verts[vIndex++] = newVertex;
+            }
+            // 'owned' outside edges
+            u32 edgeIndicies[] = {6, 1, 2, 3};
+            for (int v = 0; v < 3; v++) {
+                vec2 pos1 = hexagonPositions[edgeIndicies[v]];
+                vec2 pos2 = hexagonPositions[edgeIndicies[v + 1]];
+                vec2 pos = vec2Mix(pos1, pos2, 0.5);
+                int neighborhood = edgeIndicies[v] - 1;
+                bc_HexmapVertexData newVertex = {
+                    .position = vec2Add(pos, cellPos),
+                    .neighborWeight = neighborhood,
+                    .barycentric = getHexVertBarycentric(pos, neighborhood),
+                    .localX = x,
+                    .localY = y
+                };
+                verts[vIndex++] = newVertex;
+            }
+        }
+    }
+
+    // elements
+    // TODO: need to handle first row & column. For now just start at cell [1, 1]
+    // TODO: need to handle last column (otherwise can't reference SE cell). For now just end row early
+    u32 eIndex = 0;
+    for (int y = 1; y < height; y++) {
+        for (int x = 1; x < width - 1; x++) {
+            u32 c = x + (y * width); // current cell index
+            u32 cellBaseElementIndex = vertsPerHex * c;
+            // get relative element index for west, south-west, and south-east cell
+            s32 cbW = -vertsPerHex;
+            s32 cbSW = -(vertsPerHex * width);
+            s32 cbSE = cbSW + vertsPerHex;
+            // All relevent element indicies for each hextant. There are duplicate indicies, but this makes it easier to iterate over
+            s32 basisEles[] = {
+                0, 1, 2, 3, 10, 4,
+                0, 2, cbSE + 1, 4, 11, 5,
+                0, cbSE + 1, cbSW + 2, 5, cbSE + 9, 6,
+                0, cbSW + 2, cbSW + 1, 6, cbSW + 10, 7,
+                0, cbSW + 1, cbW + 2, 7, cbW + 11, 8,
+                0, cbW + 2, 1, 8, 9, 3
+            };
+            // Index into a row of basisEles
+            u32 hextantRelEles[] = {0, 3, 5, 1, 4, 3, 2, 5, 4, 3, 4, 5};
+            // Iterate over hextants
+            for (int h = 0; h < 6; h++) {
+                for (int e = 0; e < 12; e++) {
+                    s32 ele = cellBaseElementIndex + basisEles[hextantRelEles[e] + (6 * h)];
+                    elements[eIndex++] = ele;
+                }
+            }
+            //eIndex += elesPerHex;
+            //cellBaseElementIndex += vertsPerHex;
+        }
+    }
+
+    // Vertex and index creation should be sort of separate; element indexes are not mostly local any more, need to find and use verts mostly from nearby cells
+
+    sg_buffer_desc vbd = {
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .data.ptr = verts,
+        .data.size = vertexBufferSize
+    };
+    sg_buffer vb = sg_make_buffer(&vbd);
+
+    sg_buffer_desc ibd = {
+        .type = SG_BUFFERTYPE_INDEXBUFFER,
+        .data.ptr = elements,
+        .data.size = elementBufferSize
+    };
+    sg_buffer ib = sg_make_buffer(&ibd);
+
+    free(verts);
+    free(elements);
+
+    return (Mesh) {
+        .vertexBuffers[0] = vb,
+        .indexBuffer = ib,
+        .elements = elementCount
+    };
 }
 
 /**
@@ -133,14 +297,14 @@ Mesh createHexmapMesh(void) {
 
     // hexagon model data
     static const float halfHeight = 0.433012701892;
-    static const vec3 hexagonPositions[] = {
-        { {0.0, 0.0, 0.0} }, // center
-        { {0.0, 0.5, 0.0} }, // top middle, runs clockwise
-        { {halfHeight, 0.25, 0.0} },
-        { {halfHeight, -0.25, 0.0} },
-        { {0.0, -0.5, 0.0} },
-        { {-halfHeight, -0.25, 0.0} },
-        { {-halfHeight, 0.25, 0.0} },
+    static const vec2 hexagonPositions[] = {
+        { {0.0, 0.0} }, // center
+        { {0.0, 0.5} }, // top middle, runs clockwise
+        { {halfHeight, 0.25} },
+        { {halfHeight, -0.25} },
+        { {0.0, -0.5} },
+        { {-halfHeight, -0.25} },
+        { {-halfHeight, 0.25} },
     };
     static const unsigned int hexagonIndicies[] = {
         0, 1, 2, // top right, runs clockwise
@@ -165,12 +329,12 @@ Mesh createHexmapMesh(void) {
             for (int v = 0; v < vertsPerCell; v++) {
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
-                vec3 pos = vec3Add(hexagonPositions[v], (vec3){{posX, posY, 0.0}});
+                vec2 pos = hexagonPositions[v];
                 int neighborhood = max_int(0, v - 1);
                 bc_HexmapVertexData newVertex = {
-                    .position = pos,
+                    .position = vec2Add(pos, (vec2){{posX, posY}}),
                     .neighborWeight = neighborhood,
-                    .barycentric = getHexVertBarycentric(hexagonPositions[v].x, hexagonPositions[v].y, neighborhood),
+                    .barycentric = getHexVertBarycentric(pos, neighborhood),
                     .localX = x,
                     .localY = y
                 };
@@ -315,10 +479,11 @@ Mesh createHexmapMesh(void) {
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = leftEdgeConnectionVerts[v];
-            vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
+            vec2 pos = hexagonPositions[hexPosIndex];
             bc_HexmapVertexData newVertex = {
-                .position = pos,
-                .neighborWeight = hexPosIndex,
+                .position = vec2Add(pos, (vec2){{posX, posY}}),
+                .neighborWeight = hexPosIndex - 1,
+                .barycentric = getHexVertBarycentric(pos, hexPosIndex - 1),
                 .localX = x + 1,
                 .localY = y
             };
@@ -375,10 +540,11 @@ Mesh createHexmapMesh(void) {
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = topEdgeConnectionVerts[v];
-            vec3 pos = vec3Add(hexagonPositions[hexPosIndex], (vec3){{posX, posY, 0.0}});
+            vec2 pos = hexagonPositions[hexPosIndex];
             bc_HexmapVertexData newVertex = {
-                .position = pos,
-                .neighborWeight = hexPosIndex,
+                .position = vec2Add(pos, (vec2){{posX, posY}}),
+                .neighborWeight = hexPosIndex - 1,
+                .barycentric = getHexVertBarycentric(pos, hexPosIndex - 1),
                 .localX = x,
                 .localY = y + 1
             };
@@ -399,11 +565,11 @@ Mesh createHexmapMesh(void) {
             cellCoord = (htw_geo_GridCoord){x + 1, y + 1};
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
-            vec3 pos = vec3Add(hexagonPositions[5], (vec3){{posX, posY, 0.0}});
+            vec2 pos = hexagonPositions[5];
             bc_HexmapVertexData newVertex = {
-                .position = pos,
-                //.cellIndex = baseCell + width
-                .neighborWeight = 5,
+                .position = vec2Add(pos, (vec2){{posX, posY}}),
+                .neighborWeight = 5 - 1,
+                .barycentric = getHexVertBarycentric(pos, 5 - 1),
                 .localX = x + 1,
                 .localY = y + 1
             };
@@ -625,7 +791,7 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
             .attrs = {
                 [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
                 [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
-                [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
+                [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT2},
                 [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
                 [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
                 [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
@@ -640,7 +806,8 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
     };
     sg_pipeline pip = sg_make_pipeline(&pd);
 
-    Mesh mesh = createHexmapMesh();
+    //Mesh mesh = createHexmapMesh();
+    Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
 
     for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], Pipeline, {pip});
