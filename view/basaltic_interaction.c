@@ -226,15 +226,20 @@ void editTerrain(ecs_world_t *world, float strength) {
     const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
     htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
 
-    ecs_entity_t focusPlane = ecs_singleton_get(world, FocusPlane)->entity;
-    ecs_world_t *modelWorld = ecs_singleton_get(world, ModelWorld)->world;
-    htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+    const FocusPlane *fp = ecs_singleton_get(world, FocusPlane);
+    const ModelWorld *mw = ecs_singleton_get(world, ModelWorld);
 
-    bc_CellData *cd = htw_geo_getCell(cm, cellCoord);
-    cd->height += tb->value * strength;
+    if (tb && hoveredCoord && fp && mw) {
+        ecs_entity_t focusPlane = fp->entity;
+        ecs_world_t *modelWorld = mw->world;
+        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-    // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
-    DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
-    u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
-    dirty->chunks[dirty->count++] = chunk;
+        bc_CellData *cd = htw_geo_getCell(cm, cellCoord);
+        cd->height += tb->value * strength;
+
+        // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
+        DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
+        u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
+        dirty->chunks[dirty->count++] = chunk;
+    }
 }

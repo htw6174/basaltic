@@ -87,7 +87,7 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     float remapLeft = abs(slopeLeft) > 2 ? 1.0 : 0.0;
     float remapRight = abs(slopeRight) > 2 ? 1.0 : 0.0;
 
-    float slopeFactor = 0.1;
+    float slopeFactor = 0.15;
 
     // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
