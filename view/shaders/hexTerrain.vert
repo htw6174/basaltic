@@ -89,17 +89,6 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 
     float slopeFactor = 0.1;
 
-    vec2 p1 = vec2(0.0, 0.0);
-    vec2 p2 = neighborPositions[neighborhood].xy;
-    vec2 p3 = neighborPositions[neighborhood].zw;
-
-    vec2 cart = ((p1 - p3) * barycentric.x) + ((p2 - p3) * barycentric.y) + p3;
-
-    //barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
-
-    // Use barycentric coord to interpolate samples
-    float height = (cd.r * barycentric.x) + (cdl.r * barycentric.y) + (cdr.r * barycentric.z);
-
     // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
     const float planck = 0.001;
@@ -107,14 +96,14 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     vec3 bary1 = vec3(barycentric.x - planck, barycentric.y, barycentric.z + planck);
     // middle finger, towards cdl
     vec3 bary2 = vec3(barycentric.x - planck, barycentric.y + planck, barycentric.z);
-    // Home cell relative cartesian position of samples
-    vec2 cart1 = ((p1 - p3) * bary1.x) + ((p2 - p3) * bary1.y) + p3;
-    vec2 cart2 = ((p1 - p3) * bary2.x) + ((p2 - p3) * bary2.y) + p3;
-    // must remap after adding planck for accurate slope
-    //bary1 = remapBarycentric(bary1, remapLeft, remapRight, slopeFactor);
-    //bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
 
-    // interpolate nearby samples
+    // must remap after adding planck for accurate slope
+    barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
+    bary1 = remapBarycentric(bary1, remapLeft, remapRight, slopeFactor);
+    bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
+
+    // Use barycentric coord to interpolate samples
+    float height = (cd.r * barycentric.x) + (cdl.r * barycentric.y) + (cdr.r * barycentric.z);
     float h1 = (cd.r * bary1.x) + (cdl.r * bary1.y) + (cdr.r * bary1.z);
     float h2 = (cd.r * bary2.x) + (cdl.r * bary2.y) + (cdr.r * bary2.z);
 
@@ -122,21 +111,17 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     // in the special case of an equilateral triangle, this is easy to find. cartesian distance == (barycentric distance * grid scale)
     // still need to rotate vectors according to sample cell's direction; == -(neighborhood - 2) * [60 deg, 30 deg]
     // More general formula : https://www.iue.tuwien.ac.at/phd/nentchev/node26.html#eq:lambda_representation_2D_xy
-    //float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
-    //float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
-    // TODO: validate that the tangent's endpoint actually transforms back into a sensible spot in cartesian space. May need to use different transformation
+    float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
+    float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
     // Get distance from vertex
-    // TODO
-    vec3 tangent = vec3(cart1 - cart, (h1 - height) * 0.2);
-    vec3 bitangent = vec3(cart2 - cart, (h2 - height) * 0.2);
-    //vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (h1 - height) * 0.2); // TODO: provide terrain scale as uniform, multiply in
-    //vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (h2 - height) * 0.2);
+    vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (h1 - height) * 0.2); // TODO: provide terrain scale as uniform, multiply in
+    vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (h2 - height) * 0.2);
 
     // approximate vertex normal from cross product - thumb
     inout_normal = normalize(cross(tangent, bitangent));
 
     // TEST: see what this looks like
-    inout_color = vec4(inout_normal, 1.0);
+    //inout_color = vec4(inout_normal, 1.0);
 
     return height;
 }
@@ -180,5 +165,5 @@ void main()
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
 
     //inout_color = vec4(in_barycentric, 1.0);
-    //inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
+    inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
 }
