@@ -12,8 +12,8 @@ void UniformPointerToMouse(ecs_iter_t *it) {
 
     // TODO: need any special handling for multiple pointer inputs? For now just override with last pointer
     for (int i = 0; i < it->count; i++) {
-        float x = pointers[i].x;
-        float y = w->y - pointers[i].y;
+        float x = pointers[i].x + 0.5;
+        float y = (w->y - pointers[i].y) + 0.5;
         ecs_singleton_set(it->world, Mouse, {x, y});
     }
 }

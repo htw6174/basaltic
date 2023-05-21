@@ -129,11 +129,10 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 
 void main()
 {
-    //inout_cellIndex = uint(65535.0 * in_cellIndex);
     inout_uv = in_barycentric.yz;
 
     // unpack terrain data
-    inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); //65535.0);
+    inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); // scale normalized s16 back to full range
     ivec4 cd = terrainFetch(inout_cellCoord);
 
     // get neighboring cell data

@@ -26,14 +26,11 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 	int hoveredY;
 } FeedbackBuffer;
 
-//buffer uint hoveredCell;
-
 in vec4 inout_color;
 in vec3 inout_pos;
 in vec3 inout_normal;
 in vec2 inout_uv;
 flat in ivec2 inout_cellCoord;
-//flat in uint inout_cellIndex;
 
 out vec4 out_color;
 
@@ -59,13 +56,14 @@ vec3 randColor(float seed) {
 void main()
 {
 	// compute normal from position deriviatives
-	// NOTE: computing normlas in the pixel shader alone restricts you to flat shading; smooth shading requires information about neighboring verticies. If adding neighboring tile info anyway, could compute per vertex normals in vert shader?
-	vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
-	//vec3 normal = inout_normal;
+	// NOTE: computing normals in the pixel shader alone restricts you to flat shading; smooth shading requires information about neighboring verticies. If adding neighboring tile info anyway, could compute per vertex normals in vert shader?
+	//vec3 normal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	vec3 normal = inout_normal;
 
+	// NOTE: gl pixel centers lie on half integers. mousePosition should have 0.5 added to match OpenGL's pixel space.
 	vec2 windowPos = gl_FragCoord.xy;
 	float mouseDist = distance(windowPos, mousePosition);
-	if (mouseDist < 1.0) {
+	if (mouseDist < 0.1) {
 		FeedbackBuffer.hoveredX = inout_cellCoord.x;
 		FeedbackBuffer.hoveredY = inout_cellCoord.y;
 	}
@@ -76,10 +74,10 @@ void main()
 
 	vec3 litColor = inout_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 
-	// TEST: display white outline on every cell
-		if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
-		float edgeDist = min(inout_uv.x, inout_uv.y);
-		litColor = edgeDist > 0.25 && edgeDist < 0.27 ? vec3(1.0, 1.0, 1.0) : litColor;
+	// display white outline on hovered cell
+	if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
+		float edgeDist = max(inout_uv.x, inout_uv.y) - (1.0 - (inout_uv.x + inout_uv.y));
+		litColor = abs(edgeDist) < 0.1 ? vec3(1.0, 1.0, 1.0) : litColor;
 	}
 
 	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
@@ -88,4 +86,5 @@ void main()
 	//out_color = inout_color;
 	//out_color = vec4(normal, 1.0);
 	//out_color = vec4(inout_uv, 0.0, 1.0);
+	//out_color = vec4(rand(inout_cellCoord.x), rand(inout_cellCoord.y), rand(dot(inout_cellCoord, inout_cellCoord)), 1.0);
 }

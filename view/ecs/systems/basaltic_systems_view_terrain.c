@@ -193,6 +193,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
             //assert(vIndex % 12 == 0);
         }
     }
+    assert(vIndex == vertexCount);
 
     // elements
     // TODO: need to handle first row & column. For now just start at cell [1, 1]
@@ -220,7 +221,8 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
                 0, cbW + 2, 1, 8, 9, 3
             };
             // Index into a row of basisEles
-            u32 hextantRelEles[] = {0, 3, 5, 1, 4, 3, 2, 5, 4, 3, 4, 5};
+            // NOTE: ordering here is important to ensure the triggering vertex for non-interpolated cell data is correct. Keeping the last vertex inside the hex ensures this, at least for OpenGL
+            u32 hextantRelEles[] = {0, 3, 5, 1, 4, 3, 4, 2, 5, 3, 4, 5};
             // Iterate over hextants
             for (int h = 0; h < 6; h++) {
                 for (int e = 0; e < 12; e++) {
@@ -232,6 +234,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
             //cellBaseElementIndex += vertsPerHex;
         }
     }
+    assert(eIndex == elementCount);
 
     // Vertex and index creation should be sort of separate; element indexes are not mostly local any more, need to find and use verts mostly from nearby cells
 

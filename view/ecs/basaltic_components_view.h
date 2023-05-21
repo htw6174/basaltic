@@ -117,7 +117,7 @@ ECS_STRUCT(WindowSize, {
     float y;
 });
 
-// Pixel coordinates formatted for shader uniform use; origin at bottom-left
+// Pixel coordinates formatted for shader uniform use; origin at bottom-left, lie on half integer boundary (+0.5, +0.5)
 ECS_STRUCT(Mouse, {
     float x;
     float y;
