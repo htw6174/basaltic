@@ -119,9 +119,10 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 
     // approximate vertex normal from cross product - thumb
     inout_normal = normalize(cross(tangent, bitangent));
+    //inout_normal = barycentric;
 
     // TEST: see what this looks like
-    //inout_color = vec4(inout_normal, 1.0);
+    //inout_color = vec4(barycentric, 1.0);
 
     return height;
 }
