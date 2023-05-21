@@ -42,7 +42,7 @@ layout(location = 1) in vec2 in_rootCoord;
 layout(location = 2) in vec2 in_position;
 layout(location = 3) in float in_neighborWeight; // integral part is index into sampleOffsets, fractional part is weight from left to right sample
 layout(location = 4) in vec3 in_barycentric;
-layout(location = 5) in vec2 in_localCoord; // For compatability, this is a u16 normalized to a float. Multiply by 2e16 to restore.
+layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16 normalized to a float. Multiply by 2e16 to restore.
 
 out vec4 inout_color;
 out vec3 inout_pos;
@@ -133,7 +133,7 @@ void main()
     inout_uv = in_barycentric.yz;
 
     // unpack terrain data
-    inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 65535.0);
+    inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); //65535.0);
     ivec4 cd = terrainFetch(inout_cellCoord);
 
     // get neighboring cell data

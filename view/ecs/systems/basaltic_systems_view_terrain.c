@@ -17,8 +17,8 @@ typedef struct {
     vec2 position;
     float neighborWeight;
     vec3 barycentric;
-    u16 localX;
-    u16 localY;
+    s16 localX;
+    s16 localY;
 } bc_HexmapVertexData;
 
 typedef struct {
@@ -95,17 +95,18 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
     // Setup
     const u32 cellCount = width * height;
 
+    // FIXME: temp fix to fill in gaps. Generate all verts for extra cells to the left, right, bottom. Slightly wasteful but keeps generation algo simple
+    // NOTE: *BEWARE* of trying to compare a negative signed int with an unsigned int; -1 < (unsigned int)1 == FALSE
+    const s32 expandWidth = width + 2;
+    const s32 expandHeight = height + 1;
+    const s32 expandedCellCount = expandWidth * expandHeight;
+
     // Extra 2 per cell along the bottom edge, extra 1 per cell along the left and right edges
-    const u32 edgeVertexCount = 2 * (width + height);
-    const u32 edgeSubdivVertCount = edgeVertexCount * pow(4, subdivisions); // TODO: not sure about this formula
-    // Total vert count per interior cell: 3 for home tri + ((3 + 6) owned edges per cell * (pow(2, subdivisions) - 1) extra verts per original edge) + (6 hextants * (number of new interior verts per subdivision = [0, 0, 3, 18, ???]))
-    // progresses: 3, 12, 48, ???
+    //const u32 edgeVertexCount = 2 * (width + height);
+    //const u32 edgeSubdivVertCount = edgeVertexCount * pow(4, subdivisions); // TODO: not sure about this formula
     // is it really as simple as 3 * pow(4, subdiv)? Makes sense in the infinite plane case: 6 tris around every vert, 3 verts for every tri -> verts = tris / 2
-    //static const u32 fudge[] = {0, 0, 3, 18};
-    //const u32 perCellSubdivVertCount = 3 + ((3 + 6) * (pow(2, subdivisions) - 1)) + (6 * (fudge[subdivisions]));
-    //const u32 perCellSubdivVertCount = 3 + (subdivisions * (6 + 3)) + (6 * 3 * (u32)pow(4, subdivisions - 1));
     const u32 vertsPerHex = 3 * pow(4, subdivisions);
-    const u32 vertexCount = (cellCount * vertsPerHex) + edgeSubdivVertCount;
+    const u32 vertexCount = expandedCellCount * vertsPerHex;
     // 6 base tris, each subdivision splits each tri in 4
     const u32 trisPerHex = 6 * pow(4, subdivisions);
     const u32 triangleCount = trisPerHex * cellCount;
@@ -134,17 +135,17 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
     bc_HexmapVertexData *verts = calloc(1, vertexBufferSize);
     u32 *elements = calloc(1, elementBufferSize);
 
-    // Fill in mesh
+    // vertex data
     u32 vIndex = 0;
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            u32 c = x + (y * width); // current cell index
-            // vertex data
-            // create 3 new verts per cell for the 'home tri'
+    // NOTE: because starting from a negative value, be sure to use signed int for comparison
+    for (int y = -1; y < expandHeight - 1; y++) {
+        for (int x = -1; x < expandWidth - 1; x++) {
+            // setup
             htw_geo_GridCoord cellCoord = {x, y};
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             vec2 cellPos = (vec2){{posX, posY}};
+            // create 3 new verts per cell for the 'home tri'
             for (int v = 0; v < 3; v++) {
                 vec2 pos = hexagonPositions[v];
                 int neighborhood = max_int(0, v - 1);
@@ -189,22 +190,27 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
                 };
                 verts[vIndex++] = newVertex;
             }
+            //assert(vIndex % 12 == 0);
         }
     }
 
     // elements
     // TODO: need to handle first row & column. For now just start at cell [1, 1]
     // TODO: need to handle last column (otherwise can't reference SE cell). For now just end row early
+    //u32 cellBaseElementIndex = vertsPerHex * (expandWidth + 1);
     u32 eIndex = 0;
-    for (int y = 1; y < height; y++) {
-        for (int x = 1; x < width - 1; x++) {
-            u32 c = x + (y * width); // current cell index
-            u32 cellBaseElementIndex = vertsPerHex * c;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            //u32 c = x + (y * width); // current cell index
+            // 'vertex cell': must account for the fact that the vertex array is effectively w+2 * h+1, and offset [-1, -1]
+            // [0, 0] -> [1, 1], c = 0 -> vc = 1 + (1 * expandWidth)
+            u32 vc = (x + 1) + ((y + 1) * expandWidth);
+            u32 cellBaseElementIndex = vertsPerHex * vc;
             // get relative element index for west, south-west, and south-east cell
             s32 cbW = -vertsPerHex;
-            s32 cbSW = -(vertsPerHex * width);
+            s32 cbSW = -(vertsPerHex * expandWidth);
             s32 cbSE = cbSW + vertsPerHex;
-            // All relevent element indicies for each hextant. There are duplicate indicies, but this makes it easier to iterate over
+            // All relevent element indicies for each hextant. Duplicating some indicies makes it easier to iterate over
             s32 basisEles[] = {
                 0, 1, 2, 3, 10, 4,
                 0, 2, cbSE + 1, 4, 11, 5,
@@ -218,11 +224,11 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
             // Iterate over hextants
             for (int h = 0; h < 6; h++) {
                 for (int e = 0; e < 12; e++) {
-                    s32 ele = cellBaseElementIndex + basisEles[hextantRelEles[e] + (6 * h)];
+                    u32 ele = cellBaseElementIndex + basisEles[hextantRelEles[e] + (6 * h)];
+                    //assert(ele > 0 && ele < vertexCount);
                     elements[eIndex++] = ele;
                 }
             }
-            //eIndex += elesPerHex;
             //cellBaseElementIndex += vertsPerHex;
         }
     }
@@ -794,7 +800,7 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
                 [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT2},
                 [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
                 [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
-                [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_USHORT2N}
+                [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_SHORT2N}
             }
         },
         .index_type = SG_INDEXTYPE_UINT32,

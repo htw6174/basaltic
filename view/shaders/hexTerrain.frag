@@ -22,8 +22,8 @@ uniform vec2 mousePosition;
 uniform int chunkIndex;
 
 layout(std430, binding = 0) buffer feedbackBuffer {
-	uint hoveredChunk;
-	uint hoveredCell;
+	int hoveredX;
+	int hoveredY;
 } FeedbackBuffer;
 
 //buffer uint hoveredCell;
@@ -66,8 +66,8 @@ void main()
 	vec2 windowPos = gl_FragCoord.xy;
 	float mouseDist = distance(windowPos, mousePosition);
 	if (mouseDist < 1.0) {
-		FeedbackBuffer.hoveredChunk = inout_cellCoord.x;
-		FeedbackBuffer.hoveredCell = inout_cellCoord.y;
+		FeedbackBuffer.hoveredX = inout_cellCoord.x;
+		FeedbackBuffer.hoveredY = inout_cellCoord.y;
 	}
 
 	//float cliff = 1.0 - normal.z;
@@ -77,7 +77,7 @@ void main()
 	vec3 litColor = inout_color.rgb * phong(normal, normalize(vec3(1.5, -3.0, 3.0)));
 
 	// TEST: display white outline on every cell
-		if (FeedbackBuffer.hoveredChunk == inout_cellCoord.x && FeedbackBuffer.hoveredCell == inout_cellCoord.y) {
+		if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
 		float edgeDist = min(inout_uv.x, inout_uv.y);
 		litColor = edgeDist > 0.25 && edgeDist < 0.27 ? vec3(1.0, 1.0, 1.0) : litColor;
 	}
