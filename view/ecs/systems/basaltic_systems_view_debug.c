@@ -129,6 +129,7 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
     }
 }
 
+// TODO: now that this is more general, can be moved out of debug system
 void DrawInstances(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
@@ -245,4 +246,6 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set(world, grassVis, QueryDesc, {
         .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
     });
+
+    ecs_enable(world, ecs_id(DrawInstances), false);
 }

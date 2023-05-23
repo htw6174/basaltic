@@ -47,7 +47,7 @@ layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16
 out vec4 inout_color;
 out vec3 inout_pos;
 out vec3 inout_normal;
-out vec2 inout_uv;
+out vec3 inout_tangent;
 flat out ivec2 inout_cellCoord;
 //flat out uint inout_cellIndex;
 
@@ -121,6 +121,9 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     inout_normal = normalize(cross(tangent, bitangent));
     //inout_normal = barycentric;
 
+    // provide tangent to frag shader for mikkTSpace stuff
+    inout_tangent = normalize(vec3(planck, 0.0, (h1 - height) * 0.2));
+
     // TEST: see what this looks like
     //inout_color = vec4(barycentric, 1.0);
 
@@ -129,8 +132,6 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 
 void main()
 {
-    inout_uv = in_barycentric.yz;
-
     // unpack terrain data
     inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); // scale normalized s16 back to full range
     ivec4 cd = terrainFetch(inout_cellCoord);

@@ -171,6 +171,12 @@ ECS_STRUCT(FeedbackBuffer, {
     u32 gluint;
 });
 
+// Immutable texture array, all get bound to the fragment stage
+ECS_STRUCT(Texture, {
+    sg_image images[SG_MAX_SHADERSTAGE_IMAGES];
+});
+
+// Mutable texture
 ECS_STRUCT(DataTexture, {
     sg_image image;
     u32 width;

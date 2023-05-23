@@ -779,6 +779,18 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         }
     };
 
+    // Should always provide uniform names
+    sg_shader_image_desc colTex = {
+        .name = "tex_color",
+        .image_type = SG_IMAGETYPE_2D,
+        .sampler_type = SG_SAMPLERTYPE_FLOAT
+    };
+    sg_shader_image_desc normTex = {
+        .name = "tex_normal",
+        .image_type = SG_IMAGETYPE_2D,
+        .sampler_type = SG_SAMPLERTYPE_FLOAT
+    };
+
     sg_shader_desc tsd = {
         .vs.uniform_blocks[0] = vsdGlobal,
         .vs.uniform_blocks[1] = vsdLocal,
@@ -786,6 +798,10 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
         .vs.source = vert,
         .fs.uniform_blocks[0] = fsdGlobal,
         .fs.uniform_blocks[1] = fsdLocal,
+        .fs.images = {
+            [0] = colTex,
+            [1] = normTex
+        },
         .fs.source = frag
     };
     sg_shader terrainShader = sg_make_shader(&tsd);
@@ -1016,6 +1032,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     Mesh *mesh = ecs_field(it, Mesh, ++f);
     TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, ++f);
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
+    Texture *textures = ecs_field(it, Texture, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
     FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
@@ -1030,6 +1047,13 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             .index_buffer = mesh[i].indexBuffer,
             .vs_images[0] = dataTextures[i].image
         };
+
+        // Get images, add to fs_images
+        if (textures != NULL) {
+            for (int img = 0; img < SG_MAX_SHADERSTAGE_IMAGES; img++) {
+                bind.fs_images[img] = textures[i].images[img];
+            }
+        }
 
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
@@ -1115,6 +1139,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] Mesh,
                [in] TerrainBuffer,
                [in] DataTexture,
+               [in] ?Texture,
                [in] PVMatrix($),
                [in] Mouse($),
                [in] FeedbackBuffer($),
@@ -1128,6 +1153,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     glGenBuffers(1, &feedbackBuffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(HoveredCell), NULL, GL_DYNAMIC_READ);
+    GlCheck();
 
     sg_reset_state_cache();
 
@@ -1135,4 +1161,10 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ecs_entity_t terrainDraw = ecs_new_id(world);
     ecs_add(world, terrainDraw, TerrainRender);
+
+    // TEST: add textures. Should have a better loader for this eventually, would be super nice to swap out in the editor.
+    ecs_set(world, terrainDraw, Texture, {
+        .images[0] = bc_loadImage("view/textures/tropic_plants_c.png"),
+        .images[1] = bc_loadImage("view/textures/tropic_plants_norm.png")
+    });
 }
