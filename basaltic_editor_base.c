@@ -7,7 +7,7 @@
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_USE_OPENGL3
-#define CIMGUI_USE_SDL
+#define CIMGUI_USE_SDL2
 #include "cimgui/cimgui.h"
 #include "cimgui/cimgui_impl.h"
 
