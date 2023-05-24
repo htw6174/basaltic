@@ -8,11 +8,11 @@
 ivec4 sampleOffsets[6] = ivec4[](
     // Begins from samples used for north vertex, in clockwise order
     ivec4(-1, 1, 0, 1),
-    ivec4(0, 1, 1, 0),
-    ivec4(1, 0, 1, -1),
-    ivec4(1, -1, 0, -1),
-    ivec4(0, -1, -1, 0),
-    ivec4(-1, 0, -1, 1)
+                                 ivec4(0, 1, 1, 0),
+                                 ivec4(1, 0, 1, -1),
+                                 ivec4(1, -1, 0, -1),
+                                 ivec4(0, -1, -1, 0),
+                                 ivec4(-1, 0, -1, 1)
 );
 
 const float hexStepY = sqrt(0.75); // Y distance between cell rows
@@ -23,11 +23,11 @@ const float hexStepXY = 0.5; // X distance from a cell to its neighbor 1 row up 
 vec4 neighborPositions[6] = vec4[](
     // Begins from samples used for north vertex, in clockwise order
     vec4(-hexStepXY, hexStepY, hexStepXY, hexStepY),
-    vec4(hexStepXY, hexStepY, hexStepX, 0.0),
-    vec4(hexStepX, 0.0, hexStepXY, -hexStepY),
-    vec4(hexStepXY, -hexStepY, -hexStepXY, -hexStepY),
-    vec4(-hexStepXY, -hexStepY, -hexStepX, 0.0),
-    vec4(-hexStepXY, 0.0, -hexStepXY, hexStepY)
+                                   vec4(hexStepXY, hexStepY, hexStepX, 0.0),
+                                   vec4(hexStepX, 0.0, hexStepXY, -hexStepY),
+                                   vec4(hexStepXY, -hexStepY, -hexStepXY, -hexStepY),
+                                   vec4(-hexStepXY, -hexStepY, -hexStepX, 0.0),
+                                   vec4(-hexStepXY, 0.0, -hexStepXY, hexStepY)
 );
 
 uniform mat4 pv;
@@ -47,6 +47,7 @@ layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16
 out vec4 inout_color;
 out vec3 inout_pos;
 out vec3 inout_normal;
+out vec3 inout_tangent;
 flat out ivec2 inout_cellCoord;
 //flat out uint inout_cellIndex;
 
@@ -118,6 +119,13 @@ float height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
 
     // approximate vertex normal from cross product - thumb
     inout_normal = normalize(cross(tangent, bitangent));
+    //inout_normal = barycentric;
+
+    // provide tangent to frag shader for mikkTSpace stuff
+    inout_tangent = normalize(vec3(planck, 0.0, (h1 - height) * 0.2));
+
+    // TEST: see what this looks like
+    //inout_color = vec4(barycentric, 1.0);
 
     return height;
 }
@@ -160,3 +168,4 @@ void main()
     //inout_color = vec4(in_barycentric, 1.0);
     inout_color = vec4(cd.g / 255.0, cd.b / 255.0, cd.a / 255.0, 1.0);
 }
+
