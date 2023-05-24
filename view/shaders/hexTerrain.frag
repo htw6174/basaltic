@@ -129,13 +129,16 @@ void main()
 	mikktsTangent = inout_tangent;
 	mikktsBitangent = sign_w * cross(inout_normal, inout_tangent);
 
+	//vec3 baseNorm = inout_normal
+	//vec3 baseNorm = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+
 	float renormFactor = 1.0 / length(inout_normal);
 	mikktsTangent *= renormFactor;
 	mikktsBitangent *= renormFactor;
 	nrmBaseNormal = renormFactor * inout_normal;
 
 	dPdx = dFdx(inout_pos);
-	dPdy = dFdx(inout_pos);
+	dPdy = dFdy(inout_pos);
 	sigmaX = dPdx - dot(dPdx, nrmBaseNormal) * nrmBaseNormal;
 	sigmaY = dPdy - dot(dPdy, nrmBaseNormal) * nrmBaseNormal;
 	flip_sign = dot(dPdy, cross(nrmBaseNormal, dPdx)) < 0 ? -1 : 1;
@@ -149,26 +152,20 @@ void main()
 	}
 
 	//float cliff = 1.0 - normal.z;
-	//vec3 surfaceColor = mix(in_color.rgb, cliffColor, cliff * cliff);
-	//vec3 randColor = randColor(inout_cellIndex);
 
 	// Tile across cells, and add a random texture offset per cell
 	vec2 samplePos = (inout_pos.xy * 0.1) + hash2(vec2(inout_cellCoord));
 
-	// FIXME: need proper mikkTSpace normal+tangent from vert stage. For now, use an approximation
-	//GenBasisTB(mikktsTangent, mikktsBitangent, samplePos);
-
 	// Sample color
 	//vec3 albedo = inout_color.rgb;
-	//vec3 albedo = texelFetch(tex_color, ivec2(inout_pos.xy), 0).rgb;
 	vec3 albedo = texture(tex_color, samplePos).rgb;
-	albedo = mix(inout_color.xyz, albedo, inout_normal.z);
+	albedo = mix(inout_color.xyz, albedo, normalize(cross(dPdx, dPdy)).z);
 
 	// Sample normal
 	vec3 sampleNormal = texture(tex_normal, samplePos).rgb;
 	vec2 deriv = TspaceNormalToDerivative((2.0 * sampleNormal) - 1.0);
 	vec3 surfGrad = SurfgradFromTBN(deriv, mikktsTangent, mikktsBitangent);
-	vec3 vN = ResolveNormalFromSurfaceGradient(surfGrad);
+	vec3 vN = ResolveNormalFromSurfaceGradient(surfGrad * 0.2);
 
 	// Apply lighting
 	vec3 litColor = albedo * phong(vN, normalize(vec3(1.5, -3.0, 3.0)));

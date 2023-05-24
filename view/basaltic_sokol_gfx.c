@@ -28,7 +28,7 @@ sg_image bc_loadImage(const char *filename) {
     size_t imgDataSize = width * height * channels;
     // **NOTE** If using mips at all, need to provide *every* possible mipmap level, down to 1x1 (at least for OpenGL)
     // If you don't do this, there is no error or warning, and any sample taken from the image will be black
-    int mipCount = 11;
+    int mipCount = log2(width) + 1;
 
     sg_image_desc desc = {
         .width = width,

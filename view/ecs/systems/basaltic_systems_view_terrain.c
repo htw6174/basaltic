@@ -1165,6 +1165,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     // TEST: add textures. Should have a better loader for this eventually, would be super nice to swap out in the editor.
     ecs_set(world, terrainDraw, Texture, {
         .images[0] = bc_loadImage("view/textures/tropic_plants_c.png"),
+        //.images[0] = bc_loadImage("view/textures/test_grass.png"),
         .images[1] = bc_loadImage("view/textures/tropic_plants_norm.png")
     });
 }
