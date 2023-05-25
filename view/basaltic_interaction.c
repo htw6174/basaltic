@@ -40,10 +40,20 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 //bc_snapCameraToCharacter(ui, ui->activeCharacter);
                 break;
             case SDLK_UP:
-                //editMap(commandBuffer, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex, 1);
+                editTerrain(world, 1.0);
                 break;
             case SDLK_DOWN:
-                //editMap(commandBuffer, ui->focusedTerrain, ui->hoveredChunkIndex, ui->hoveredCellIndex, -1);
+                editTerrain(world, -1.0);
+                break;
+            case SDLK_LEFT:
+                TerrainBrush *tb = ecs_singleton_get_mut(world, TerrainBrush);
+                tb->value -= 1;
+                ecs_singleton_modified(world, TerrainBrush);
+                break;
+            case SDLK_RIGHT:
+                tb = ecs_singleton_get_mut(world, TerrainBrush);
+                tb->value += 1;
+                ecs_singleton_modified(world, TerrainBrush);
                 break;
             case SDLK_SPACE:
                 advanceStep(commandBuffer);
