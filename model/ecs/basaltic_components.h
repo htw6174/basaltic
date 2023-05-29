@@ -6,6 +6,14 @@
 #include "components/basaltic_components_actors.h"
 #include "components/basaltic_components_wildlife.h"
 
+#undef ECS_META_IMPL
+#ifndef BASALTIC_COMPONENTS_IMPL
+#define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
+#endif
+
+// Common types
+extern ECS_COMPONENT_DECLARE(s16);
+
 // TODO: find a home for this
 extern ECS_TAG_DECLARE(PlayerVision);
 

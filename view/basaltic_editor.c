@@ -256,20 +256,29 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
 }
 
 void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity) {
-    htw_ChunkMap *cm = ecs_get(world, plane, Plane)->chunkMap;
+    const Plane *p = ecs_get(world, plane, Plane);
+    htw_ChunkMap *cm = p->chunkMap;
 
     coordInspector("Cell coordinates", coord);
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Data", ImGuiTreeNodeFlags_DefaultOpen)) {
         igSpacing();
 
-        bc_CellData *cellData = htw_geo_getCell(cm, coord);
-        igText("Cell info:");
+        // TODO: use reflection info to get these fields automatically (could even make editable?)
+        // TODO: include read-only fields for derived cell data
+        CellData *cellData = htw_geo_getCell(cm, coord);
+        igText("Raw Cell Info:");
         igValue_Int("Height", cellData->height);
-        igValue_Int("Temperature", cellData->temperature);
-        igValue_Int("Nutrients", cellData->nutrient);
-        igValue_Int("Rainfall", cellData->rainfall);
-        igValue_Int("Vegetation", cellData->vegetation);
+        igValue_Int("Geology", cellData->geology);
+        igValue_Int("Groundwater", cellData->groundwater);
+        igValue_Int("Understory", cellData->understory);
+        igValue_Int("Canopy", cellData->canopy);
+
+        igText("Derived Cell Info:");
+        s32 altitudeMeters = cellData->height * 100;
+        igText("Altitude: %im", altitudeMeters);
+        float biotemp = (float)plane_GetCellBiotemperature(p, coord) / 100.0;
+        igText("Biotemperature: %.2f °C", biotemp);
     }
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Entities", ImGuiTreeNodeFlags_DefaultOpen)) {

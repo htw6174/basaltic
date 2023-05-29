@@ -148,7 +148,7 @@ static void worldStepStressTest(bc_WorldState *world) {
     u32 chunkCount = cm->chunkCountX * cm->chunkCountY;
     u32 cellsPerChunk = bc_chunkSize * bc_chunkSize;
     for (int c = 0; c < chunkCount; c++) {
-        bc_CellData *cellData = cm->chunks[c].cellData;
+        CellData *cellData = cm->chunks[c].cellData;
         for (int i = 0; i < cellsPerChunk; i++) {
             s32 currentValue = cellData[i].height;
             // With worldCoord lookup: ~60 tps
@@ -163,7 +163,7 @@ static void worldStepStressTest(bc_WorldState *world) {
             for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
                 htw_geo_CubeCoord cubeNeighbor = htw_geo_addCubeCoords(cubeHere, htw_geo_cubeDirections[d]);
                 htw_geo_GridCoord gridNeighbor = htw_geo_cubeToGridCoord(cubeNeighbor);
-                neighborAverage += ((bc_CellData*)htw_geo_getCell(cm, gridNeighbor))->height;
+                neighborAverage += ((CellData*)htw_geo_getCell(cm, gridNeighbor))->height;
             }
             neighborAverage /= HEX_DIRECTION_COUNT;
             s32 erosion = lerp_int(currentValue, neighborAverage, 0.2);

@@ -11,8 +11,6 @@ void TerrainHourlyStep(ecs_iter_t *it);
 void TerrainSeasonalStep(ecs_iter_t *it);
 void CleanEmptyRoots(ecs_iter_t *it);
 
-void updateVegetation(bc_CellData *cellData);
-
 void TerrainHourlyStep(ecs_iter_t *it) {
     // TODO: are there any terrain updates that need to be make hourly (per-step)? If not, just make day/week/month/year step systems
 }
@@ -24,10 +22,13 @@ void TerrainSeasonalStep(ecs_iter_t *it) {
         htw_ChunkMap *cm = planes[i].chunkMap;
         for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
             for (int x = 0; x < cm->chunkCountX; x++, c++) {
-                bc_CellData *cellData = cm->chunks[c].cellData;
+                CellData *cellData = cm->chunks[c].cellData;
 
                 for (int cell = 0; cell < cm->cellsPerChunk; cell++) {
-                    updateVegetation(&cellData[cell]);
+                    // TODO: need better defined growth behavior
+                    if (cellData->groundwater > 0) {
+                        cellData->understory += 1;
+                    }
                 }
             }
         }
@@ -58,13 +59,4 @@ void BcSystemsTerrainImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, TerrainSeasonalStep, AdvanceHour, Plane);
     ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, bc.planes.CellRoot);
-}
-
-void updateVegetation(bc_CellData *cellData) {
-    if (cellData->nutrient > cellData->vegetation) {
-        cellData->vegetation++;
-        cellData->nutrient -= cellData->vegetation;
-    } else {
-        cellData->nutrient += cellData->rainfall;
-    }
 }

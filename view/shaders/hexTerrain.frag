@@ -130,6 +130,16 @@ void main()
 	//vec3 vN = mix(flatNormal, inout_normal, inout_normal.z);
 
 	// Sample color
+	// TODO: pick from colormap
+	float elevation = inout_color.r;
+	float biotemp = inout_color.g;
+	float understory = inout_color.b;
+	float humidityPref = inout_color.a;
+	vec3 coldColor = vec3(0.9);
+	vec3 warmColor = vec3(mix(0.0, 0.5, biotemp), understory, humidityPref);
+	float snowLine = step(0.15, biotemp);
+	vec3 biomeColor = mix(coldColor, warmColor, snowLine);
+
 	float noiseFreq = isCliff ? 20.0 : 4.0;
 	float noiseMag = isCliff ? 0.1 : 0.5;
 	float bandFreq = isCliff ? 20.0 : 2.0;
@@ -139,7 +149,14 @@ void main()
 	//float noisyZ = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
 	float strataSample = floor(noisyZ * bandFreq);
 	float cliffValue = (rand(strataSample) * 0.2) + 0.4;
-	vec3 albedo = isCliff ? vec3(cliffValue) : inout_color.rgb * (1.0 + (cliffValue - 0.5));
+	vec3 albedo = isCliff ? vec3(cliffValue) : biomeColor * (1.0 + (cliffValue - 0.5));
+
+	// TODO: proper water level recoloring
+	if (elevation < 0.0) albedo = vec3(0.5, 0.3, 0.1) / -(elevation - 1.0);
+
+	// TEST: color per tile with obvious faces
+	//albedo = randColor(rand2(inout_cellCoord));
+	//vN = flatNormal;
 
 	// Apply lighting
 	vec3 litColor = albedo * phong(vN, normalize(vec3(1.5, -3.0, 3.0)));
@@ -158,5 +175,4 @@ void main()
 	//out_color = inout_color;
 	out_color = vec4(litColor, 1.0);
 	//out_color = vec4(inout_uv, 0.0, 1.0);
-	//out_color = vec4(rand(inout_cellCoord.x), rand(inout_cellCoord.y), rand(dot(inout_cellCoord, inout_cellCoord)), 1.0);
 }

@@ -29,6 +29,18 @@ ECS_STRUCT(SpatialStorage, {
     khash_t(WorldMap) *hashMap;
 });
 
+// Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though
+ECS_STRUCT(CellData, {
+    s16 height; // Each height step represents 100m of elevation change TODO: only need to represent ~200 values here, could change to s8. Could probably reduce range of other values too
+    u16 geology;
+    u32 groundwater;
+    u32 surfacewater;
+    u32 understory;
+    u32 canopy;
+    u16 humidityPreference;
+    u16 visibility; // bitmask
+});
+
 ECS_STRUCT(Plane, {
     htw_ChunkMap *chunkMap;
 });
@@ -48,5 +60,9 @@ ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Positio
 void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position pos);
 void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position pos);
 void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position oldPos, Position newPos);
+
+CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
+
+s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

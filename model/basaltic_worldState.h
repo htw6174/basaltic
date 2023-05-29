@@ -5,7 +5,6 @@
 #include <SDL2/SDL_mutex.h>
 #include "htw_geomap.h"
 #include "flecs.h"
-#include "khash.h"
 
 #define BC_MAX_SEED_LENGTH 256
 
@@ -22,17 +21,6 @@ typedef enum bc_TerrainVisibilityBitFlags {
     BC_TERRAIN_VISIBILITY_SECRETS =     0x00000080, // hidden cave entrances, lairs, or isolated buildings
     BC_TERRAIN_VISIBILITY_ALL =         0x000000ff,
 } bc_TerrainVisibilityBitFlags;
-
-/* NOTE: this struct is copied directly into graphics buffers, and must correspond to CellData where used in shaders */
-// TODO: can define both structs in a c/glsl compatable header
-typedef struct {
-    s32 height;
-    s32 temperature;
-    s32 nutrient;
-    s32 rainfall;
-    u32 visibility;
-    s32 vegetation;
-} bc_CellData;
 
 typedef struct {
     u32 seed;
@@ -51,15 +39,8 @@ typedef struct {
     SDL_sem *lock;
 } bc_WorldState;
 
-static bc_CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
 
 static u32 bc_getChunkIndexByWorldPosition(htw_ChunkMap *chunkMap, float worldX, float worldY);
-
-
-static bc_CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex) {
-    bc_CellData *cell = chunkMap->chunks[chunkIndex].cellData;
-    return &cell[cellIndex];
-}
 
 // TODO: move this to htw_geomap?
 static u32 bc_getChunkIndexByWorldPosition(htw_ChunkMap *chunkMap, float worldX, float worldY) {

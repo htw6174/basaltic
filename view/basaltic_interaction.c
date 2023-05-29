@@ -244,7 +244,7 @@ void editTerrain(ecs_world_t *world, float strength) {
         ecs_world_t *modelWorld = mw->world;
         htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-        bc_CellData *cd = htw_geo_getCell(cm, cellCoord);
+        CellData *cd = htw_geo_getCell(cm, cellCoord);
         cd->height += tb->value * strength;
 
         // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush

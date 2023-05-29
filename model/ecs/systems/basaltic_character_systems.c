@@ -103,11 +103,11 @@ void bc_setDescenderDestinations(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         s32 lowestDirection = -1;
-        s32 lowestElevation = ((bc_CellData*)htw_geo_getCell(tm->chunkMap, positions[i]))->height;
+        s32 lowestElevation = ((CellData*)htw_geo_getCell(tm->chunkMap, positions[i]))->height;
         for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
             // Get cell elevation
             htw_geo_GridCoord evalCoord = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[d]);
-            bc_CellData *cell = (bc_CellData*)htw_geo_getCell(tm->chunkMap, evalCoord);
+            CellData *cell = (CellData*)htw_geo_getCell(tm->chunkMap, evalCoord);
             if (cell->height < lowestElevation) lowestDirection = d;
             lowestElevation = min_int(lowestElevation, cell->height);
         }
@@ -166,7 +166,7 @@ void bc_revealMap(ecs_iter_t *it) {
             htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
             u32 chunkIndex, cellIndex;
             htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
-            bc_CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+            CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
             bc_TerrainVisibilityBitFlags cellVisibility = 0;
             // restrict sight by distance
@@ -307,19 +307,19 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
             htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
             u32 chunkIndex, cellIndex;
             htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
-            bc_CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+            CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
             // Consume some of current cell vegetation
             if (c == 0) {
-                cell->vegetation -= cell->vegetation * 0.1;
-                if (cell->vegetation > 40) {
+                cell->understory -= cell->understory * 0.1;
+                if (cell->understory > 40) {
                     break;
                 }
             }
 
             // Get cell data, find best vegetation
-            if (cell->vegetation > bestVegetation) {
-                bestVegetation = cell->vegetation;
+            if (cell->understory > bestVegetation) {
+                bestVegetation = cell->understory;
                 bestDirection = relativeCoord;
             }
 

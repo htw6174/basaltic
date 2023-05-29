@@ -13,6 +13,7 @@ void BcPlanesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcPlanes);
 
     ECS_META_COMPONENT(world, SpatialStorage);
+    ECS_META_COMPONENT(world, CellData);
     ECS_META_COMPONENT(world, Plane);
     ECS_COMPONENT_DEFINE(world, Position);
     ECS_COMPONENT_DEFINE(world, Destination);
@@ -114,4 +115,25 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
 void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position oldPos, Position newPos) {
     plane_RemoveEntity(world, plane, e, oldPos);
     plane_PlaceEntity(world, plane, e, newPos);
+}
+
+CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex) {
+    CellData *cell = chunkMap->chunks[chunkIndex].cellData;
+    return &cell[cellIndex];
+}
+
+/**
+ * @brief Represents mean annual temperature at a cell on the plane, determined by distance to the plane origin and cell height. Approximate range from -30c to +30c
+ *
+ * @param plane p_plane:...
+ * @param pos p_pos:...
+ * @return Biotemperature in centicelsius (degrees celsius * 100)
+ */
+s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
+    // "Temperatures in the atmosphere decrease with height at an average rate of 6.5 °C per kilometer"
+    const s32 centicelsiusPerHeightUnit = -65;
+    s32 latitudeTemp = htw_geo_circularGradientByGridCoord(
+        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -3000, 3000, plane->chunkMap->mapWidth * 0.67);
+    s32 altitude = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
+    return latitudeTemp + (abs(altitude) * centicelsiusPerHeightUnit);
 }

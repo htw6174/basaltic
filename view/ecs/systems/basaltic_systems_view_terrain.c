@@ -45,9 +45,9 @@ vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
 
 Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
-void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
+void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
-void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex);
+void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex);
 
 void InitTerrainInstances(ecs_iter_t *it);
 void UpdateTerrainInstances(ecs_iter_t *it);
@@ -635,7 +635,7 @@ Mesh createHexmapMesh(void) {
     };
 }
 
-void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk) {
+void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk) {
     // update list a to contain all elements of list b while changing as few elements as possible of list a
     // a = [0, 1], b = [1, 2] : put all elements of b into a with fewest location changes (a = [2, 1])
     // b doesn't contain 0, so 0 must be replaced
@@ -650,6 +650,7 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
     // loadedChunks.chunkIndex[] = a
     // NOTE: there *has* to be a better way to do this, feels very messy right now.
 
+    htw_ChunkMap *chunkMap = plane->chunkMap;
     s32 *closestChunks = terrain->closestChunks;
     s32 *loadedChunks = terrain->loadedChunks;
 
@@ -701,13 +702,14 @@ void updateTerrainVisibleChunks(htw_ChunkMap *chunkMap, TerrainBuffer *terrain, 
         htw_geo_getChunkRootPosition(chunkMap, loadedChunks[c], &chunkX, &chunkY);
         terrain->chunkPositions[c] = (vec3){{chunkX, chunkY, 0.0}};
         // TODO: only update chunk if freshly visible or has pending updates
-        updateDataTextureChunk(chunkMap, dataTexture, loadedChunks[c]);
+        updateDataTextureChunk(plane, dataTexture, loadedChunks[c]);
     }
 }
 
-void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u32 chunkIndex) {
+void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
+    htw_ChunkMap *chunkMap = plane->chunkMap;
 
     // Find bottom-left corner of image region to update
     htw_geo_GridCoord startTexel = htw_geo_chunkAndCellToGridCoordinates(chunkMap, chunkIndex, 0);
@@ -719,12 +721,29 @@ void updateDataTextureChunk(htw_ChunkMap *chunkMap, DataTexture *dataTexture, u3
     for (s32 y = 0; y < height; y++) {
         for (s32 x = 0; x < width; x++) {
             u32 c = x + (y * width);
-            bc_CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
+            CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
+            /* Info the shader needs:
+             * - height
+             * - geology
+             * - biotemperature
+             * - humidity provence
+             * - understory coverage
+             * - canopy coverage
+             * - surface water details
+             * - visibility
+             */
+            s32 biotemp = plane_GetCellBiotemperature(plane, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
+            u16 tempIndex = remap_int(biotemp, -3000, 3000, 0, 255);
+
+            s32 rChannel = ((u32)cell->geology << 16) + (u16)cell->height; // base terrain
+            u32 gChannel = ((u32)cell->humidityPreference << 16) + (u16)tempIndex; // life zone
+            u32 bChannel = ((u32)cell->canopy << 16) + (u16)cell->understory; // vegetation
+            u32 aChannel = ((u32)cell->visibility << 16) + (u16)0; // water and visibility TODO
             s32 texelData[4] = {
-                cell->height,
-                cell->temperature,
-                cell->vegetation,
-                cell->rainfall
+                rChannel,
+                gChannel,
+                bChannel,
+                aChannel
             };
             memcpy(texHead + (x * dataTexture->formatSize), &texelData, sizeof(texelData));
         }
@@ -883,7 +902,7 @@ void UpdateHexTerrainBuffers(ecs_iter_t *it) {
 
                 // TODO: correctly determine center chunk from camera focus
                 u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, 0.0f, 0.0f);
-                updateTerrainVisibleChunks(cm, &terrainBuffers[i], &dataTextures[i], centerChunk);
+                updateTerrainVisibleChunks(&planes[m], &terrainBuffers[i], &dataTextures[i], centerChunk);
             }
         }
     }
@@ -989,7 +1008,7 @@ void UpdateTerrainDataTexture(ecs_iter_t *it) {
                 htw_ChunkMap *cm = planes[m].chunkMap;
                 DataTexture dt = dataTextures[i];
                 for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
-                    updateDataTextureChunk(cm, &dt, c);
+                    updateDataTextureChunk(&planes[m], &dt, c);
                 }
 
                 sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
@@ -1011,10 +1030,9 @@ void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
             while (ecs_query_next(&mit)) {
                 Plane *planes = ecs_field(&mit, Plane, 1);
                 for (int m = 0; m < mit.count; m++) {
-                    htw_ChunkMap *cm = planes[m].chunkMap;
                     DataTexture dt = dataTextures[i];
                     for (int c = 0; c < (dirty[i].count); c++) {
-                        updateDataTextureChunk(cm, &dt, dirty[i].chunks[c]);
+                        updateDataTextureChunk(&planes[m], &dt, dirty[i].chunks[c]);
                     }
                     sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
                 }
