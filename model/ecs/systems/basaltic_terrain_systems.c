@@ -11,6 +11,8 @@ void TerrainHourlyStep(ecs_iter_t *it);
 void TerrainSeasonalStep(ecs_iter_t *it);
 void CleanEmptyRoots(ecs_iter_t *it);
 
+void chunkUpdate(htw_Chunk *chunk, size_t cellCount);
+
 void TerrainHourlyStep(ecs_iter_t *it) {
     // TODO: are there any terrain updates that need to be make hourly (per-step)? If not, just make day/week/month/year step systems
 }
@@ -22,15 +24,24 @@ void TerrainSeasonalStep(ecs_iter_t *it) {
         htw_ChunkMap *cm = planes[i].chunkMap;
         for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
             for (int x = 0; x < cm->chunkCountX; x++, c++) {
-                CellData *cellData = cm->chunks[c].cellData;
-
-                for (int cell = 0; cell < cm->cellsPerChunk; cell++) {
-                    // TODO: need better defined growth behavior
-                    if (cellData->groundwater > 0) {
-                        cellData->understory += 1;
-                    }
-                }
+                chunkUpdate(&cm->chunks[c], cm->cellsPerChunk);
             }
+        }
+    }
+}
+
+void chunkUpdate(htw_Chunk *chunk, size_t cellCount) {
+    CellData *base = chunk->cellData;
+    for (int c = 0; c < cellCount; c++) {
+        CellData *cell = &base[c];
+
+        // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
+
+
+        // TODO: need better defined growth behavior
+        cell->groundwater += htw_randRange(256) < cell->surfacewater ? 1 : 0;
+        if (cell->groundwater > 0) {
+            cell->understory += 1;
         }
     }
 }

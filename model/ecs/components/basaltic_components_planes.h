@@ -33,8 +33,8 @@ ECS_STRUCT(SpatialStorage, {
 ECS_STRUCT(CellData, {
     s16 height; // Each height step represents 100m of elevation change TODO: only need to represent ~200 values here, could change to s8. Could probably reduce range of other values too
     u16 geology;
-    u32 groundwater;
-    u32 surfacewater;
+    s16 groundwater; // If > 0: Units undefined atm, base decrease of 1/hour; if <= 0: Represents number of hours without groundwater, always decreases by 1/hour 
+    u16 surfacewater;
     u32 understory;
     u32 canopy;
     u16 humidityPreference;
