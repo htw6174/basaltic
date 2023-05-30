@@ -145,14 +145,6 @@ void main()
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
-    //float waterDepth = (WorldInfo.seaLevel - elevation) / 64.0; // >0 on ocean
-
-    //elevation = max(elevation, WorldInfo.seaLevel);
-
-    // TEST: wiggle elevation up or down by a half step
-    //float wiggle = round( sin(rand(gl_VertexID))) * 0.5;
-    //float wiggle = cd.r;
-
     vec3 unscaledPosition = vec3(in_position, elevation);
     //vec4 localPosition = vec4(unscaledPosition * WorldInfo.gridToWorld, 1.0);
     //vec3 unscaledPosition = in_position + vec3(0.0, 0.0, (65535.0 / 256.0) * in_cellIndex);
