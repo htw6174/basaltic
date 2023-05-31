@@ -64,5 +64,6 @@ void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Po
 CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
 
 s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
+float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
 
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

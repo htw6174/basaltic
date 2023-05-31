@@ -110,7 +110,7 @@ void BcviewImport(ecs_world_t *world) {
     });
 
     // Global scale for world rendering
-    ecs_singleton_set(world, Scale, {{1.0, 1.0, 0.2}});
+    ecs_singleton_set(world, Scale, {{1.0, 1.0, 0.1}});
 
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);

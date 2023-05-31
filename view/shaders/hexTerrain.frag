@@ -1,18 +1,11 @@
 #version 430
-/*
- * Normal resolve adapted from Mikkelson[2020] - https://github.com/mmikk/surfgrad-bump-standalone-demo
- * Hex tile blending technique adapted from Mikkelson[2022] - https://github.com/mmikk/hextile-demo/
- *
- */
+
+// toggle for a more mobile-friendly version of this shader
+#define LIGHTWEIGHT
 
 //precision mediump float;
 
 #define PI 3.14159
-
-// Smallest such that 1.0 + FLT_EPSILON != 1.0.
-#ifndef FLT_EPSILON
-#define FLT_EPSILON 1.192092896e-07F
-#endif
 
 #define SPECULAR 0.5
 #define DIFFUSE 0.7
@@ -45,6 +38,7 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 in vec4 inout_color;
 in vec3 inout_pos;
 in vec3 inout_normal;
+in float inout_radius; // approximate distance from center of cell, based on vert barycentric. == 1 at cell corners, == 0.75 at center of edge
 flat in ivec2 inout_cellCoord;
 
 out vec4 out_color;
@@ -65,7 +59,7 @@ vec2 hash2(vec2 p) {
 
 /*
  * Screen-space stable threshold from position hash, as described in [Wyman 2017](https://www.casual-effects.com/research/Wyman2017Hashed/index.html)
- * hash21 from McGuire 2016, stableHash from Wyman
+ * hash21 and hash31 from McGuire 2016, stableHash from Wyman
 */
 float hash21(vec2 x) {
 	return fract( 1.0e4 * sin( 17.0*x.x + 0.1*x.y ) *
@@ -113,7 +107,7 @@ vec3 randColor(float seed) {
 	return vec3(rand(seed), rand(seed + 13.0), rand(seed + 37.0));
 }
 
-// NOTE: the glsl built-in noise functions do nothing. naming convention for my functions: noise[input dimensions][output dimensions][type]
+// NOTE: the glsl built-in noise functions do nothing. Naming convention for my functions: noise[input dimensions][output dimensions][type]
 float noise21sharp(vec2 x) {
 	vec2 i = floor(x);  // integer
 	vec2 f = fract(x);  // fraction
@@ -165,7 +159,7 @@ void main()
 	}
 
 	// compute normal from position deriviatives
-	// NOTE: computing normals in the pixel shader alone restricts you to flat shading; smooth shading requires information about neighboring verticies. If adding neighboring tile info anyway, could compute per vertex normals in vert shader?
+	// NOTE: frag shader derivative normals always give 'flat' shading
 	vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
 	//float cliff = 1.0 - normal.z;
 	bool isCliff = /*(flatNormal.z < sin(PI / 4)) &&*/ (inout_normal.z < sin(PI / 3.75));
@@ -176,37 +170,51 @@ void main()
 	//vec3 vN = mix(flatNormal, inout_normal, inout_normal.z);
 
 	// Sample color
-	float elevation = inout_color.r;
-	float biotemp = inout_color.g;
-	float understory = inout_color.b; // == % of tile with low vegetation coverage
+	float biotemp = inout_color.r;
+	float understory = inout_color.g; // == % of tile with low vegetation coverage
+	float canopy = inout_color.b; // == % of tile with tall vegetation coverage
 	float humidityPref = inout_color.a;
 
 	// TODO: pick from colormap
-	vec3 dirtColor = vec3(0.4, 0.25, 0.0);
+	vec3 dirtColor = mix(vec3(0.2, 0.15, 0.1), vec3(1.0, 0.8, 0.1), biotemp);
 	vec3 grassColor = vec3(mix(0.7, 0.2, biotemp), humidityPref + 0.2, humidityPref * 0.33);
-	vec3 treeColor = vec3(0.05, mix(0.3, 1.0, humidityPref), 0.1);
+	vec3 treeColor = vec3(0.05, mix(0.2, 1.0, humidityPref), 0.1);
 	vec3 snowColor = vec3(0.9);
 
+#ifdef LIGHTWEIGHT
+	// fill in grass from edges
+	float hashThreshold = 1.0 - inout_radius;
+#else
 	// hashed stochastic test for vegetation coverage
 	float hashThreshold = stableHash(inout_pos * 100.0);
+#endif
 	vec3 groundColor = understory < hashThreshold ? dirtColor : grassColor;
 
 	float snowLine = step(0.15, biotemp);
 	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
+
+	// expand tree cluster from center
+	biomeColor = canopy < inout_radius ? biomeColor : treeColor;
 
 	float noiseFreq = isCliff ? 20.0 : 4.0;
 	float noiseMag = isCliff ? 0.1 : 0.5;
 	float bandFreq = isCliff ? 20.0 : 2.0;
 
 	//float noisyZ = inout_pos.z + (sin(inout_pos.x * 2.0) * 0.2);
+#ifdef LIGHTWEIGHT
+	float noisyZ = inout_pos.z;
+#else
 	float noisyZ = inout_pos.z + (noise21sharp(inout_pos.xy * noiseFreq) * noiseMag);
+#endif
 	//float noisyZ = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
 	float strataSample = floor(noisyZ * bandFreq);
 	float cliffValue = (rand(strataSample) * 0.2) + 0.4;
 	vec3 albedo = isCliff ? vec3(cliffValue) : biomeColor * (1.0 + (cliffValue - 0.5));
 
 	// TODO: proper water level recoloring
-	if (elevation < 0.0) {
+	// TODO: global constant for sea level; this is effectively 20m below height 0
+	float elevation = inout_pos.z;
+	if (elevation < -0.02) {
 		vec3 oceanFloor = vec3(0.5, 0.3, 0.1) / -(elevation - 1.0);
 		vec3 oceanSurface = vec3(0.05, 0.2, 0.9);
 		albedo = mix(oceanFloor, oceanSurface, 0.5);

@@ -11,7 +11,7 @@ void TerrainHourlyStep(ecs_iter_t *it);
 void TerrainSeasonalStep(ecs_iter_t *it);
 void CleanEmptyRoots(ecs_iter_t *it);
 
-void chunkUpdate(htw_Chunk *chunk, size_t cellCount);
+void chunkUpdate(Plane *plane, size_t chunkIndex);
 
 void TerrainHourlyStep(ecs_iter_t *it) {
     // TODO: are there any terrain updates that need to be make hourly (per-step)? If not, just make day/week/month/year step systems
@@ -24,24 +24,39 @@ void TerrainSeasonalStep(ecs_iter_t *it) {
         htw_ChunkMap *cm = planes[i].chunkMap;
         for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
             for (int x = 0; x < cm->chunkCountX; x++, c++) {
-                chunkUpdate(&cm->chunks[c], cm->cellsPerChunk);
+                chunkUpdate(&planes[i], c);
             }
         }
     }
 }
 
-void chunkUpdate(htw_Chunk *chunk, size_t cellCount) {
-    CellData *base = chunk->cellData;
-    for (int c = 0; c < cellCount; c++) {
+void chunkUpdate(Plane *plane, size_t chunkIndex) {
+    htw_ChunkMap *cm = plane->chunkMap;
+    CellData *base = cm->chunks[chunkIndex].cellData;
+    for (int c = 0; c < cm->cellsPerChunk; c++) {
         CellData *cell = &base[c];
 
         // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
-
+        if (htw_randRange(256 * 128) < cell->surfacewater) {
+            // "rainstorm"; if less than 0 (tracking number of dry hours), then start from 0
+            cell->groundwater = min_int(max_int(cell->surfacewater, cell->groundwater + cell->surfacewater), 512);
+        }
 
         // TODO: need better defined growth behavior
-        cell->groundwater += htw_randRange(256) < cell->surfacewater ? 1 : 0;
         if (cell->groundwater > 0) {
+            // Remove groundwater according to evapotranspiration, grow new vegetation
+            cell->groundwater--;
             cell->understory += 1;
+            float canopyGrowthProb = plane_CanopyGrowthRate(plane, htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, c));
+            cell->canopy += htw_randRange(256) < (canopyGrowthProb * 256.0) ? 1 : 0;
+        } else {
+            // Track hours since water was available, kill vegetation if dryer longer than drought resistance threshold
+            cell->groundwater--;
+            if (abs(cell->groundwater) > (256 - cell->humidityPreference)) {
+                // Make sure decrease doesn't cause underflow
+                cell->understory = cell->understory < cell->understory - 1 ? 0 : cell->understory - 1;
+                cell->canopy = cell->canopy < cell->canopy - 1 ? 0 : cell->canopy - 1;
+            }
         }
     }
 }

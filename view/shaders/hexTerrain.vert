@@ -47,6 +47,7 @@ layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16
 out vec4 inout_color;
 out vec3 inout_pos;
 out vec3 inout_normal;
+out float inout_radius;
 flat out ivec2 inout_cellCoord;
 //flat out uint inout_cellIndex;
 
@@ -141,6 +142,7 @@ void main()
     float biotemp = bitfieldExtract(cd.g, 0, 16) / 255.0;
     float humidityPref = bitfieldExtract(cd.g, 16, 16) / 255.0;
     float understory = bitfieldExtract(cd.b, 0, 16) / 255.0;
+    float canopy = bitfieldExtract(cd.b, 16, 16) / 255.0;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
@@ -155,9 +157,12 @@ void main()
 
     gl_Position = pv * worldPosition;
 
+    //inout_radius = length(in_barycentric.yz) * 2.0; // * sqrt(0.75) * (4.0 / 3.0);
+    inout_radius = (1.0 - in_barycentric.x) * 1.5;
+
     //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
 
     //inout_color = vec4(in_barycentric, 1.0);
-    inout_color = vec4(elevation, biotemp, understory, humidityPref);
+    inout_color = vec4(biotemp, understory, canopy, humidityPref);
     //inout_color = vec4(biomeColor, 1.0);
 }

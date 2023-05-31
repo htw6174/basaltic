@@ -1,6 +1,6 @@
 #define BASALTIC_PLANES_IMPL
-
 #include "basaltic_components_planes.h"
+#include <math.h>
 
 ECS_COMPONENT_DECLARE(SpatialStorage);
 ECS_COMPONENT_DECLARE(Plane);
@@ -136,4 +136,23 @@ s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
         plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -3000, 3000, plane->chunkMap->mapWidth * 0.67);
     s32 altitude = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
     return latitudeTemp + (abs(altitude) * centicelsiusPerHeightUnit);
+}
+
+/**
+ * @brief Growth rate dependent on understory coverage % and canopy coverage %; low at the extremes and high in the middle
+ *
+ * @param plane p_plane:...
+ * @param pos p_pos:...
+ * @return float
+ */
+float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos) {
+    CellData *cell = htw_geo_getCell(plane->chunkMap, pos);
+    // % of max coverage
+    float understoryCoverage = (float)cell->understory / 255.0;
+    float canopyCoverage = (float)cell->canopy / 255.0;
+    // 5% at 0% canopy, maxes out at 100% at 95% canopy
+    float shrubRatio = fmaxf(canopyCoverage + 0.05, 1.0);
+
+    float maxUnderstoryCoverage = 1.0 - canopyCoverage;
+    return shrubRatio * understoryCoverage * maxUnderstoryCoverage;
 }

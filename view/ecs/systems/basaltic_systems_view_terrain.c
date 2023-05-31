@@ -114,7 +114,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
     const u32 elementCount = elesPerHex * cellCount;
 
     // useful constants; based on distance between 2 adjacent hex centers == 1
-    static const float outerRadius = 0.57735026919; // = sqrt(0.75) * (2.0 / 3.0));
+    static const float outerRadius = 0.57735026919; // = sqrt(0.75) * (2.0 / 3.0);
     static const float innerRadius = 0.5;
     static const float halfEdge = outerRadius / 2;
     static const vec2 hexagonPositions[] = {

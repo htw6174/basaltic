@@ -102,9 +102,9 @@ void bc_setupEditor(void) {
         .worldName = "View",
         .customQueries = {
             [0] = {.queryExpr = "TerrainBrush"},
-            [1] = {.queryExpr = "Pipeline || InstanceBuffer"}, //(bcview.RenderPipeline, _)"},
+            [1] = {.queryExpr = "Pipeline || InstanceBuffer, ?Disabled"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
-            [3] = {.queryExpr = "flecs.system.System"},
+            [3] = {.queryExpr = "flecs.system.System, ?Disabled"},
         }
     };
 
