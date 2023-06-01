@@ -239,6 +239,7 @@ void editTerrain(ecs_world_t *world, float strength) {
     const FocusPlane *fp = ecs_singleton_get(world, FocusPlane);
     const ModelWorld *mw = ecs_singleton_get(world, ModelWorld);
 
+    // TODO: also check to see if world is locked, don't edit if so
     if (tb && hoveredCoord && fp && mw) {
         ecs_entity_t focusPlane = fp->entity;
         ecs_world_t *modelWorld = mw->world;

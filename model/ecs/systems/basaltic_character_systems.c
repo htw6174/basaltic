@@ -80,7 +80,7 @@ void SurfaceSpawn(ecs_iter_t *it) {
     Plane *planes = ecs_field(it, Plane, 1);
 
     for (int i = 0; i < it->count; i++) {
-        bc_createCharacters(it->world, it->entities[i], 10000);
+        bc_createCharacters(it->world, it->entities[i], 1000);
     }
 }
 
