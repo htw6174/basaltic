@@ -145,7 +145,9 @@ ECS_STRUCT(WrapInstanceOffsets, {
     vec3 offsets[4];
 });
 
+// TODO: would be nice if this was resizable
 ECS_STRUCT(InstanceBuffer, {
+    s32 maxInstances;
     s32 instances;
     ECS_PRIVATE;
     size_t size;

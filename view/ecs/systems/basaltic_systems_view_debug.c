@@ -86,7 +86,7 @@ void InitDebugBuffers(ecs_iter_t *it) {
         };
         sg_buffer instanceBuffer = sg_make_buffer(&vbd);
 
-        ecs_set(it->world, it->entities[i], InstanceBuffer, {.buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
+        ecs_set(it->world, it->entities[i], InstanceBuffer, {.maxInstances = DEBUG_INSTANCE_COUNT, .instances = 0, .buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
         ecs_set(it->world, it->entities[i], Elements, {24});
     }
 
@@ -110,7 +110,7 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
             Position *positions = ecs_field(&mit, Position, 1);
             ecs_entity_t tmEnt = ecs_field_id(&mit, 2);
             htw_ChunkMap *cm = ecs_get(mit.world, ecs_pair_second(mit.world, tmEnt), Plane)->chunkMap;
-            for (int m = 0; m < mit.count; m++) {
+            for (int m = 0; m < mit.count, instanceCount < instanceBuffers[i].maxInstances; m++) {
                 u32 chunkIndex, cellIndex;
                 htw_geo_gridCoordinateToChunkAndCellIndex(cm, positions[m], &chunkIndex, &cellIndex);
                 s32 elevation = bc_getCellByIndex(cm, chunkIndex, cellIndex)->height;
