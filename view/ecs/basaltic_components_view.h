@@ -48,6 +48,10 @@ extern ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 extern ECS_TAG_DECLARE(Previous); // Relationship where target is previous value of a component
 
+ECS_STRUCT(DeltaTime, {
+    float seconds;
+});
+
 // Pixel coordinates directly from SDL; origin at top-left
 ECS_STRUCT(Pointer, {
     s32 x;

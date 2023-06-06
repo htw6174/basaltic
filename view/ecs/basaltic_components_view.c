@@ -57,6 +57,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
     ECS_TAG_DEFINE(world, Previous);
+    ECS_META_COMPONENT(world, DeltaTime);
     ECS_META_COMPONENT(world, Pointer);
     ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
@@ -105,8 +106,8 @@ void BcviewImport(ecs_world_t *world) {
     });
 
     ecs_singleton_set(world, CameraSpeed, {
-        .movement = 0.15f,
-        .rotation = 1.5f
+        .movement = 10.0f,
+        .rotation = 90.0f
     });
 
     // Global scale for world rendering
@@ -128,6 +129,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_pair(world, ecs_id(Pointer), Previous, ecs_id(HoveredCell));
 
     // Global uniforms
+    ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, PVMatrix);
 

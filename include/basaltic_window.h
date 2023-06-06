@@ -6,9 +6,9 @@
 
 typedef struct {
     u32 width, height;
-    u64 milliSeconds;
-    u64 frame;
-    // TODO: time of last frame or deltatime?
+    u64 milliSeconds; // Milliseconds since program start
+    u64 frame; // Number of frames since program start
+    u64 lastFrameDuration; // In milliseconds
     SDL_Window *window;
     SDL_GLContext glContext;
 } bc_WindowContext;

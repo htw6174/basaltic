@@ -82,8 +82,10 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     bc_WorldState *world = model == NULL ? NULL : model->world;
 
-    // TODO: get frame time here, pass instead of making flecs calculate it
-    ecs_progress(vc.ecsWorld, 0.0f);
+    float dT = (float)wc->lastFrameDuration / 1000.0; // in seconds
+    ecs_singleton_set(vc.ecsWorld, DeltaTime, {dT});
+
+    ecs_progress(vc.ecsWorld, dT);
 
     if (world != NULL) {
         if (*ecs_singleton_get(vc.ecsWorld, ModelLastRenderedStep) < world->step) {

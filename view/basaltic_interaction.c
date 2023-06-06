@@ -64,6 +64,8 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 }
 
 void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
+    float dT = ecs_singleton_get(world, DeltaTime)->seconds;
+
     if (useMouse) {
         // get mouse state
         s32 x, y, deltaX, deltaY;
@@ -102,18 +104,18 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     if (useKeyboard) {
         // handle continuous button presses
         const Uint8 *k = SDL_GetKeyboardState(NULL);
-        if (k[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * 0.1;
-        if (k[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation;
-        if (k[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation;
-        if (k[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation;
-        if (k[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation;
-        if (k[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->movement;
-        if (k[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->movement;
-        if (k[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->movement;
-        if (k[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->movement;
+        if (k[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
+        if (k[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
+        if (k[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
+        if (k[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
+        if (k[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation * dT;
+        if (k[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation * dT;
+        if (k[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation * dT;
+        if (k[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation * dT;
+        if (k[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->movement * dT;
+        if (k[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->movement * dT;
+        if (k[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->movement * dT;
+        if (k[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->movement * dT;
     }
 
     translateCamera(world, camDelta);

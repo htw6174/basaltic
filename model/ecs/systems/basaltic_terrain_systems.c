@@ -35,6 +35,8 @@ void chunkUpdate(Plane *plane, size_t chunkIndex) {
     CellData *base = cm->chunks[chunkIndex].cellData;
     for (int c = 0; c < cm->cellsPerChunk; c++) {
         CellData *cell = &base[c];
+        htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, c);
+        s32 biotemp = plane_GetCellBiotemperature(plane, cellCoord);
 
         // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
         if (htw_randRange(256 * 128) < cell->surfacewater) {
@@ -43,11 +45,11 @@ void chunkUpdate(Plane *plane, size_t chunkIndex) {
         }
 
         // TODO: need better defined growth behavior
-        if (cell->groundwater > 0) {
+        if (cell->groundwater > 0 && biotemp > -2000) {
             // Remove groundwater according to evapotranspiration, grow new vegetation
             cell->groundwater--;
             cell->understory += 1;
-            float canopyGrowthProb = plane_CanopyGrowthRate(plane, htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, c));
+            float canopyGrowthProb = plane_CanopyGrowthRate(plane, cellCoord);
             cell->canopy += htw_randRange(256) < (canopyGrowthProb * 256.0) ? 1 : 0;
         } else {
             // Track hours since water was available, kill vegetation if dryer longer than drought resistance threshold

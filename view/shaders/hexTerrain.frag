@@ -1,7 +1,7 @@
 #version 430
 
 // toggle for a more mobile-friendly version of this shader
-#define LIGHTWEIGHT
+//#define LIGHTWEIGHT
 
 //precision mediump float;
 
@@ -71,12 +71,15 @@ float hash31(vec3 x) {
 	return hash21( vec2( hash21( x.xy ), x.z ) );
 }
 
+// TODO: should place a limit on frequency; looks good from far away but too noisy close up
 float stableHash(in vec3 pos) {
 	const float g_HashScale = 1.0;
 
 	// Find the discretized derivatives of our coordinates
 	float maxDeriv = max(length(dFdx(pos)),
 						 length(dFdy(pos)));
+	// TEST: limit frequency with a minimum deriv
+	maxDeriv = max(maxDeriv, 1.0);
 	float pixScale = 1.0/(g_HashScale*maxDeriv);
 	// Find two nearest log-discretized noise scales
 	vec2 pixScales = vec2( exp2(floor(log2(pixScale))),
@@ -183,18 +186,22 @@ void main()
 
 #ifdef LIGHTWEIGHT
 	// fill in grass from edges
-	float hashThreshold = 1.0 - inout_radius;
+	float grassThreshold = 1.0 - inout_radius;
+	// expand tree cluster from center
+	float treeThreshold = inout_radius;
 #else
 	// hashed stochastic test for vegetation coverage
 	float hashThreshold = stableHash(inout_pos * 100.0);
+	float grassThreshold = hashThreshold;
+	float treeThreshold = hashThreshold;
 #endif
-	vec3 groundColor = understory < hashThreshold ? dirtColor : grassColor;
+
+	vec3 groundColor = understory < grassThreshold ? dirtColor : grassColor;
 
 	float snowLine = step(0.15, biotemp);
 	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
 
-	// expand tree cluster from center
-	biomeColor = canopy < inout_radius ? biomeColor : treeColor;
+	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
 
 	float noiseFreq = isCliff ? 20.0 : 4.0;
 	float noiseMag = isCliff ? 0.1 : 0.5;
