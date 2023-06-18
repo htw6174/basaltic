@@ -1177,7 +1177,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 
-    ecs_entity_t terrainDraw = ecs_new_id(world);
+    ecs_entity_t terrainDraw = ecs_set_name(world, 0, "DrawQuery terrain");
     ecs_add(world, terrainDraw, TerrainRender);
 
     // TEST: add textures. Should have a better loader for this eventually, would be super nice to swap out in the editor.

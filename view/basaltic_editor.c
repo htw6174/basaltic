@@ -29,6 +29,7 @@ typedef struct {
     s32 queryPageLength;
     char queryExpr[MAX_QUERY_EXPR_LENGTH];
     char queryExprError[MAX_QUERY_EXPR_LENGTH];
+    ImGuiTextFilter filter;
 } QueryContext;
 
 typedef struct {
@@ -70,7 +71,7 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
 bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected);
 bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *selected);
 /** Displays query results as a scrollable list of igSelectable. If filter is not NULL, filters list by entity name. Sets [selected] to id of selected item. Returns true when an item is clicked */
-bool entityList(ecs_world_t *world, ecs_iter_t *iter, ImGuiTextFilter *filter, ImVec2 size, s32 maxDisplayedResults, ecs_entity_t *selected);
+bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImVec2 size, s32 pageLength, s32 *pageNumber, ecs_entity_t *selected);
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity);
 void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity);
 /** If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value */
@@ -221,7 +222,7 @@ void bc_editorOnModelStop(void) {
     modelInspector = (EcsInspectionContext){0};
 }
 
-// TODO: will this work with just the model's ecs world?
+// TODO: consider seperating the parts that require viewEcsWorld to another inspector section
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     ecs_entity_t focusedPlane = ecs_singleton_get(viewEcsWorld, FocusPlane)->entity;
     htw_ChunkMap *cm = ecs_get(world->ecsWorld, focusedPlane, Plane)->chunkMap;
@@ -375,52 +376,15 @@ void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selec
     if (qc->queryExprError[0] != '\0') {
         igTextColored((ImVec4){1.0, 0.0, 0.0, 1.0}, qc->queryExprError);
     }
+
+    ImGuiTextFilter_Draw(&qc->filter, "Filter", 0);
+
     igInputInt("Results per page", &qc->queryPageLength, 1, 1, 0);
     qc->queryPageLength = max_int(qc->queryPageLength, 10);
 
-    // TODO: Put in a scroll area if list too long
     if (qc->query != NULL) {
-        igPushID_Str("Query Results");
-        u32 resultsCount = 0;
-        u32 minDisplayed = qc->queryPageLength * qc->queryPage;
-        u32 maxDisplayed = minDisplayed + qc->queryPageLength;
         ecs_iter_t it = ecs_query_iter(world, qc->query);
-        while (ecs_query_next(&it)) {
-            for (int i = 0; i < it.count; i++) {
-                //resultsCount += hierarchyInspector(world, it.entities[i], qc);
-                if (resultsCount >= minDisplayed && resultsCount < maxDisplayed) {
-                    ecs_entity_t e = it.entities[i];
-                    const char *name = getEntityLabel(world, e);
-                    igPushID_Int(e);
-                    // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
-                    if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
-                        *selected = e;
-                    }
-                    // TODO: should be its own function
-                    if (igBeginPopupContextItem("##context_menu", ImGuiPopupFlags_MouseButtonRight)) {
-                        if (igSelectable_Bool("Create Instance", false, 0, (ImVec2){0, 0})) {
-                            ecs_new_w_pair(world, EcsIsA, e);
-                        }
-                        // TODO: more context options
-                        igEndPopup();
-                    }
-                    igPopID();
-                }
-                resultsCount++;
-            }
-        }
-        // TODO: after converting to table, add blank rows so other controls don't change position
-        igValue_Uint("Results", resultsCount);
-        s32 pageCount = (s32)ceilf((float)resultsCount / qc->queryPageLength) - 1;
-        if (pageCount > 0) {
-            if (igArrowButton("page_left", ImGuiDir_Left)) qc->queryPage--;
-            igSameLine(0, -1);
-            if (igArrowButton("page_right", ImGuiDir_Right)) qc->queryPage++;
-            igSameLine(0, -1);
-            igSliderInt("Page", &qc->queryPage, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
-        }
-        qc->queryPage = min_int(qc->queryPage, pageCount);
-        igPopID();
+        entityList(world, &it, &qc->filter, (ImVec2){0.0, 0.0}, qc->queryPageLength, &qc->queryPage, selected);
     }
 }
 
@@ -698,7 +662,8 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
     // List filtered results
     float itemHeight = igGetTextLineHeightWithSpacing();
     ecs_iter_t it = ecs_query_iter(world, query);
-    entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 25, selected);
+    static s32 page;
+    entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 25, &page, selected);
 
     // TODO: make fullpath inspector method
     char *path = ecs_get_fullpath(world, *selected);
@@ -736,7 +701,8 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
     static ImGuiTextFilter relationshipFilter;
     ImGuiTextFilter_Draw(&relationshipFilter, "##", 0);
     ecs_iter_t relationshipIter = ecs_query_iter(world, relationshipQuery);
-    entityList(world, &relationshipIter, &relationshipFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &relationship);
+    static s32 relationshipPage = 0;
+    entityList(world, &relationshipIter, &relationshipFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &relationshipPage, &relationship);
     igEndGroup();
     igPopID();
 
@@ -765,7 +731,8 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
     igBeginGroup();
     static ImGuiTextFilter targetFilter;
     ImGuiTextFilter_Draw(&targetFilter, "##", 0);
-    entityList(world, &targetIter, &targetFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &target);
+    static s32 targetPage = 0;
+    entityList(world, &targetIter, &targetFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &targetPage, &target);
     igEndGroup();
     igPopID();
 
@@ -795,38 +762,88 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
     return selectionMade;
 }
 
-bool entityList(ecs_world_t *world, ecs_iter_t *iter, ImGuiTextFilter *filter, ImVec2 size, s32 maxDisplayedResults, ecs_entity_t *selected) {
+bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImVec2 size, s32 pageLength, s32 *pageNumber, ecs_entity_t *selected) {
     bool anyClicked = false;
-    s32 fullCount = 0;
-    s32 displayedCount = 0;
+    //igPushID_Str("Query Results");
+    igBeginChild_Str("Entity List", size, true, ImGuiWindowFlags_HorizontalScrollbar);
+    u32 resultsCount = 0;
+    u32 firstResult = pageLength * *pageNumber;
+    u32 lastResult = firstResult + pageLength;
 
-    igBeginChild_Str("Entity Selector", size, true, ImGuiWindowFlags_HorizontalScrollbar);
-    while (ecs_iter_next(iter)) {
-        for (int i = 0; i < iter->count; i++) {
-            if (displayedCount < maxDisplayedResults) {
-                ecs_entity_t e = iter->entities[i];
-                const char *name = getEntityLabel(world, e);
-                // TODO: make filter optional?
-                if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
-                    igPushID_Int(e); // Ensure that identical names in different scopes don't conflict
+    while (ecs_query_next(it)) {
+        for (int i = 0; i < it->count; i++) {
+            ecs_entity_t e = it->entities[i];
+            const char *name = getEntityLabel(world, e);
+            // TODO: make filter optional?
+            if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
+                if (resultsCount >= firstResult && resultsCount < lastResult) {
+                    igPushID_Int(e);
                     // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
                     if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
                         *selected = e;
                         anyClicked = true;
                     }
+                    // TODO: should be its own function
+                    if (igBeginPopupContextItem("##context_menu", ImGuiPopupFlags_MouseButtonRight)) {
+                        if (igSelectable_Bool("Create Instance", false, 0, (ImVec2){0, 0})) {
+                            ecs_new_w_pair(world, EcsIsA, e);
+                        }
+                        // TODO: more context options
+                        igEndPopup();
+                    }
                     igPopID();
-                    displayedCount++;
                 }
+                resultsCount++;
             }
-            fullCount++;
         }
     }
-    // FIXME: extremely minor, but this will display '0 more results' when fullCount is exactly maxDisplayedResults
-    if (displayedCount == maxDisplayedResults) {
-        igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", fullCount - maxDisplayedResults);
+    // TODO: after converting to table, add blank rows so other controls don't change position
+    // TODO: make page number optional, display "x more results..." if not provided
+    igValue_Uint("Results", resultsCount);
+    s32 pageCount = max_int((s32)ceilf((float)resultsCount / pageLength) - 1, 0);
+    if (pageCount > 0) {
+        if (igArrowButton("page_left", ImGuiDir_Left)) *pageNumber--;
+        igSameLine(0, -1);
+        if (igArrowButton("page_right", ImGuiDir_Right)) *pageNumber++;
+        igSameLine(0, -1);
+        igSliderInt("Page", pageNumber, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
     }
+    *pageNumber = min_int(*pageNumber, pageCount);
+    //igPopID();
     igEndChild();
+    
     return anyClicked;
+
+    // s32 fullCount = 0;
+    // s32 displayedCount = 0;
+
+    // TODO: Put in a scroll area if list longer than size can accomidate
+    // igBeginChild_Str("Entity Selector", size, true, ImGuiWindowFlags_HorizontalScrollbar);
+    // while (ecs_iter_next(iter)) {
+    //     for (int i = 0; i < iter->count; i++) {
+    //         if (displayedCount < maxDisplayedResults) {
+    //             ecs_entity_t e = iter->entities[i];
+    //             const char *name = getEntityLabel(world, e);
+    //             // TODO: make filter optional?
+    //             if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
+    //                 igPushID_Int(e); // Ensure that identical names in different scopes don't conflict
+    //                 // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
+    //                 if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
+    //                     *selected = e;
+    //                     anyClicked = true;
+    //                 }
+    //                 igPopID();
+    //                 displayedCount++;
+    //             }
+    //         }
+    //         fullCount++;
+    //     }
+    // }
+    // // FIXME: extremely minor, but this will display '0 more results' when fullCount is exactly maxDisplayedResults
+    // if (displayedCount == maxDisplayedResults) {
+    //     igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", fullCount - maxDisplayedResults);
+    // }
+    // igEndChild();
 }
 
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity) {
