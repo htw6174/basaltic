@@ -770,7 +770,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     u32 firstResult = pageLength * *pageNumber;
     u32 lastResult = firstResult + pageLength;
 
-    while (ecs_query_next(it)) {
+    while (ecs_iter_next(it)) {
         for (int i = 0; i < it->count; i++) {
             ecs_entity_t e = it->entities[i];
             const char *name = getEntityLabel(world, e);
