@@ -182,6 +182,8 @@ static void doWorldStep(bc_WorldState *world) {
     // Waiting here gives the view thread a chance to safely read & render world data
     SDL_SemWait(world->lock);
     ecs_progress(world->ecsWorld, 1.0);
+    world->step++;
+    ecs_singleton_set(world->ecsWorld, Step, {world->step}); // FIXME kind of awkward to track this in 2 different places, but good reasons to keep both
     SDL_SemPost(world->lock);
 
     // ecs_world_t *stage = ecs_get_stage(world->ecsWorld, 0);
@@ -194,8 +196,6 @@ static void doWorldStep(bc_WorldState *world) {
     // // TODO: only end readonly mode (flush the buffer and make ecs storage changes) if no other threads are currently reading from the world
     // ecs_readonly_end(world->ecsWorld);
     // ecs_readonly_begin(world->ecsWorld);
-
-    world->step++;
 }
 
 /*

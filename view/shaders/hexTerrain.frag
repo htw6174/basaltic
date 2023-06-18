@@ -1,7 +1,7 @@
 #version 430
 
 // toggle for a more mobile-friendly version of this shader
-//#define LIGHTWEIGHT
+#define LIGHTWEIGHT
 
 //precision mediump float;
 
@@ -79,7 +79,7 @@ float stableHash(in vec3 pos) {
 	float maxDeriv = max(length(dFdx(pos)),
 						 length(dFdy(pos)));
 	// TEST: limit frequency with a minimum deriv
-	maxDeriv = max(maxDeriv, 1.0);
+	maxDeriv = max(maxDeriv, 0.5);
 	float pixScale = 1.0/(g_HashScale*maxDeriv);
 	// Find two nearest log-discretized noise scales
 	vec2 pixScales = vec2( exp2(floor(log2(pixScale))),

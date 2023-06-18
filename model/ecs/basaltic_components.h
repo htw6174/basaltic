@@ -14,6 +14,10 @@
 // Common types
 extern ECS_COMPONENT_DECLARE(s16);
 
+ECS_STRUCT(Step, {
+    u64 step;
+});
+
 // TODO: find a home for this
 extern ECS_TAG_DECLARE(PlayerVision);
 

@@ -110,7 +110,7 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
             Position *positions = ecs_field(&mit, Position, 1);
             ecs_entity_t tmEnt = ecs_field_id(&mit, 2);
             htw_ChunkMap *cm = ecs_get(mit.world, ecs_pair_second(mit.world, tmEnt), Plane)->chunkMap;
-            for (int m = 0; m < mit.count, instanceCount < instanceBuffers[i].maxInstances; m++) {
+            for (int m = 0; m < mit.count && instanceCount < instanceBuffers[i].maxInstances; m++) {
                 u32 chunkIndex, cellIndex;
                 htw_geo_gridCoordinateToChunkAndCellIndex(cm, positions[m], &chunkIndex, &cellIndex);
                 s32 elevation = bc_getCellByIndex(cm, chunkIndex, cellIndex)->height;
@@ -247,5 +247,5 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
     });
 
-    ecs_enable(world, ecs_id(DrawInstances), false);
+    //ecs_enable(world, ecs_id(DrawInstances), false);
 }

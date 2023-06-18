@@ -254,5 +254,6 @@ void editTerrain(ecs_world_t *world, float strength) {
         DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
         u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
         dirty->chunks[dirty->count++] = chunk;
+        ecs_singleton_modified(world, DirtyChunkBuffer);
     }
 }
