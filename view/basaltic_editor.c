@@ -627,11 +627,29 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         }
     }
 
+    const char *label = getEntityLabel(world, node);
     // Note: leaf nodes are always *expanded*, not collapsed. Should skip iterating children, but still TreePop if leaf.
-    bool expandNode = igTreeNodeEx_Str(getEntityLabel(world, node), flags);
+    bool expandNode = igTreeNodeEx_Str(label, flags);
     // If tree node was clicked, but not expanded, inspect node
     if (igIsItemClicked(ImGuiMouseButton_Left) && !igIsItemToggledOpen()) {
         *focus = node;
+    }
+
+    // drag and drop
+    if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
+            igSetDragDropPayload("BC_PAYLOAD_ENTITY", &node, sizeof(ecs_entity_t), ImGuiCond_None);
+            igEndDragDropSource();
+    }
+    if (igBeginDragDropTarget()) {
+        const ImGuiPayload *payload = igAcceptDragDropPayload("BC_PAYLOAD_ENTITY", ImGuiDragDropFlags_None);
+        if (payload != NULL) {
+            ecs_entity_t payload_entity = *(const ecs_entity_t*)payload->Data;
+            if (ecs_is_valid(world, payload_entity)) {
+                // TODO: need to queue this action for end of frame?
+                ecs_add_pair(world, payload_entity, EcsChildOf, node);
+            }
+        }
+        igEndDragDropTarget();
     }
 
     if (expandNode && drawChildren) {
@@ -814,36 +832,10 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     
     return anyClicked;
 
-    // s32 fullCount = 0;
-    // s32 displayedCount = 0;
-
-    // TODO: Put in a scroll area if list longer than size can accomidate
-    // igBeginChild_Str("Entity Selector", size, true, ImGuiWindowFlags_HorizontalScrollbar);
-    // while (ecs_iter_next(iter)) {
-    //     for (int i = 0; i < iter->count; i++) {
-    //         if (displayedCount < maxDisplayedResults) {
-    //             ecs_entity_t e = iter->entities[i];
-    //             const char *name = getEntityLabel(world, e);
-    //             // TODO: make filter optional?
-    //             if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
-    //                 igPushID_Int(e); // Ensure that identical names in different scopes don't conflict
-    //                 // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
-    //                 if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
-    //                     *selected = e;
-    //                     anyClicked = true;
-    //                 }
-    //                 igPopID();
-    //                 displayedCount++;
-    //             }
-    //         }
-    //         fullCount++;
-    //     }
-    // }
     // // FIXME: extremely minor, but this will display '0 more results' when fullCount is exactly maxDisplayedResults
     // if (displayedCount == maxDisplayedResults) {
     //     igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", fullCount - maxDisplayedResults);
     // }
-    // igEndChild();
 }
 
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity) {
