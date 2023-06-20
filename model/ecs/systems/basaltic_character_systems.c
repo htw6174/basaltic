@@ -15,16 +15,20 @@
 void bc_setWandererDestinations(ecs_iter_t *it);
 // TEST: check neighboring cell features, move towards lowest elevation
 void bc_setDescenderDestinations(ecs_iter_t *it);
-void bc_moveCharacters(ecs_iter_t *it);
 void bc_revealMap(ecs_iter_t *it);
 
 void characterCreated(ecs_iter_t *it);
 void characterMoved(ecs_iter_t *it);
 void characterDestroyed(ecs_iter_t *it);
 
+void spawnActors(ecs_iter_t *it);
+
 void egoBehaviorWander(ecs_iter_t *it);
 void egoBehaviorGrazer(ecs_iter_t *it);
 void egoBehaviorPredator(ecs_iter_t *it);
+
+void executeMove(ecs_iter_t *it);
+void executeFeed(ecs_iter_t *it);
 
 // TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
@@ -76,14 +80,6 @@ void bc_setCharacterDestination(ecs_world_t *world, ecs_entity_t e, htw_geo_Grid
     }
 }
 
-void SurfaceSpawn(ecs_iter_t *it) {
-    Plane *planes = ecs_field(it, Plane, 1);
-
-    for (int i = 0; i < it->count; i++) {
-        bc_createCharacters(it->world, it->entities[i], 1000);
-    }
-}
-
 void egoBehaviorWander(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
@@ -116,24 +112,6 @@ void bc_setDescenderDestinations(ecs_iter_t *it) {
         } else {
             destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[lowestDirection]);
         }
-    }
-}
-
-// TODO: tell flecs to process movement without queuing commands
-void bc_moveCharacters(ecs_iter_t *it) {
-    // TODO: wrap position according to chunk map
-    // TODO: should I wrap when setting destinations too?
-    Position *positions = ecs_field(it, Position, 1);
-    Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
-
-    for (int i = 0; i < it->count; i++) {
-        u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
-        // TODO: move towards destination by maximum single turn move distance
-        plane_MoveEntity(it->world, tmEnt, it->entities[i], positions[i], destinations[i]);
-        // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-        positions[i] = destinations[i];
     }
 }
 
@@ -189,80 +167,12 @@ void bc_revealMap(ecs_iter_t *it) {
     }
 }
 
-void BcSystemsCharactersImport(ecs_world_t *world) {
-    ECS_MODULE(world, BcSystemsCharacters);
-
-    // ECS_IMPORT(world, Bc); // NOTE: this import does nothing, because `Bc` is a 'parent' path of `BcSystemsCharacters`
-    ECS_IMPORT(world, BcPhases);
-    ECS_IMPORT(world, BcPlanes);
-    ECS_IMPORT(world, BcActors);
-    ECS_IMPORT(world, BcWildlife);
-
-    // TODO: change IsOn field, use Plane(up(bc.planes.IsOn)) instead
-    // - NOTE: should ask about or profile this; could cause the query to switch to per-instance iteration instead, which may negatively effect performance. Tradeoff is that access to the Plane is faster?
-    ECS_SYSTEM(world, egoBehaviorWander, Planning,
-        [in] Position,
-        [out] Destination,
-        [in] (bc.planes.IsOn, _),
-        [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
-    );
-
-    ECS_SYSTEM(world, bc_moveCharacters, Execution,
-        [out] Position,
-        [in] Destination,
-        [in] (bc.planes.IsOn, _)
-    );
-
-    // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
-    ecs_system(world, {
-        .entity = bc_moveCharacters,
-        .no_readonly = true
-    });
-
-    ECS_SYSTEM(world, bc_revealMap, Resolution,
-        [in] Position,
-        [in] (bc.planes.IsOn, _),
-        [none] bc.PlayerVision
-    );
-    //ECS_OBSERVER(world, characterMoved, EcsOnSet, Position, (IsOn, _));
-    ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
-
-    // wildlife behaviors
-    // NOTE: would like to have a better way to access tags, paths are still getting verbose; for OneOf relationships, need to remember that relationship path is always start of tag fullpath
-    ECS_SYSTEM(world, egoBehaviorGrazer, Planning,
-        [in] Position,
-        [out] Destination,
-        [in] (bc.planes.IsOn, _),
-        [none] (bc.actors.Ego, bc.actors.Ego.EgoGrazer),
-    );
-    ecs_system(world, {
-        .entity = egoBehaviorGrazer,
-        .multi_threaded = true
-    });
-
-    ECS_SYSTEM(world, egoBehaviorPredator, Planning,
-        [in] Position,
-        [out] Destination,
-        [in] (bc.planes.IsOn, _),
-        [none] (bc.actors.Ego, bc.actors.Ego.EgoPredator),
-    );
-    ecs_system(world, {
-        .entity = egoBehaviorPredator,
-        .multi_threaded = true
-    });
-
-    ECS_SYSTEM(world, SurfaceSpawn, EcsOnStart,
-        [in] Plane
-    );
-
-    ecs_system(world, {
-        .entity = SurfaceSpawn,
-        .no_readonly = true
-    });
-}
-
 void characterCreated(ecs_iter_t *it) {
-
+    Position *positions = ecs_field(it, Position, 1);
+    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    for (int i = 0; i < it->count; i++) {
+        plane_PlaceEntity(it->world, tmEnt, it->entities[i], positions[i]);
+    }
 }
 
 void characterMoved(ecs_iter_t *it) {
@@ -281,10 +191,48 @@ void characterDestroyed(ecs_iter_t *it) {
     }
 }
 
+void spawnActors(ecs_iter_t *it) {
+    Spawner *spawners = ecs_field(it, Spawner, 1);
+    ecs_entity_t plane = ecs_field_id(it, 2);
+
+    ecs_world_t *world = it->world;
+    htw_ChunkMap *cm = ecs_get(world, ecs_pair_second(world, plane), Plane)->chunkMap;
+
+    ecs_entity_t oldScope = ecs_get_scope(world);
+    ecs_set_scope(world, plane);
+
+    u32 maxX = cm->mapWidth;
+    u32 maxY = cm->mapHeight;
+
+    ecs_defer_begin(world);
+    for (int i = 0; i < it->count; i++) {
+        Spawner sp = spawners[i];
+        for (int e = 0; e < sp.count; e++) {
+            ecs_entity_t newCharacter = ecs_new(it->world, 0);
+            htw_geo_GridCoord coord = {
+                .x = htw_randRange(maxX),
+                .y = htw_randRange(maxY)
+            };
+            ecs_add_pair(world, newCharacter, IsOn, plane);
+            plane_PlaceEntity(world, plane, newCharacter, coord);
+            ecs_set(world, newCharacter, Position, {coord.x, coord.y});
+            ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
+            ecs_add_pair(world, newCharacter, EcsIsA, sp.prefab);
+        }
+        if (sp.oneShot) {
+            ecs_delete(world, it->entities[i]);
+        }
+    }
+    ecs_defer_end(world);
+
+    ecs_set_scope(world, oldScope);
+}
+
 void egoBehaviorGrazer(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
     ecs_entity_t tmEnt = ecs_field_id(it, 3);
+
     const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
     htw_ChunkMap *cm = tm->chunkMap;
 
@@ -293,43 +241,47 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
         htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(positions[i]);
         htw_geo_CubeCoord relativeCoord = {0, 0, 0};
 
-        // get number of cells to check based on character's attributes
-        u32 sightRange = 2;
-        u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
-
         // track best candidate
-        s32 bestVegetation = 0;
-        htw_geo_CubeCoord bestDirection = {0, 0, 0};
+        CellData *cell = htw_geo_getCell(cm, positions[i]);
+        u32 availableHere = cell->understory;
 
-        for (int c = 0; c < cellsInSightRange; c++) {
-            // Result coordinate is not confined to chunkmap, but converting to chunk and cell will also wrap input coords
-            htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
-            htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
-            u32 chunkIndex, cellIndex;
-            htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
-            CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
+        // if there is enough here, stay put and feed. Otherwise, find best nearby cell
+        // TODO: first check for and move directly away from predators
+        u32 tolerance = 10;
+        if (availableHere >= tolerance) {
+            ecs_add_pair(it->world, it->entities[i], Action, ActionFeed);
+        } else {
+            // get number of cells to check based on character's attributes
+            u32 sightRange = 2;
+            u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
+            u32 bestAvailable = availableHere;
+            htw_geo_CubeCoord bestDirection = {0, 0, 0};
+            for (int c = 0; c < cellsInSightRange; c++) {
+                // Result coordinate is not confined to chunkmap, but converting to chunk and cell will also wrap input coords
+                htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
+                htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
+                u32 chunkIndex, cellIndex;
+                htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
+                cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
-            // Consume some of current cell vegetation
-            if (c == 0) {
-                cell->understory -= cell->understory * 0.1;
-                if (cell->understory > 40) {
-                    break;
+                // Get cell data, find best vegetation
+                if (cell->understory > bestAvailable) {
+                    bestAvailable = cell->understory;
+                    bestDirection = relativeCoord;
                 }
+
+                htw_geo_getNextHexSpiralCoord(&relativeCoord);
+            }
+            // if no cell with more than scraps, move randomly
+            if (bestAvailable < tolerance) {
+                s32 dir = htw_randRange(HEX_DIRECTION_COUNT);
+                bestDirection = htw_geo_cubeDirections[dir];
             }
 
-            // Get cell data, find best vegetation
-            if (cell->understory > bestVegetation) {
-                bestVegetation = cell->understory;
-                bestDirection = relativeCoord;
-            }
-
-            // TODO: check for predators, move in opposite direction and break if found
-
-            htw_geo_getNextHexSpiralCoord(&relativeCoord);
+            // Apply best direction found
+            destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
+            ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
         }
-
-        // Apply best direction found
-        destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
     }
 }
 
@@ -373,5 +325,125 @@ void egoBehaviorPredator(ecs_iter_t *it) {
             // move randomly
             destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_hexGridDirections[htw_randRange(HEX_DIRECTION_COUNT)]);
         }
+        ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }
+}
+
+void executeMove(ecs_iter_t *it) {
+    Position *positions = ecs_field(it, Position, 1);
+    Destination *destinations = ecs_field(it, Destination, 2);
+    ecs_entity_t tmEnt = ecs_field_id(it, 3);
+    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+
+    for (int i = 0; i < it->count; i++) {
+        u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
+        // TODO: move towards destination by maximum single turn move distance
+        plane_MoveEntity(it->world, tmEnt, it->entities[i], positions[i], destinations[i]);
+        // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
+        positions[i] = destinations[i];
+    }
+}
+
+void executeFeed(ecs_iter_t *it) {
+    Position *positions = ecs_field(it, Position, 1);
+    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+    htw_ChunkMap *cm = tm->chunkMap;
+    ecs_entity_t diet = ecs_pair_second(it->world, ecs_field_id(it, 3));
+    if (ecs_field_is_set(it, 4)) {
+        // multiply consumed amount by group size
+        Group *groups = ecs_field(it, Group, 4);
+        for (int i = 0; i < it->count; i++) {
+            CellData *cell = htw_geo_getCell(cm, positions[i]);
+            s32 consumed = min_int(cell->understory, groups[i].count);
+            cell->understory -= consumed;
+        }
+    } else {
+        for (int i = 0; i < it->count; i++) {
+            CellData *cell = htw_geo_getCell(cm, positions[i]);
+            s32 consumed = min_int(cell->understory, 1);
+            cell->understory -= consumed;
+        }
+    }
+}
+
+void BcSystemsCharactersImport(ecs_world_t *world) {
+    ECS_MODULE(world, BcSystemsCharacters);
+
+    // ECS_IMPORT(world, Bc); // NOTE: this import does nothing, because `Bc` is a 'parent' path of `BcSystemsCharacters`
+    ECS_IMPORT(world, BcPhases);
+    ECS_IMPORT(world, BcPlanes);
+    ECS_IMPORT(world, BcActors);
+    ECS_IMPORT(world, BcWildlife);
+
+    // TODO: change IsOn field, use Plane(up(bc.planes.IsOn)) instead
+    // - NOTE: should ask about or profile this; could cause the query to switch to per-instance iteration instead, which may negatively effect performance. Tradeoff is that access to the Plane is faster?
+    ECS_SYSTEM(world, egoBehaviorWander, Planning,
+               [in] Position,
+               [out] Destination,
+               [in] (bc.planes.IsOn, _),
+               [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
+    );
+
+    ECS_SYSTEM(world, bc_revealMap, Resolution,
+               [in] Position,
+               [in] (bc.planes.IsOn, _),
+               [none] bc.PlayerVision
+    );
+    //ECS_OBSERVER(world, characterMoved, EcsOnSet, Position, (IsOn, _));
+    ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
+
+    ECS_SYSTEM(world, spawnActors, EcsPreUpdate,
+        [in] Spawner,
+        [in] (bc.planes.IsOn, _)
+    );
+    // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
+    ecs_system(world, {
+        .entity = spawnActors,
+        .no_readonly = true
+    });
+
+    // wildlife behaviors
+    // NOTE: would like to have a better way to access tags, paths are still getting verbose; for OneOf relationships, need to remember that relationship path is always start of tag fullpath
+    ECS_SYSTEM(world, egoBehaviorGrazer, Planning,
+               [in] Position,
+               [out] Destination,
+               [in] (bc.planes.IsOn, _),
+               [none] (bc.actors.Ego, bc.actors.Ego.EgoGrazer),
+    );
+    ecs_system(world, {
+        .entity = egoBehaviorGrazer,
+        .multi_threaded = true
+    });
+
+    ECS_SYSTEM(world, egoBehaviorPredator, Planning,
+               [in] Position,
+               [out] Destination,
+               [in] (bc.planes.IsOn, _),
+               [none] (bc.actors.Ego, bc.actors.Ego.EgoPredator),
+    );
+    ecs_system(world, {
+        .entity = egoBehaviorPredator,
+        .multi_threaded = true
+    });
+
+    ECS_SYSTEM(world, executeMove, Execution,
+               [out] Position,
+               [in] Destination,
+               [in] (bc.planes.IsOn, _),
+               [none] (bc.actors.Action, bc.actors.Action.ActionMove)
+    );
+    // movement actions must be synchronious TODO: revisit this; could be enough to have a cleanup step to enforce the 1 root per cell rule
+    ecs_system(world, {
+        .entity = executeMove,
+        .no_readonly = true
+    });
+
+    ECS_SYSTEM(world, executeFeed, Execution,
+               [in] Position,
+               [in] (bc.planes.IsOn, _),
+               [in] (bc.wildlife.Diet, _),
+               [in] ?Group,
+               [none] (bc.actors.Action, bc.actors.Action.ActionFeed)
+    );
 }

@@ -140,6 +140,7 @@ s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
 
 s32 plane_GetCellTemperature(const Plane *plane, htw_geo_GridCoord pos) {
     // TODO: keep track of current season / temp variation at the plane level?
+    return plane_GetCellBiotemperature(plane, pos);
 }
 
 /**
@@ -156,7 +157,7 @@ float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos) {
     float canopyCoverage = (float)cell->canopy / 255.0;
     // 5% at 0% canopy, maxes out at 100% at 95% canopy
     float shrubRatio = fmaxf(canopyCoverage + 0.05, 1.0);
-
+    // decreasing benefit of high understory coverage as canopy takes over
     float maxUnderstoryCoverage = 1.0 - canopyCoverage;
     return shrubRatio * understoryCoverage * maxUnderstoryCoverage;
 }

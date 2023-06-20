@@ -22,8 +22,8 @@ void editTerrain(ecs_world_t *world, float strength);
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            //selectCell(world);
-            editTerrain(world, 1.0);
+            selectCell(world);
+            //editTerrain(world, 1.0);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
             //advanceStep(commandBuffer);
@@ -46,15 +46,19 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 editTerrain(world, -1.0);
                 break;
             case SDLK_LEFT:
+            {
                 TerrainBrush *tb = ecs_singleton_get_mut(world, TerrainBrush);
                 tb->value -= 1;
                 ecs_singleton_modified(world, TerrainBrush);
                 break;
+            }
             case SDLK_RIGHT:
-                tb = ecs_singleton_get_mut(world, TerrainBrush);
+            {
+                TerrainBrush *tb = ecs_singleton_get_mut(world, TerrainBrush);
                 tb->value += 1;
                 ecs_singleton_modified(world, TerrainBrush);
                 break;
+            }
             case SDLK_SPACE:
                 advanceStep(commandBuffer);
                 pauseStep(commandBuffer);
@@ -84,7 +88,7 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
         // Should only do this if mouse also moved this frame; prevents jittering on cell edges, and unintentional edits where lowering terrain changes the hovered cell
         if (mouseMoved && hoverChanged) {
             // Hovered cell changed
-            // TODO: onClick and onHoverChanged should usually do the same thing
+            // TODO: onClick and onHoverChanged should usually be connected; make mouse actions configurable or context-dependent
             if (mouseStateMask & SDL_BUTTON_LMASK) {
                 editTerrain(world, 1.0);
             }
@@ -247,8 +251,15 @@ void editTerrain(ecs_world_t *world, float strength) {
         ecs_world_t *modelWorld = mw->world;
         htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-        CellData *cd = htw_geo_getCell(cm, cellCoord);
-        cd->height += tb->value * strength;
+        u32 area = htw_geo_getHexArea(tb->radius);
+        htw_geo_GridCoord offsetCoord = {0, 0};
+        for (int i = 0; i < area; i++) {
+            CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
+            cd->height += tb->value * strength;
+            htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
+            htw_geo_getNextHexSpiralCoord(&cubeOffset);
+            offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
+        }
 
         // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
         DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);

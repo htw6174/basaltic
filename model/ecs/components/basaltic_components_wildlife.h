@@ -15,6 +15,10 @@ extern ECS_TAG_DECLARE(EgoGrazer);
 extern ECS_TAG_DECLARE(EgoPredator);
 extern ECS_TAG_DECLARE(EgoHunter);
 
+extern ECS_TAG_DECLARE(ActionFeed);
+extern ECS_TAG_DECLARE(ActionFollow);
+extern ECS_TAG_DECLARE(ActionAttack);
+
 extern ECS_TAG_DECLARE(Flying); // Ignore terrain when moving
 extern ECS_TAG_DECLARE(Climbing); // Reduced stamina penalty for elevation difference when moving
 extern ECS_TAG_DECLARE(Amphibious); // Move through bodies of water with no penalty

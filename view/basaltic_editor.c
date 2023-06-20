@@ -63,7 +63,7 @@ void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected);
 void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected);
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
-void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic);
+void entityCreator(ecs_world_t *world, ecs_entity_t parent, ecs_entity_t *focusEntity);
 /** Displays an igInputText for [name]]. Returns true when [name] is set to a unique name in parent scope and submitted. When used within a popup, auto-focuses input field and closes popup when confirming. */
 bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t name_buf_size);
 /** Returns number of entities in hierarchy, including the root */
@@ -230,7 +230,8 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     const HoveredCell *hovered = ecs_singleton_get(viewEcsWorld, HoveredCell);
     const SelectedCell *selected = ecs_singleton_get(viewEcsWorld, SelectedCell);
 
-    static bool inspectSelected = false;
+    // TODO: have a window attached to the mouse for hovered info, pin selected info here
+    static bool inspectSelected = true;
     igCheckbox("Show Selected Cell Info", &inspectSelected);
 
     htw_geo_GridCoord focusCoord;
@@ -303,7 +304,7 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         igOpenPopup_Str("create_entity", 0);
     }
     if (igBeginPopup("create_entity", 0)) {
-        entityCreator(world, 0, ic);
+        entityCreator(world, 0, &ic->focusEntity);
         igEndPopup();
     }
 
@@ -403,15 +404,18 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     if(!ecs_is_valid(world, e)) {
         return;
     }
-    // TODO: shouldn't let any entity be deleted and/or disabled. Components, anything in the flecs namespace; systems should only be disabled, etc.
+    // TODO: shouldn't let any entity be deleted or disabled. Components, anything in the flecs namespace; systems should only be disabled, etc.
     bool enabled = !ecs_has_id(world, e, EcsDisabled);
     if (igCheckbox("Enabled", &enabled)) {
         ecs_enable(world, e, enabled);
     }
-    igSameLine(0, -1);
-    if (igSmallButton("Delete")) {
-        ecs_delete(world, e);
-        return;
+    // If deleting an entity would cause flecs to crash, don't have a button for it!
+    if (!ecs_has_pair(world, e, EcsOnDelete, EcsPanic)) {
+        igSameLine(0, -1);
+        if (igSmallButton("Delete")) {
+            ecs_delete(world, e);
+            return;
+        }
     }
 
     igBeginDisabled(!enabled);
@@ -565,14 +569,14 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     }
 }
 
-void entityCreator(ecs_world_t *world, ecs_entity_t parent, EcsInspectionContext *ic) {
+void entityCreator(ecs_world_t *world, ecs_entity_t parent, ecs_entity_t *focusEntity) {
     static char name[256];
     // Within a popup, clear name when opening
     if (igIsWindowAppearing()) {
         name[0] = '\0';
     }
     if (entityRenamer(world, parent, name, 256)) {
-        ecs_new_from_path(world, parent, name);
+        *focusEntity = ecs_new_from_path(world, parent, name);
     }
 }
 
@@ -801,6 +805,11 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
                         *selected = e;
                         anyClicked = true;
                     }
+                    // drag and drop
+                    if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
+                        igSetDragDropPayload("BC_PAYLOAD_ENTITY", &e, sizeof(ecs_entity_t), ImGuiCond_None);
+                        igEndDragDropSource();
+                    }
                     // TODO: should be its own function
                     if (igBeginPopupContextItem("##context_menu", ImGuiPopupFlags_MouseButtonRight)) {
                         if (igSelectable_Bool("Create Instance", false, 0, (ImVec2){0, 0})) {
@@ -942,6 +951,7 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
     switch (kind) {
         case EcsBool:
             igCheckbox("##", field);
+            break;
         case EcsChar:
             igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%c", 0);
             break;
@@ -989,14 +999,32 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             //igInputText("##", field, 0, 0, NULL, NULL); // TODO set size
             break;
         case EcsEntity:
+        {
             ecs_entity_t e = *(ecs_entity_t*)(field);
             entityLabel(world, e);
+
+            // drag and drop
+            if (igBeginDragDropTarget()) {
+                const ImGuiPayload *payload = igAcceptDragDropPayload("BC_PAYLOAD_ENTITY", ImGuiDragDropFlags_None);
+                if (payload != NULL) {
+                    memcpy(field, payload->Data, sizeof(ecs_entity_t));
+                }
+                igEndDragDropTarget();
+            }
             if (focusEntity != NULL) {
+                // no reason to drag an invalid entity
+                if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
+                    igSetDragDropPayload("BC_PAYLOAD_ENTITY", field, sizeof(ecs_entity_t), ImGuiCond_None);
+                    igEndDragDropSource();
+                }
+
+                // TODO: selection menu
                 igSameLine(0, -1);
                 if (igSmallButton("?")) {
                     *focusEntity = e;
                 }
             }
+        }
             break;
         default:
             igText("Error: unhandled primitive type");

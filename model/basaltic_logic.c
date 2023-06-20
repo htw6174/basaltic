@@ -46,6 +46,12 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
     htw_ChunkMap *cm = bc_createTerrain(chunkCountX, chunkCountY);
     newWorld->centralPlane = ecs_set(newWorld->ecsWorld, 0, Plane, {cm});
+    ecs_set_name(newWorld->ecsWorld, newWorld->centralPlane, "Overworld");
+
+    // TEST: create some spawners
+    ecs_entity_t prefab = ecs_lookup_fullpath(newWorld->ecsWorld, "bc.wildlife.BisonHerdPrefab");
+    ecs_entity_t testSpawner = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab, .count = 250, .oneShot = true});
+    ecs_add_pair(newWorld->ecsWorld, testSpawner, IsOn, newWorld->centralPlane);
 
     newWorld->lock = SDL_CreateSemaphore(1);
 
