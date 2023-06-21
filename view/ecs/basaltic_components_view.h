@@ -13,6 +13,8 @@
 #define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
 #endif
 
+#define MAX_QUERY_EXPR_LENGTH 1024
+
 /* Common types */
 extern ECS_COMPONENT_DECLARE(s32);
 extern ECS_COMPONENT_DECLARE(vec3);
@@ -37,6 +39,7 @@ ECS_STRUCT(ModelQuery, {
 
 ECS_STRUCT(QueryDesc, {
     ecs_query_desc_t desc;
+    char expr[MAX_QUERY_EXPR_LENGTH]; // query description doesn't reserve space for the filter expression, store here TODO: change do a resizable type
 });
 
 typedef u64 ModelLastRenderedStep;

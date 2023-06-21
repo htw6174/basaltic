@@ -66,7 +66,7 @@ void CreateModelQueries(ecs_iter_t *it) {
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
     for (int i = 0; i < it->count; i++) {
-
+        terms[i].desc.filter.expr = terms[i].expr;
         ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
         ecs_set(it->world, it->entities[i], ModelQuery, {query});
     }
@@ -82,6 +82,7 @@ void CreateSubQueries(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         terms[i].desc.parent = baseQueries[i].query;
+        terms[i].desc.filter.expr = terms[i].expr;
         ecs_query_t *query = ecs_query_init(modelWorld, &(terms[i].desc));
         if (query != NULL) {
             ecs_set(it->world, it->entities[i], ModelQuery, {query});

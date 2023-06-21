@@ -55,24 +55,4 @@ void BcWildlifeImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, Climbing);
     ECS_TAG_DEFINE(world, Amphibious);
     ECS_TAG_DEFINE(world, Aquatic);
-
-    /* Prefabs */
-
-    // wolf pack
-    ecs_entity_t wolfPackPrefab = ecs_set_name(world, 0, "WolfPackPrefab");
-    ecs_add_id(world, wolfPackPrefab, EcsPrefab);
-    ecs_add_pair(world, wolfPackPrefab, Ego, EgoPredator);
-    ecs_add_pair(world, wolfPackPrefab, Diet, Meat);
-    ecs_set(world, wolfPackPrefab, Group, {.count = 10});
-    ecs_override(world, wolfPackPrefab, Group);
-    ecs_set(world, wolfPackPrefab, ActorSize, {ACTOR_SIZE_AVERAGE});
-
-    // bison herd
-    ecs_entity_t bisonHerdPrefab = ecs_set_name(world, 0, "BisonHerdPrefab");
-    ecs_add_id(world, bisonHerdPrefab, EcsPrefab);
-    ecs_add_pair(world, bisonHerdPrefab, Ego, EgoGrazer);
-    ecs_add_pair(world, bisonHerdPrefab, Diet, Grasses);
-    ecs_set(world, bisonHerdPrefab, Group, {.count = 30});
-    ecs_override(world, bisonHerdPrefab, Group);
-    ecs_set(world, bisonHerdPrefab, ActorSize, {ACTOR_SIZE_LARGE});
 }

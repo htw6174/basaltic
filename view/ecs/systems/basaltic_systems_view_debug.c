@@ -213,7 +213,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         //     {.id = ecs_id(Position), .inout = EcsIn}, // NOTE: even if the header is included, if the correct module is not imported then entity IDs may default to 0, preventing them from becoming usable filter terms. The query builder Macros can help to detect this at runtime, but having a compile time check would be very helpful
         //     {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
         // }
-        .desc.filter.expr = "Position, (bc.planes.IsOn, _)"
+        .expr = "Position, (bc.planes.IsOn, _)"
     });
     ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
     ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
@@ -227,28 +227,28 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set_name(world, meatVis, "DrawQuery diet meat");
     ecs_set(world, meatVis, Color, {{0.7, 0.0, 0.0, 1.0}});
     ecs_set(world, meatVis, QueryDesc, {
-        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"
+        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"
     });
 
     ecs_entity_t fruitVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
     ecs_set_name(world, fruitVis, "DrawQuery diet fruit");
     ecs_set(world, fruitVis, Color, {{0.7, 0.0, 0.7, 1.0}});
     ecs_set(world, fruitVis, QueryDesc, {
-        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"
+        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"
     });
 
     ecs_entity_t foliageVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
     ecs_set_name(world, foliageVis, "DrawQuery diet foliage");
     ecs_set(world, foliageVis, Color, {{0.0, 0.7, 0.7, 1.0}});
     ecs_set(world, foliageVis, QueryDesc, {
-        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"
+        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"
     });
 
     ecs_entity_t grassVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
     ecs_set_name(world, grassVis, "DrawQuery diet grass");
     ecs_set(world, grassVis, Color, {{0.0, 0.7, 0.0, 1.0}});
     ecs_set(world, grassVis, QueryDesc, {
-        .desc.filter.expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
+        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
     });
 
     //ecs_enable(world, ecs_id(DrawInstances), false);

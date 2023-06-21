@@ -21,7 +21,6 @@
 #include "cimgui_impl.h"
 
 #define MAX_CUSTOM_QUERIES 4
-#define MAX_QUERY_EXPR_LENGTH 1024
 
 typedef struct {
     ecs_query_t *query;
@@ -878,15 +877,14 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
             igOpenPopup_Str("query_expr", 0);
         }
         if (igBeginPopup("query_expr", 0)) {
-            static char queryExpr[MAX_QUERY_EXPR_LENGTH] = {0};
-            //static char queryExprError[MAX_QUERY_EXPR_LENGTH]; // Unneeded? not creating the query here, so might not get direct error feedback
-            // if (igIsWindowAppearing()) {
-            //     queryExpr[0] = '\0';
-            // }
-            // TODO: make input field larger
+            QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
+            static char queryExpr[MAX_QUERY_EXPR_LENGTH];
+            if (igIsWindowAppearing()) {
+                memcpy(queryExpr, qd->expr, MAX_QUERY_EXPR_LENGTH);
+            }
             if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-                //qd->desc.filter.expr = queryExpr;
-                ecs_set(world, e, QueryDesc, {.desc.filter.expr = queryExpr});
+                memcpy(qd->expr, queryExpr, MAX_QUERY_EXPR_LENGTH);
+                ecs_modified(world, e, QueryDesc);
                 igCloseCurrentPopup();
             }
             igEndPopup();
