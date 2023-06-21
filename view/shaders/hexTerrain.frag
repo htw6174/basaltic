@@ -1,7 +1,7 @@
 #version 430
 
 // toggle for a more mobile-friendly version of this shader
-#define LIGHTWEIGHT
+//#define LIGHTWEIGHT
 
 //precision mediump float;
 
@@ -179,9 +179,37 @@ void main()
 	float humidityPref = inout_color.a;
 
 	// TODO: pick from colormap
-	vec3 dirtColor = mix(vec3(0.2, 0.15, 0.1), vec3(1.0, 0.8, 0.1), biotemp);
-	vec3 grassColor = vec3(mix(0.7, 0.2, biotemp), humidityPref + 0.2, humidityPref * 0.33);
-	vec3 treeColor = vec3(0.05, mix(0.2, 1.0, humidityPref), 0.1);
+	const vec3 dirt_cold_dry = vec3(0.6, 0.6, 0.5);
+	const vec3 dirt_hot_dry = vec3(1.0, 0.9, 0.5);
+	const vec3 dirt_cold_wet = vec3(0.4, 0.25, 0.1);
+	const vec3 dirt_hot_wet = vec3(0.5, 0.25, 0.0);
+
+	const vec3 grass_cold_dry = vec3(0.55, 0.15, 0.2);
+	const vec3 grass_hot_dry = vec3(0.6, 0.6, 0.1);
+	const vec3 grass_cold_wet = vec3(0.4, 0.4, 0.2);
+	const vec3 grass_hot_wet = vec3(0.35, 0.5, 0.1);
+
+	const vec3 canopy_cold_dry = vec3(0.2, 0.25, 0.2);
+	const vec3 canopy_hot_dry = vec3(0.25, 0.4, 0.2);
+	const vec3 canopy_cold_wet = vec3(0.05, 0.25, 0.1);
+	const vec3 canopy_hot_wet = vec3(0.05, 0.5, 0.1);
+
+	vec3 dirtColor = mix(
+		mix(dirt_cold_dry, dirt_hot_dry, biotemp),
+		mix(dirt_cold_wet, dirt_hot_wet, biotemp),
+		humidityPref
+	);
+	//vec3 grassColor = vec3(mix(0.7, 0.2, biotemp), humidityPref + 0.2, humidityPref * 0.33);
+	vec3 grassColor = mix(
+		mix(grass_cold_dry, grass_hot_dry, biotemp),
+		mix(grass_cold_wet, grass_hot_wet, biotemp),
+		humidityPref
+	);
+	vec3 treeColor = mix(
+		mix(canopy_cold_dry, canopy_hot_dry, biotemp),
+		mix(canopy_cold_wet, canopy_hot_wet, biotemp),
+		humidityPref
+	);
 	vec3 snowColor = vec3(0.9);
 
 #ifdef LIGHTWEIGHT

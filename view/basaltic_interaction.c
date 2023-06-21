@@ -22,12 +22,13 @@ void editTerrain(ecs_world_t *world, float strength);
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            selectCell(world);
-            //editTerrain(world, 1.0);
+            editTerrain(world, 1.0);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
             //advanceStep(commandBuffer);
             editTerrain(world, -1.0);
+        } else if (e->button.button == SDL_BUTTON_MIDDLE) {
+            selectCell(world);
         }
     }
     if (useKeyboard && e->type == SDL_KEYDOWN) {

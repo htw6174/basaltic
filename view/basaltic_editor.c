@@ -273,8 +273,10 @@ void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         igValue_Int("Height", cellData->height);
         igValue_Int("Geology", cellData->geology);
         igValue_Int("Groundwater", cellData->groundwater);
+        igValue_Int("Surface Water", cellData->surfacewater);
         igValue_Int("Understory", cellData->understory);
         igValue_Int("Canopy", cellData->canopy);
+        igValue_Int("Humidity Preference", cellData->humidityPreference);
 
         igText("Derived Cell Info:");
         s32 altitudeMeters = cellData->height * 100;
