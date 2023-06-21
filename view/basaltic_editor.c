@@ -351,12 +351,12 @@ void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic) {
     igGetContentRegionAvail(&avail);
     for (int i = 0; i < MAX_CUSTOM_QUERIES; i++) {
         igPushID_Int(i);
-        if(igBeginChild_Str("Custom Query", (ImVec2){avail.x / MAX_CUSTOM_QUERIES, 0}, true, 0)) {
+        if(igBeginChild_Str("Custom Query", (ImVec2){avail.x / MAX_CUSTOM_QUERIES, avail.y}, true, 0)) {
             ecsQueryInspector(world, &ic->customQueries[i], &ic->focusEntity);
         }
         igEndChild();
         igPopID();
-        igSameLine(0, -1);
+        igSameLine(0, 0);
     }
 }
 
@@ -685,8 +685,8 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
     // List filtered results
     float itemHeight = igGetTextLineHeightWithSpacing();
     ecs_iter_t it = ecs_query_iter(world, query);
-    static s32 page;
-    entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 25, &page, selected);
+    static s32 page = 0;
+    entityList(world, &it, &filter, (ImVec2){200.0, itemHeight * 10.0}, 10, &page, selected);
 
     // TODO: make fullpath inspector method
     char *path = ecs_get_fullpath(world, *selected);
@@ -717,15 +717,19 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
 
     igPushID_Str("rel");
     igBeginGroup();
-    // Set name filter
+    //igBeginChild_Str("Entity List", (ImVec2){200.0, -1.0}, true, ImGuiWindowFlags_None);
+
+    igText("Relationship");
     if (igIsWindowAppearing()) {
         igSetKeyboardFocusHere(0);
     }
+
     static ImGuiTextFilter relationshipFilter;
     ImGuiTextFilter_Draw(&relationshipFilter, "##", 0);
     ecs_iter_t relationshipIter = ecs_query_iter(world, relationshipQuery);
     static s32 relationshipPage = 0;
-    entityList(world, &relationshipIter, &relationshipFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &relationshipPage, &relationship);
+    entityList(world, &relationshipIter, &relationshipFilter, (ImVec2){200.0, itemHeight * 10.0}, 10, &relationshipPage, &relationship);
+    //igEndChild();
     igEndGroup();
     igPopID();
 
@@ -752,10 +756,12 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
 
     igPushID_Str("target");
     igBeginGroup();
+
+    igText("Target");
     static ImGuiTextFilter targetFilter;
     ImGuiTextFilter_Draw(&targetFilter, "##", 0);
     static s32 targetPage = 0;
-    entityList(world, &targetIter, &targetFilter, (ImVec2){200.0, itemHeight * 10.0}, 25, &targetPage, &target);
+    entityList(world, &targetIter, &targetFilter, (ImVec2){200.0, itemHeight * 10.0}, 10, &targetPage, &target);
     igEndGroup();
     igPopID();
 
@@ -787,10 +793,12 @@ bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *
 
 bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImVec2 size, s32 pageLength, s32 *pageNumber, ecs_entity_t *selected) {
     bool anyClicked = false;
-    //igPushID_Str("Query Results");
-    igBeginChild_Str("Entity List", size, true, ImGuiWindowFlags_HorizontalScrollbar);
+    //igBeginChild_Str("List Window", size, true, ImGuiWindowFlags_None);
+    float height = igGetTextLineHeightWithSpacing() * (pageLength + 1);
+    igBeginChild_Str("Entity List", (ImVec2){size.x, height}, true, ImGuiWindowFlags_HorizontalScrollbar);
     u32 resultsCount = 0;
-    u32 firstResult = pageLength * *pageNumber;
+    *pageNumber = max_int(1, *pageNumber);
+    u32 firstResult = pageLength * (*pageNumber - 1);
     u32 lastResult = firstResult + pageLength;
 
     while (ecs_iter_next(it)) {
@@ -825,26 +833,25 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
             }
         }
     }
+    igEndChild(); // Entity List
     // TODO: after converting to table, add blank rows so other controls don't change position
-    // TODO: make page number optional, display "x more results..." if not provided
     igValue_Uint("Results", resultsCount);
-    s32 pageCount = max_int((s32)ceilf((float)resultsCount / pageLength) - 1, 0);
-    if (pageCount > 0) {
-        if (igArrowButton("page_left", ImGuiDir_Left)) *pageNumber--;
+    s32 pageCount = ((resultsCount - 1) / pageLength) + 1;
+    if (pageCount > 1) {
+        if (igArrowButton("page_left", ImGuiDir_Left)) (*pageNumber)--;
         igSameLine(0, -1);
-        if (igArrowButton("page_right", ImGuiDir_Right)) *pageNumber++;
+        if (igArrowButton("page_right", ImGuiDir_Right)) (*pageNumber)++;
         igSameLine(0, -1);
-        igSliderInt("Page", pageNumber, 0, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
+        igSliderInt("Page", pageNumber, 1, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
     }
-    *pageNumber = min_int(*pageNumber, pageCount);
-    //igPopID();
-    igEndChild();
+    *pageNumber = max_int(1, min_int(*pageNumber, pageCount));
+    //igEndChild(); // List Window
     
     return anyClicked;
 
-    // // FIXME: extremely minor, but this will display '0 more results' when fullCount is exactly maxDisplayedResults
-    // if (displayedCount == maxDisplayedResults) {
-    //     igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", fullCount - maxDisplayedResults);
+    // TODO: make page number optional, display "x more results..." if not provided
+    // if (resultsCount > pageLength) {
+    //     igTextColored((ImVec4){0.5, 0.5, 0.5, 1.0}, "%i more results...", resultsCount - pageLength);
     // }
 }
 
