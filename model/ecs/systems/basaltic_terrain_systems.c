@@ -42,7 +42,7 @@ void chunkUpdate(Plane *plane, u64 step, size_t chunkIndex) {
         s32 biotemp = plane_GetCellBiotemperature(plane, cellCoord);
         float relativeTemp = sinf((float)step * 2.0 * 3.14169 / 240.0) * 1000.0; // in centacelsius, +/- 10 deg
         float realTemp = (float)biotemp + relativeTemp;
-        bool isGrowingSeason = relativeTemp > 0.0 && realTemp < 3000.0;
+        bool isGrowingSeason = realTemp > 0.0 && realTemp < 3000.0;
 
         // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
         if (htw_randRange(256 * 128) < cell->surfacewater) {

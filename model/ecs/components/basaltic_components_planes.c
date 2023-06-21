@@ -133,7 +133,7 @@ s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
     // "Temperatures in the atmosphere decrease with height at an average rate of 6.5 °C per kilometer"; height steps are 100m
     const s32 centicelsiusPerHeightUnit = -65;
     s32 latitudeTemp = htw_geo_circularGradientByGridCoord(
-        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -3000, 4000, plane->chunkMap->mapWidth * 0.67);
+        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -2000, 4000, plane->chunkMap->mapWidth * 0.67);
     s32 altitude = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
     return latitudeTemp + (abs(altitude) * centicelsiusPerHeightUnit);
 }
