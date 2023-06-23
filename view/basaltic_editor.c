@@ -1018,7 +1018,8 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
                 }
                 igEndDragDropTarget();
             }
-            if (focusEntity != NULL) {
+            // FIXME: crash when editing other fields after assigning entity?
+            if (e != 0) {
                 // no reason to drag an invalid entity
                 if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
                     igSetDragDropPayload("BC_PAYLOAD_ENTITY", field, sizeof(ecs_entity_t), ImGuiCond_None);
@@ -1031,8 +1032,8 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
                     *focusEntity = e;
                 }
             }
-        }
             break;
+        }
         default:
             igText("Error: unhandled primitive type");
             break;
