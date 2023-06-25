@@ -25,6 +25,11 @@ ECS_STRUCT(Group, {
     u32 count;
 });
 
+ECS_STRUCT(GrowthRate, {
+    u32 stepsRequired;
+    u32 progress;
+});
+
 ECS_STRUCT(Spawner, {
     ecs_entity_t prefab;
     u32 count;
@@ -40,6 +45,13 @@ ECS_ENUM(ActorSize, {
     ACTOR_SIZE_LARGE = 5, // horse, crocodile
     ACTOR_SIZE_HUGE = 6, // moose, rhino
     ACTOR_SIZE_ENORMOUS = 7, //elephant and larger
+});
+
+ECS_STRUCT(Condition, {
+    s16 maxHealth;
+    s16 health;
+    s16 maxStamina;
+    s16 stamina;
 });
 
 void BcActorsImport(ecs_world_t *world);

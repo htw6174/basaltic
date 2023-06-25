@@ -30,6 +30,13 @@ void egoBehaviorPredator(ecs_iter_t *it);
 void executeMove(ecs_iter_t *it);
 void executeFeed(ecs_iter_t *it);
 
+void resolveHealth(ecs_iter_t *it);
+
+void mergeGroups(ecs_iter_t *it);
+
+void tickGrowth(ecs_iter_t *it);
+void tickStamina(ecs_iter_t *it);
+
 // TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
 void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
     ecs_defer_begin(world);
@@ -350,20 +357,115 @@ void executeFeed(ecs_iter_t *it) {
     const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
     htw_ChunkMap *cm = tm->chunkMap;
     ecs_entity_t diet = ecs_pair_second(it->world, ecs_field_id(it, 3));
-    if (ecs_field_is_set(it, 4)) {
+    Condition *conditions = ecs_field(it, Condition, 4);
+    if (ecs_field_is_set(it, 5)) {
         // multiply consumed amount by group size
-        Group *groups = ecs_field(it, Group, 4);
+        Group *groups = ecs_field(it, Group, 5);
         for (int i = 0; i < it->count; i++) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
-            s32 consumed = min_int(cell->understory, groups[i].count);
+            s32 required = groups[i].count; // TODO: multiply by size?
+            s32 consumed = min_int(cell->understory, required);
             cell->understory -= consumed;
+            // Restore up to half of max each meal TODO best rounding method?
+            s32 restored = roundf( ((float)conditions[i].maxStamina / 2) * ((float)consumed / required) );
+            conditions[i].stamina = min_int(conditions[i].stamina + restored, conditions[i].maxStamina);
         }
     } else {
         for (int i = 0; i < it->count; i++) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
             s32 consumed = min_int(cell->understory, 1);
             cell->understory -= consumed;
+            s32 restored = conditions[i].maxStamina / 2; // Restore half of max each meal
+            conditions[i].stamina = min_int(conditions[i].stamina + restored, conditions[i].maxStamina);
         }
+    }
+}
+
+void resolveHealth(ecs_iter_t *it) {
+    Condition *conditions = ecs_field(it, Condition, 1);
+    Group *groups = ecs_field(it, Group, 2);
+
+    for (int i = 0; i < it->count; i++) {
+        // apply starvation
+        if (conditions[i].stamina <= -conditions[i].maxStamina) {
+            conditions[i].health -= groups[i].count;
+        } else if (conditions[i].stamina > 0) {
+            // heal if not malnourished
+            conditions[i].health = min_int(conditions[i].health + 1, conditions[i].maxHealth);
+        }
+
+        // handle group member death
+        // NOTE: 2x2 options: reduce group count according to how far in the red health is, or only kill one at a time; reset health to max, or increasae by max so that damage can 'overflow'
+        // for now, try simplest option: reduce by 1 and reset to max
+        if (conditions[i].health <= 0) {
+            conditions[i].health = conditions[i].maxHealth;
+            groups[i].count -= 1;
+            // destroy empty group
+            if (groups[i].count <= 0) {
+                ecs_delete(it->world, it->entities[i]);
+            }
+        }
+    }
+}
+
+void mergeGroups(ecs_iter_t *it) {
+    Position *positions = ecs_field(it, Position, 1);
+    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+    htw_ChunkMap *cm = tm->chunkMap;
+    Group *groups = ecs_field(it, Group, 3);
+    ecs_entity_t prefab = ecs_pair_second(it->world, ecs_field_id(it, 4));
+
+    for (int i = 0; i < it->count; i++) {
+
+        ecs_entity_t root = plane_GetRootEntity(it->world, tmEnt, positions[i]);
+        // filter for: entities in root's hierarchy tree & instances of the same prefab & is a group
+        ecs_filter_t *filter = ecs_filter(it->world, {
+            .terms = {
+                {ecs_id(Group)},
+                {ecs_pair(EcsIsA, prefab)},
+                {ecs_pair(EcsChildOf, root)}
+            }
+        });
+        ecs_iter_t fit = ecs_filter_iter(it->world, filter);
+        while (ecs_filter_next(&fit)) {
+            Group *otherGroups = ecs_field(&fit, Group, 1);
+
+            for (int f = 0; f < fit.count; f++) {
+                // TODO better rule later; for now only merge with groups at least 10x the size
+                if (otherGroups[i].count >= groups[i].count * 8) {
+                    // merge into other group and delete original TODO: setup test scenario, doesn't occour naturally very often
+                    otherGroups[i].count += groups[i].count;
+                    ecs_defer_begin(it->world);
+                    ecs_delete(it->world, it->entities[i]);
+                    ecs_defer_end(it->world);
+                }
+            }
+        }
+        ecs_filter_fini(filter);
+    }
+}
+
+void tickGrowth(ecs_iter_t *it) {
+    GrowthRate *growthRates = ecs_field(it, GrowthRate, 1);
+    Group *groups = ecs_field(it, Group, 2);
+
+    for (int i = 0; i < it->count; i++) {
+        growthRates[i].progress += groups[i].count / 2;
+        if (growthRates[i].progress >= growthRates[i].stepsRequired) {
+            growthRates[i].progress = 0;
+            groups[i].count += 1;
+        }
+    }
+}
+
+void tickStamina(ecs_iter_t *it) {
+    Condition *conditions = ecs_field(it, Condition, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        s32 maxStam = conditions[i].maxStamina;
+        s32 newStam = conditions[i].stamina - 1;
+        conditions[i].stamina = max_int(-maxStam, newStam);
     }
 }
 
@@ -443,27 +545,70 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [in] Position,
                [in] (bc.planes.IsOn, _),
                [in] (bc.wildlife.Diet, _),
+               [in] Condition,
                [in] ?Group,
                [none] (bc.actors.Action, bc.actors.Action.ActionFeed)
     );
 
+    ECS_SYSTEM(world, resolveHealth, Resolution,
+               [inout] Condition,
+               [inout] Group
+    );
+
+    ECS_SYSTEM(world, mergeGroups, Cleanup,
+               [in] Position,
+               [in] (bc.planes.IsOn, _),
+               [inout] Group,
+               [in] (IsA, _) // TODO: consider a better way to determine merge compatability. Can't use query variables for cached queries
+    );
+    ecs_system(world, {
+        .entity = mergeGroups,
+        .no_readonly = true
+    });
+
+    ECS_SYSTEM(world, tickGrowth, AdvanceHour,
+               [inout] GrowthRate,
+               [inout] Group
+    );
+
+    ECS_SYSTEM(world, tickStamina, AdvanceHour,
+               [inout] Condition
+    );
+
     /* Prefabs */
+
+    // actor
+    ecs_entity_t actorPrefab = ecs_set_name(world, 0, "actorPrefab");
+    ecs_add_id(world, actorPrefab, EcsPrefab);
+    ecs_override(world, actorPrefab, Position);
+    ecs_override(world, actorPrefab, Destination);
+    ecs_override(world, actorPrefab, Condition);
 
     // wolf pack
     ecs_entity_t wolfPackPrefab = ecs_set_name(world, 0, "WolfPackPrefab");
     ecs_add_id(world, wolfPackPrefab, EcsPrefab);
+    ecs_add_pair(world, wolfPackPrefab, EcsIsA, actorPrefab);
     ecs_add_pair(world, wolfPackPrefab, Ego, EgoPredator);
     ecs_add_pair(world, wolfPackPrefab, Diet, Meat);
+    ecs_set(world, wolfPackPrefab, Condition, {.maxHealth = 30, .health = 30, .maxStamina = 150, .stamina = 150});
+    ecs_override(world, wolfPackPrefab, Condition);
     ecs_set(world, wolfPackPrefab, Group, {.count = 10});
     ecs_override(world, wolfPackPrefab, Group);
+    ecs_set(world, wolfPackPrefab, GrowthRate, {.stepsRequired = 360 * 24, .progress = 0});
+    ecs_override(world, wolfPackPrefab, GrowthRate);
     ecs_set(world, wolfPackPrefab, ActorSize, {ACTOR_SIZE_AVERAGE});
 
     // bison herd
     ecs_entity_t bisonHerdPrefab = ecs_set_name(world, 0, "BisonHerdPrefab");
     ecs_add_id(world, bisonHerdPrefab, EcsPrefab);
+    ecs_add_pair(world, bisonHerdPrefab, EcsIsA, actorPrefab);
     ecs_add_pair(world, bisonHerdPrefab, Ego, EgoGrazer);
     ecs_add_pair(world, bisonHerdPrefab, Diet, Grasses);
-    ecs_set(world, bisonHerdPrefab, Group, {.count = 30});
+    ecs_set(world, bisonHerdPrefab, Condition, {.maxHealth = 100, .health = 100, .maxStamina = 25, .stamina = 25});
+    ecs_override(world, bisonHerdPrefab, Condition);
+    ecs_set(world, bisonHerdPrefab, Group, {.count = 100});
     ecs_override(world, bisonHerdPrefab, Group);
+    ecs_set(world, bisonHerdPrefab, GrowthRate, {.stepsRequired = 360 * 24, .progress = 0});
+    ecs_override(world, bisonHerdPrefab, GrowthRate);
     ecs_set(world, bisonHerdPrefab, ActorSize, {ACTOR_SIZE_LARGE});
 }
