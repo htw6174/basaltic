@@ -13,6 +13,7 @@ bc_WindowContext *bc_createWindow(u32 width, u32 height) {
     wc->height = height;
     wc->window = createWindow(width, height);
     wc->frame = 0;
+    wc->performanceFrequency = SDL_GetPerformanceFrequency();
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -21,6 +22,8 @@ bc_WindowContext *bc_createWindow(u32 width, u32 height) {
     if (glc == NULL) {
         printf("Failed to create GL Context: %s\n", SDL_GetError());
     }
+    SDL_GL_SetSwapInterval(1); // enable vsync for framerate limiting
+
     if (SDL_GL_MakeCurrent(wc->window, glc) != 0) {
         printf("Failed to activate GL Context: %s\n", SDL_GetError());
     }

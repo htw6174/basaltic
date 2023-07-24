@@ -28,9 +28,6 @@ typedef struct {
 
 bc_EngineSettings *loadEngineConfig(char *path);
 
-void beginFrame(bc_WindowContext *wc);
-void endFrame(bc_WindowContext *wc);
-
 void startModel(SuperContext *sc);
 void stopModel(SDL_Thread **modelThread, bc_ModelData **modelData);
 void loadModel(char *path);
@@ -70,7 +67,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
 
     sc.superInterface->signal = BC_SUPERVISOR_SIGNAL_NONE;
 
-    u32 frameInterval = 1000 / sc.engineConfig->frameRateLimit;
+    //u32 frameInterval = 1000 / sc.engineConfig->frameRateLimit;
 
     bc_WindowContext *wc = bc_createWindow(1280, 720);
     // TODO: rework imgui editor to use openGL backend from sokol
@@ -100,8 +97,11 @@ int bc_startEngine(bc_StartupSettings startSettings) {
             break;
     }
 
+    u64 lastFrameStart = SDL_GetPerformanceCounter();
     while (sc.appState == BC_PROCESS_STATE_RUNNING) {
-        Uint64 startTime = wc->milliSeconds = SDL_GetTicks64();
+        u64 frameStart = SDL_GetPerformanceCounter();
+        wc->lastFrameDuration = frameStart - lastFrameStart;
+        lastFrameStart = frameStart;
 
         if (sc.isModelDataReady == true && isModelPassedToView == false) {
             md = sc.modelData;
@@ -126,7 +126,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
 
         bc_view_processInputState(sc.inputBuffer, passthroughMouse, passthroughKeyboard);
 
-        beginFrame(wc);
+        bc_view_beginFrame(wc);
         bc_view_drawFrame(sc.superInterface, md, wc, sc.inputBuffer);
 
         if (editorEngineContext.isActive) {
@@ -136,7 +136,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
             bc_endEditor();
         }
 
-        endFrame(wc);
+        bc_view_endFrame(wc);
 
         // handle superInterface signals
         switch (sc.superInterface->signal) {
@@ -170,15 +170,24 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         }
 
         // delay until end of frame
-        Uint64 endTime = SDL_GetTicks64();
-        Uint64 duration = endTime - startTime;
+        // Uint64 endTime = SDL_GetTicks64();
+        // Uint64 duration = endTime - startTime;
+        // u64 frameMod = wc->frame % bc_frameHistoryLength;
+        // superInfo->frameDurations[frameMod] = duration;
+        // if (duration < frameInterval) {
+        //     SDL_Delay(frameInterval - duration);
+        // }
+        // wc->lastFrameDuration = max_int(duration, frameInterval);
+        // wc->frame++;
+
+        // frame timings
+        u64 frameEnd = SDL_GetPerformanceCounter();
+        u64 duration = frameEnd - frameStart;
         u64 frameMod = wc->frame % bc_frameHistoryLength;
         superInfo->frameDurations[frameMod] = duration;
-        if (duration < frameInterval) {
-            SDL_Delay(frameInterval - duration);
-        }
-        wc->lastFrameDuration = max_int(duration, frameInterval);
         wc->frame++;
+
+        SDL_GL_SwapWindow(wc->window);
     }
 
     // repeated here just to be safe
@@ -204,15 +213,6 @@ bc_EngineSettings *loadEngineConfig(char *path) {
         .tickRateLimit = 60,
     };
     return engineConfig;
-}
-
-void beginFrame(bc_WindowContext *wc) {
-    bc_view_beginFrame(wc);
-}
-
-void endFrame(bc_WindowContext *wc) {
-    bc_view_endFrame(wc);
-    SDL_GL_SwapWindow(wc->window);
 }
 
 void startModel(SuperContext *sc) {

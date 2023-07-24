@@ -8,7 +8,8 @@ typedef struct {
     u32 width, height;
     u64 milliSeconds; // Milliseconds since program start
     u64 frame; // Number of frames since program start
-    u64 lastFrameDuration; // In milliseconds
+    u64 performanceFrequency; // From SDL_GetPerformanceFrequency; high performance counter ticks per second
+    u64 lastFrameDuration; // interval between frame start SDL_GetPerformanceCounter calls
     SDL_Window *window;
     SDL_GLContext glContext;
 } bc_WindowContext;

@@ -131,12 +131,12 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     }
     */
 
-    igBegin("View Inspector", NULL, 0);
+    igBegin("View Inspector", NULL, ImGuiWindowFlags_None);
     ecsWorldInspector(viewWorld, &viewInspector);
     igEnd();
 
 
-    igBegin("Model Inspector", NULL, 0);
+    igBegin("Model Inspector", NULL, ImGuiWindowFlags_None);
     if (model == NULL) {
         igText("Generation Settings");
 

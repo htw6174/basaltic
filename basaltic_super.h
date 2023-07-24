@@ -21,8 +21,7 @@ typedef struct {
 } bc_EngineSettings;
 
 typedef struct {
-    // TODO: move frame time tracking to bc_WindowContext?
-    u64 *frameDurations;
+    u64 *frameDurations; // interval between start and end of frame SDL_GetPerformanceCounter calls
     u64 *tickDurations;
     u64 *worldStepHistory;
 } bc_SuperInfo;

@@ -18,6 +18,9 @@ bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc)
     ImGui_ImplSDL2_InitForOpenGL(wc->window, wc->glContext);
     ImGui_ImplOpenGL3_Init("#version 330");
 
+    ImGuiIO *igio = igGetIO();
+    igio->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
     bc_EditorEngineContext newEditor = {
         .isActive = isActiveAtStart,
         .showDemoWindow = false,
@@ -73,6 +76,9 @@ void bc_endEditor() {
 }
 
 void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_SuperInfo *superInfo, bc_EngineSettings *engineSettings) {
+    // enable docking over entire screen
+    igDockSpaceOverViewport(igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
+
     igBegin("Engine Options", NULL, 0);
 
     igText("Press backquote (`/~) to toggle editor");
@@ -86,35 +92,23 @@ void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_Sup
         igShowDemoWindow(&eec->showDemoWindow);
     }
 
-    // NOTE: model start/stop buttons have been moved to the Model module. Any reason to restore the functionality here?
-    // if (igButton("Start Model", (ImVec2){0, 0})) {
-    //     bc_requestModelStop();
-    //     eec->modelRestarting = true;
-    // }
-    //
-    // if (!eec->modelRestarting) {
-    //     if (igButton("Stop Model", (ImVec2){0, 0})) {
-    //         bc_requestModelStop();
-    //     }
-    // }
-    //
-    // if (eec->modelRestarting == true) {
-    //     if (bc_isModelRunning() == false) {
-    //         // TODO: maybe shouldn't do this here. Parameters need to be added to ModelStartSettings struct
-    //         //bc_startNewGame(eec->worldChunkWidth, eec->worldChunkHeight, eec->newGameSeed);
-    //         eec->modelRestarting = false;
-    //     }
-    // }
-
     igEnd();
 
     igBegin("Performance", NULL, 0);
 
     u64 frameMod = (wc->frame - 1) % bc_frameHistoryLength; // Need to get info for previous frame because current frame time hasn't been recorded yet
-    float lastFrameDuration = (float)superInfo->frameDurations[frameMod] / 1000.0;
+    float lastFrameDuration = (float)superInfo->frameDurations[frameMod] / wc->performanceFrequency; // in seconds
     eec->maxFrameDuration = fmaxf(eec->maxFrameDuration, lastFrameDuration);
     eec->frameDurationHistory[frameMod] = lastFrameDuration;
     igPlotLines_FloatPtr("Frame time", eec->frameDurationHistory, bc_frameHistoryLength, frameMod, "", 0.0, eec->maxFrameDuration, (ImVec2){0, 0}, sizeof(float));
+
+    float sumOfTimes = 0.0;
+    for (int i = 0; i < bc_frameHistoryLength; i++) {
+        sumOfTimes += superInfo->frameDurations[i];
+    }
+    // Not calculating 'real' fps, because that may be limited by vsync. Instead, this represents the time it took to prepare a frame, and is a better indication of poetntial max fps
+    float avgFrameTime = ((float)sumOfTimes / bc_frameHistoryLength) / wc->performanceFrequency;
+    igValue_Float("Avg potential fps", 1.0 / avgFrameTime, "%.1f");
 
     // u64 lastWorldStep = superInfo->worldStepHistory[frameMod];
     // u64 previousSecondFrameMod = (wc->frame - 61) % bc_frameHistoryLength;
