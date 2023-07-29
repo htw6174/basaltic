@@ -179,7 +179,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
     ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
-        [in] Pipeline(up(bcview.RenderPipeline)),
+        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
@@ -217,7 +217,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     });
     ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
     ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
-    ecs_override(world, debugPrefab, InstanceBuffer); // NOTE: no need for a real instance buffer here, just want to add one to instances
+    ecs_override(world, debugPrefab, InstanceBuffer);
     ecs_override(world, debugPrefab, QueryDesc);
     ecs_override(world, debugPrefab, Color);
 

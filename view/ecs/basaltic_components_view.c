@@ -12,6 +12,9 @@ ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 ECS_TAG_DECLARE(Previous);
 
+ECS_TAG_DECLARE(VertexShaderSource);
+ECS_TAG_DECLARE(FragmentShaderSource);
+
 ECS_TAG_DECLARE(RenderPipeline);
 ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
@@ -48,8 +51,9 @@ void BcviewImport(ecs_world_t *world) {
 
     // TODO: figure out how to re-use vec3's struct_desc for Scale
     ECS_COMPONENT_DEFINE(world, Scale);
-
     ECS_COMPONENT_DEFINE(world, Color);
+
+    ECS_META_COMPONENT(world, ResourceFile);
 
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
@@ -73,8 +77,11 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Mouse);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
-    ECS_COMPONENT_DEFINE(world, Pipeline);
 
+    ECS_TAG_DEFINE(world, VertexShaderSource);
+    ECS_TAG_DEFINE(world, FragmentShaderSource);
+
+    ECS_COMPONENT_DEFINE(world, Pipeline);
     ECS_TAG_DEFINE(world, RenderPipeline);
     ecs_add_id(world, RenderPipeline, EcsTraversable);
     ecs_add_id(world, RenderPipeline, EcsOneOf);

@@ -4,6 +4,7 @@
 #include "htw_core.h"
 #include "basaltic_worldState.h"
 #include "basaltic_components.h"
+#include <time.h>
 #include "ccVector.h"
 #include "sokol_gfx.h"
 #include "flecs.h"
@@ -24,6 +25,12 @@ extern ECS_COMPONENT_DECLARE(Scale);
 
 typedef vec4 Color;
 extern ECS_COMPONENT_DECLARE(Color);
+
+ECS_STRUCT(ResourceFile, {
+    // NOTE: should be explicitly time_t; need to add meta info first
+    u64 accessTime; // update whenever file is read; if modify time on disk is > this, should reload file
+    char path[256];
+});
 
 
 
@@ -138,8 +145,12 @@ ECS_STRUCT(ModelMatrix, {
     mat4x4 model;
 });
 
+extern ECS_TAG_DECLARE(VertexShaderSource);
+extern ECS_TAG_DECLARE(FragmentShaderSource);
+
 ECS_STRUCT(Pipeline, {
     sg_pipeline pipeline;
+    sg_shader shader;
 });
 
 // Relationship where the target is a Pipeline entity

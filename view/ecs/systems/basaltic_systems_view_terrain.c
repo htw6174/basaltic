@@ -6,6 +6,7 @@
 #include "htw_core.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
+#include <sys/stat.h>
 #ifdef _WIN32
 #include <GL/glew.h>
 #else
@@ -19,7 +20,7 @@ typedef struct {
     vec3 barycentric;
     s16 localX;
     s16 localY;
-} bc_HexmapVertexData;
+} hexmapVertexData;
 
 typedef struct {
     vec4 position;
@@ -38,7 +39,7 @@ typedef struct {
     u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
     u16 unused2; // weather / temporary effect bitmask?
     //int64_t aligner;
-} bc_TerrainCellData;
+} terrainCellData;
 
 vec3 barycentric(vec2 p, vec2 left, vec2 right);
 vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
@@ -46,6 +47,8 @@ vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
 Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
 void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
+
+Pipeline createHexTerrainPipeline(const char *vertSourcePath, const char *fragSourcePath);
 
 void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex);
 
@@ -130,9 +133,9 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
     // TEST
     printf("Creating tri grid mesh:\n- %u subdivisions\n- %u verts\n- %u tris\n", subdivisions, vertexCount, triangleCount);
 
-    size_t vertexBufferSize = vertexCount * sizeof(bc_HexmapVertexData);
+    size_t vertexBufferSize = vertexCount * sizeof(hexmapVertexData);
     size_t elementBufferSize = elementCount * sizeof(u32);
-    bc_HexmapVertexData *verts = calloc(1, vertexBufferSize);
+    hexmapVertexData *verts = calloc(1, vertexBufferSize);
     u32 *elements = calloc(1, elementBufferSize);
 
     // vertex data
@@ -149,7 +152,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
             for (int v = 0; v < 3; v++) {
                 vec2 pos = hexagonPositions[v];
                 int neighborhood = max_int(0, v - 1);
-                bc_HexmapVertexData newVertex = {
+                hexmapVertexData newVertex = {
                     .position = vec2Add(pos, cellPos),
                     .neighborWeight = neighborhood,
                     .barycentric = getHexVertBarycentric(pos, neighborhood),
@@ -165,7 +168,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
                 vec2 pos2 = hexagonPositions[v + 1];
                 vec2 pos = vec2Mix(pos1, pos2, 0.5);
                 int neighborhood = v;
-                bc_HexmapVertexData newVertex = {
+                hexmapVertexData newVertex = {
                     .position = vec2Add(pos, cellPos),
                     .neighborWeight = neighborhood,
                     .barycentric = getHexVertBarycentric(pos, neighborhood),
@@ -181,7 +184,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
                 vec2 pos2 = hexagonPositions[edgeIndicies[v + 1]];
                 vec2 pos = vec2Mix(pos1, pos2, 0.5);
                 int neighborhood = edgeIndicies[v] - 1;
-                bc_HexmapVertexData newVertex = {
+                hexmapVertexData newVertex = {
                     .position = vec2Add(pos, cellPos),
                     .neighborWeight = neighborhood,
                     .barycentric = getHexVertBarycentric(pos, neighborhood),
@@ -290,7 +293,7 @@ Mesh createHexmapMesh(void) {
     const u32 topSideVerts = width * 3;
     const u32 topRightCornerVerts = 1;
     const u32 vertexCount = (vertsPerCell * cellCount) + rightSideVerts + topSideVerts + topRightCornerVerts;
-    const u32 vertexSize = sizeof(bc_HexmapVertexData);
+    const u32 vertexSize = sizeof(hexmapVertexData);
     // NOTE: tri variables contain the number of indicies for each area, not number of triangles
     const u32 trisPerHex = 3 * 6;
     const u32 trisPerQuad = 3 * 2;
@@ -326,7 +329,7 @@ Mesh createHexmapMesh(void) {
 
     // create and write model data for each cell
     // vert and tri array layout: [main chunk data (left to right, bottom to top), right chunk edge strip (bottom to top), top chunk edge strip (left to right), top-right corner infill]
-    bc_HexmapVertexData *vertexData = malloc(vertexDataSize);
+    hexmapVertexData *vertexData = malloc(vertexDataSize);
     u32 *triData = malloc(indexDataSize);
     u32 vIndex = 0;
     u32 tIndex = 0;
@@ -340,7 +343,7 @@ Mesh createHexmapMesh(void) {
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 vec2 pos = hexagonPositions[v];
                 int neighborhood = max_int(0, v - 1);
-                bc_HexmapVertexData newVertex = {
+                hexmapVertexData newVertex = {
                     .position = vec2Add(pos, (vec2){{posX, posY}}),
                     .neighborWeight = neighborhood,
                     .barycentric = getHexVertBarycentric(pos, neighborhood),
@@ -489,7 +492,7 @@ Mesh createHexmapMesh(void) {
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = leftEdgeConnectionVerts[v];
             vec2 pos = hexagonPositions[hexPosIndex];
-            bc_HexmapVertexData newVertex = {
+            hexmapVertexData newVertex = {
                 .position = vec2Add(pos, (vec2){{posX, posY}}),
                 .neighborWeight = hexPosIndex - 1,
                 .barycentric = getHexVertBarycentric(pos, hexPosIndex - 1),
@@ -550,7 +553,7 @@ Mesh createHexmapMesh(void) {
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             u32 hexPosIndex = topEdgeConnectionVerts[v];
             vec2 pos = hexagonPositions[hexPosIndex];
-            bc_HexmapVertexData newVertex = {
+            hexmapVertexData newVertex = {
                 .position = vec2Add(pos, (vec2){{posX, posY}}),
                 .neighborWeight = hexPosIndex - 1,
                 .barycentric = getHexVertBarycentric(pos, hexPosIndex - 1),
@@ -575,7 +578,7 @@ Mesh createHexmapMesh(void) {
             float posX, posY;
             htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
             vec2 pos = hexagonPositions[5];
-            bc_HexmapVertexData newVertex = {
+            hexmapVertexData newVertex = {
                 .position = vec2Add(pos, (vec2){{posX, posY}}),
                 .neighborWeight = 5 - 1,
                 .barycentric = getHexVertBarycentric(pos, 5 - 1),
@@ -752,11 +755,9 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
     }
 }
 
-void SetupPipelineHexTerrain(ecs_iter_t *it) {
-    RenderDistance *rd = ecs_field(it, RenderDistance, 1);
-
-    char *vert = htw_load("view/shaders/hexTerrain.vert");
-    char *frag = htw_load("view/shaders/hexTerrain.frag");
+Pipeline createHexTerrainPipeline(const char *vertSourcePath, const char *fragSourcePath) {
+    char *vert = htw_load(vertSourcePath);
+    char *frag = htw_load(fragSourcePath);
 
     // TODO: better way to setup uniform block descriptions? Maybe add description as component to each uniform component, or use sokol's shader reflection to autogen
     sg_shader_uniform_block_desc vsdGlobal = {
@@ -850,12 +851,53 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
     };
     sg_pipeline pip = sg_make_pipeline(&pd);
 
-    //Mesh mesh = createHexmapMesh();
-    Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
+    sg_reset_state_cache();
+
+    return (Pipeline){pip, terrainShader};
+}
+
+void SetupPipelineHexTerrain(ecs_iter_t *it) {
+    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
+    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
 
     for (int i = 0; i < it->count; i++) {
-        ecs_set(it->world, it->entities[i], Pipeline, {pip});
-        ecs_set_id(it->world, it->entities[i], ecs_id(Mesh), sizeof(mesh), &mesh);
+        vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
+        Pipeline pip = createHexTerrainPipeline(vertSources[i].path, fragSources[i].path);
+        ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(pip), &pip);
+    }
+}
+
+void ReloadPipelineHexTerrain(ecs_iter_t *it) {
+    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
+    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
+    Pipeline *pipelines = ecs_field(it, Pipeline, 3);
+
+    for (int i = 0; i < it->count; i++) {
+        time_t vLastAccess = vertSources[i].accessTime;
+        time_t fLastAccess = fragSources[i].accessTime;
+
+        struct stat fileStat = {0};
+        //int err = stat(vertSources[i].path, &fileStat);
+        //assert(err == 0);
+        time_t vModifyTime = 0; //fileStat.st_mtime;
+        int err = stat(fragSources[i].path, &fileStat);
+        assert(err == 0);
+        time_t fModifyTime = fileStat.st_mtime;
+
+        if (vModifyTime > vLastAccess || fModifyTime > fLastAccess) {
+            vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
+            sg_destroy_pipeline(pipelines[i].pipeline);
+            sg_destroy_shader(pipelines[i].shader);
+            Pipeline pip = createHexTerrainPipeline(vertSources[i].path, fragSources[i].path);
+            ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(pip), &pip);
+        }
+    }
+}
+
+void InitTerrainBuffers(ecs_iter_t *it) {
+    RenderDistance *rd = ecs_field(it, RenderDistance, 1);
+
+    for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], QueryDesc, {
             .desc.filter.terms = {{
                 .id = ecs_id(Plane), .inout = EcsIn
@@ -877,12 +919,10 @@ void SetupPipelineHexTerrain(ecs_iter_t *it) {
             .renderedChunkRadius = visibilityRadius,
             .renderedChunkCount = renderedChunkCount,
             .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
-            .loadedChunks = loadedChunks,
-            .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
+                .loadedChunks = loadedChunks,
+                .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
         });
     }
-
-    sg_reset_state_cache();
 }
 
 void UpdateHexTerrainBuffers(ecs_iter_t *it) {
@@ -1101,13 +1141,27 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
 
-    ECS_SYSTEM(world, SetupPipelineHexTerrain, EcsOnStart,
-               [in] RenderDistance($),
-               [out] !Pipeline,
-               [out] !Mesh,
-               [out] !QueryDesc,
-               [out] !TerrainBuffer,
+    ECS_OBSERVER(world, SetupPipelineHexTerrain, EcsOnAdd,
+               [inout] (ResourceFile, bcview.VertexShaderSource),
+               [inout] (ResourceFile, bcview.FragmentShaderSource),
+               [out] Pipeline,
                [none] bcview.TerrainRender,
+    );
+
+    ECS_SYSTEM(world, ReloadPipelineHexTerrain, EcsOnUpdate,
+               [inout] (ResourceFile, bcview.VertexShaderSource),
+               [inout] (ResourceFile, bcview.FragmentShaderSource),
+               [out] Pipeline,
+               [none] bcview.TerrainRender,
+    );
+
+    //ecs_enable(world, ReloadPipelineHexTerrain, false);
+
+    ECS_OBSERVER(world, InitTerrainBuffers, EcsOnAdd,
+        [in] RenderDistance($),
+        [out] TerrainBuffer,
+        [out] ?QueryDesc,
+        [none] bcview.TerrainRender,
     );
 
     // ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
@@ -1117,8 +1171,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     //            [none] bcview.TerrainRender,
     // );
 
-    ECS_SYSTEM(world, InitTerrainInstances, EcsOnUpdate,
-               [out] !InstanceBuffer,
+    ECS_OBSERVER(world, InitTerrainInstances, EcsOnAdd,
+               [out] InstanceBuffer,
                [none] bcview.TerrainRender,
     );
 
@@ -1152,7 +1206,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     );
 
     ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
-               [in] Pipeline,
+               [in] Pipeline(up(bcview.RenderPipeline)),
                [in] InstanceBuffer,
                [in] Mesh,
                [in] TerrainBuffer,
@@ -1177,9 +1231,26 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 
-    ecs_entity_t terrainDraw = ecs_set_name(world, 0, "DrawQuery terrain");
-    ecs_add(world, terrainDraw, TerrainRender);
+    // Pipeline, only need to create one per type
+    ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "TerrainPipeline");
+    ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
+    // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last
+    ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
+    ecs_add_pair(world, terrainPipeline, EcsChildOf, RenderPipeline);
+    ecs_add(world, terrainPipeline, Pipeline);
+    ecs_add(world, terrainPipeline, TerrainRender);
 
+    // Init mesh TODO: give this a better home?
+    //Mesh mesh = createHexmapMesh();
+    Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
+
+    ecs_entity_t terrainDraw = ecs_set_name(world, 0, "TerrainDraw");
+    ecs_add_pair(world, terrainDraw, RenderPipeline, terrainPipeline);
+    ecs_add(world, terrainDraw, TerrainRender);
+    ecs_add(world, terrainDraw, TerrainBuffer);
+    ecs_add(world, terrainDraw, InstanceBuffer);
+    ecs_add(world, terrainDraw, QueryDesc);
+    ecs_set_id(world, terrainDraw, ecs_id(Mesh), sizeof(mesh), &mesh);
     // TEST: add textures. Should have a better loader for this eventually, would be super nice to swap out in the editor.
     ecs_set(world, terrainDraw, Texture, {
         .images[0] = bc_loadImage("view/textures/tropic_plants_c.png"),

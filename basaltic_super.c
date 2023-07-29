@@ -169,17 +169,6 @@ int bc_startEngine(bc_StartupSettings startSettings) {
             stopModel(&sc.modelThread, &sc.modelData);
         }
 
-        // delay until end of frame
-        // Uint64 endTime = SDL_GetTicks64();
-        // Uint64 duration = endTime - startTime;
-        // u64 frameMod = wc->frame % bc_frameHistoryLength;
-        // superInfo->frameDurations[frameMod] = duration;
-        // if (duration < frameInterval) {
-        //     SDL_Delay(frameInterval - duration);
-        // }
-        // wc->lastFrameDuration = max_int(duration, frameInterval);
-        // wc->frame++;
-
         // frame timings
         u64 frameEnd = SDL_GetPerformanceCounter();
         u64 duration = frameEnd - frameStart;
@@ -187,6 +176,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         superInfo->frameDurations[frameMod] = duration;
         wc->frame++;
 
+        // no need to delay with vsync enabled
         SDL_GL_SwapWindow(wc->window);
     }
 

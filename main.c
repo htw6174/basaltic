@@ -51,6 +51,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
                             break;
                         }
                     }
+                    i--;
                     break;
                 case 'l':
                     settings.startupMode = BC_STARTUP_MODE_LOAD_MODEL;
