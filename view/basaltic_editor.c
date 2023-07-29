@@ -917,6 +917,7 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
 void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity) {
     ecs_entity_t type = ecs_meta_get_type(cursor);
 
+    // NOTE: pushing IDs is only needed because meta inspector can recurse; Because entities can't have 2 of the same component, and components can't have 2 members with the same name, label conflicts only come up when an entity has 2 components with members of the same name e.g. Position {int x, y}, Velocity {int x, y} -> must push id of component before making label for members
     igPushID_Int(type);
     igIndent(0);
     ecs_meta_push(cursor);
@@ -938,8 +939,16 @@ void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
                     // recurse componentInspector
                     ecsMetaInspector(world, cursor, focusEntity);
                     break;
+                case EcsEnumType:
+                    igSameLine(0, -1);
+                    // TODO: proper enum inspector, use map to create selectable dropdown
+                    ecs_map_t enumMap = ecs_get(world, type, EcsEnum)->constants;
+                    s32 key = ecs_meta_get_int(cursor);
+                    ecs_enum_constant_t *enumDesc = *ecs_map_get_ref(&enumMap, ecs_enum_constant_t, key);
+                    igText("%s = %i", enumDesc->name, enumDesc->value);
+                    break;
                 default:
-                    // TODO priority order: bitmask, enum, array, vector, opaque
+                    // TODO priority order: bitmask, array, vector, opaque
                     igSameLine(0, -1);
                     igText("Unhandled type kind");
                     break;
