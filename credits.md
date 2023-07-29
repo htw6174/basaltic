@@ -1,18 +1,20 @@
-Libraries used in, but not distributed with, this project:
-[Sokol](https://github.com/floooh/sokol)
-[SDL2](https://www.libsdl.org/)
-
-Libraries redistributed with this project:
-[stb_image_write by Sean Barrett](https://github.com/nothings/stb)
+## Libraries
+Libraries redistributed with this project in whole or part:
+[flecs by Sander Mertens](https://github.com/SanderMertens/flecs)
+[stb by Sean Barrett](https://github.com/nothings/stb)
 [ccVector by Job Talle](https://github.com/jobtalle/ccVector)
 [khash by Attractive Chaos](https://github.com/attractivechaos/klib)
-[flecs by Sander Mertens](https://github.com/SanderMertens/flecs)
 
-Licenses are in the 'licenses/' directory or included in corresponding source files
+Libraries used without source redistribution:
+[Sokol](https://github.com/floooh/sokol)
+[imgui](https://github.com/ocornut/imgui), via [cimgui](https://github.com/cimgui/cimgui)
+[SDL2](https://www.libsdl.org/)
 
-Created using [KDevelop](https://www.kdevelop.org/)
+Source code and licenses for all 3rd party code can be found in `libs`
 
-Tutorials, resources, and other tools used:
+## Created using [KDevelop](https://www.kdevelop.org/)
+
+## Tutorials, resources, and other tools used:
 [Khronos Group's Vulkan Samples](https://github.com/KhronosGroup/Vulkan-Samples)
 [The Vulkan Tutorial by Alexander Overvoorde](https://vulkan-tutorial.com/)
 [The Vulkan Guide by Victor Blanco](https://vkguide.dev/)
