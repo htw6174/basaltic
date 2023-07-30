@@ -70,3 +70,45 @@ sg_image bc_loadImage(const char *filename) {
 
     return img;
 }
+
+int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const sg_shader_desc *shaderDescription, sg_shader *out_shader) {
+    char *vert = htw_load(vertSourcePath);
+    char *frag = htw_load(fragSourcePath);
+
+    // NOTE: not great to make a 3kb copy here just to set 2 pointers; better approach?
+    sg_shader_desc sd = *shaderDescription;
+    sd.vs.source = vert;
+    sd.fs.source = frag;
+
+    sg_shader shd = sg_make_shader(&sd);
+
+    free(vert);
+    free(frag);
+
+    sg_resource_state shaderState = sg_query_shader_state(shd);
+    if (shaderState == SG_RESOURCESTATE_VALID) {
+        *out_shader = shd;
+        return 0;
+    } else {
+        return -1; // TODO: optionally get more detailed error info from sokol
+    }
+}
+
+int bc_createPipeline(const sg_pipeline_desc *pipelineDescription, const sg_shader *shader, sg_pipeline *out_pipeline) {
+    sg_pipeline_desc pd = *pipelineDescription;
+    if (sg_query_shader_state(*shader) == SG_RESOURCESTATE_VALID) {
+        pd.shader = *shader;
+    } else if (sg_query_shader_state(pipelineDescription->shader) != SG_RESOURCESTATE_VALID) {
+        return -2;
+    }
+
+    sg_pipeline p = sg_make_pipeline(&pd);
+
+    sg_resource_state pipelineState = sg_query_pipeline_state(p);
+    if (pipelineState == SG_RESOURCESTATE_VALID) {
+        *out_pipeline = p;
+        return 0;
+    } else {
+        return -1; // TODO: optionally get more detailed error info from sokol
+    }
+}

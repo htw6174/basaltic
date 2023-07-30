@@ -16,60 +16,41 @@ typedef struct {
     float scale;
 } DebugInstanceData;
 
-void InitDebugPipeline(ecs_iter_t *it) {
-    char *vert = htw_load("view/shaders/debug.vert");
-    char *frag = htw_load("view/shaders/debug.frag");
-
-    // TODO: better way to setup uniform block descriptions? Maybe add description as component to each uniform component, or use sokol's shader reflection to autogen
-    sg_shader_uniform_block_desc vsdGlobal = {
+static sg_shader_desc debugShaderDescription = {
+    .vs.uniform_blocks[0] = {
         .size = sizeof(PVMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
             [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
         }
-    };
-
-    sg_shader_uniform_block_desc vsdLocal = {
+    },
+    .vs.uniform_blocks[1] = {
         .size = sizeof(ModelMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
             [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
         }
-    };
+    },
+    .vs.source = NULL,
+    .fs.source = NULL
+};
 
-    sg_shader_desc tsd = {
-        .vs.uniform_blocks[0] = vsdGlobal,
-        .vs.uniform_blocks[1] = vsdLocal,
-        .vs.source = vert,
-        .fs.source = frag
-    };
-
-    sg_pipeline_desc pd = {
-        .shader = sg_make_shader(&tsd),
-        .layout = {
-            .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
-            .attrs = {
-                [0].format = SG_VERTEXFORMAT_FLOAT4,
-                [1].format = SG_VERTEXFORMAT_FLOAT4,
-                [2].format = SG_VERTEXFORMAT_FLOAT,
-            }
-        },
-        .depth = {
-            .compare = SG_COMPAREFUNC_LESS_EQUAL,
-            .write_enabled = true
-        },
-        .cull_mode = SG_CULLMODE_NONE
-    };
-    sg_pipeline pip = sg_make_pipeline(&pd);
-
-    free(vert);
-    free(frag);
-
-    for (int i = 0; i < it->count; i++) {
-        ecs_add_pair(it->world, it->entities[i], EcsChildOf, RenderPipeline);
-        ecs_set(it->world, it->entities[i], Pipeline, {pip});
-    }
-}
+static sg_pipeline_desc debugPipelineDescription = {
+    .shader = {0},
+    .layout = {
+        .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+        .attrs = {
+            [0].format = SG_VERTEXFORMAT_FLOAT4,
+            [1].format = SG_VERTEXFORMAT_FLOAT4,
+            [2].format = SG_VERTEXFORMAT_FLOAT,
+        }
+    },
+    .depth = {
+        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+        .write_enabled = true
+    },
+    .cull_mode = SG_CULLMODE_NONE
+};
 
 // TODO: can generalize this by requiring instance size and count
 void InitDebugBuffers(ecs_iter_t *it) {
@@ -129,38 +110,11 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
     }
 }
 
-// TODO: now that this is more general, can be moved out of debug system
-void DrawInstances(ecs_iter_t *it) {
-    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
-    InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
-    Elements *eles = ecs_field(it, Elements, 3);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
-
-    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
-
-    for (int i = 0; i < it->count; i++) {
-        sg_bindings bind = {
-            .vertex_buffers[0] = ibs[0].buffer
-        };
-
-        sg_apply_pipeline(pipelines[i].pipeline);
-        sg_apply_bindings(&bind);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
-
-        bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
-    }
-}
-
 void BcviewSystemsDebugImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystemsDebug);
 
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
-
-    ECS_OBSERVER(world, InitDebugPipeline, EcsOnAdd,
-        [out] Pipeline,
-        [none] bcview.DebugRender
-    );
 
     ECS_OBSERVER(world, InitDebugBuffers, EcsOnAdd,
         [out] InstanceBuffer,
@@ -177,16 +131,6 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [none] bcview.DebugRender
     )
 
-    // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
-    ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
-        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
-        [in] InstanceBuffer,
-        [in] Elements,
-        [in] PVMatrix($),
-        //[none] ModelWorld($),
-        [none] WrapInstanceOffsets($),
-    );
-
     // Always override, so instance's model query can become a subquery of the original
     //ecs_add_id(world, ecs_id(ModelQuery), EcsAlwaysOverride);
     // Test: instead use DontInherit, so the CreateModelQueries system picks up subqueries
@@ -195,11 +139,10 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     // Pipeline, only need to create one per type
     ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugPipeline");
-    ecs_add_id(world, debugPipeline, DebugRender);
-    ecs_add(world, debugPipeline, Pipeline);
-    // OnAdd observer initializes Pipeline and makes the entity a child of RenderPipeline
-    // FIXME? To obey OneOf restriction when setting up debug prefab, need to set pipeline's parent here
     ecs_add_pair(world, debugPipeline, EcsChildOf, RenderPipeline);
+    ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
+    ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
+    ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
 
     // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
     // aka "Draw Query"

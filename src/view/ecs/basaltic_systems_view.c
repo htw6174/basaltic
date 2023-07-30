@@ -5,6 +5,8 @@
 #include "systems/basaltic_systems_view_debug.h"
 #include "htw_core.h"
 #include "sokol_gfx.h"
+#include "basaltic_sokol_gfx.h"
+#include <sys/stat.h>
 
 void UniformPointerToMouse(ecs_iter_t *it) {
     Pointer *pointers = ecs_field(it, Pointer, 1);
@@ -60,6 +62,61 @@ void UniformCameraToPVMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, PVMatrix);
 }
 
+void SetupPipelines(ecs_iter_t *it) {
+    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
+    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
+    PipelineDescription *pipelineDescriptions = ecs_field(it, PipelineDescription, 3);
+    Pipeline *pipelines = ecs_field(it, Pipeline, 4);
+
+    for (int i = 0; i < it->count; i++) {
+        vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
+        PipelineDescription pd = pipelineDescriptions[i];
+        Pipeline p;
+        int err = bc_loadShader(vertSources[i].path, fragSources[i].path, pd.shader_desc, &p.shader);
+        err |= bc_createPipeline(pd.pipeline_desc, &p.shader, &p.pipeline);
+        if (err == 0) {
+            ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(p), &p);
+        }
+    }
+}
+
+void ReloadPipelines(ecs_iter_t *it) {
+    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
+    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
+    PipelineDescription *pipelineDescriptions = ecs_field(it, PipelineDescription, 3);
+    Pipeline *pipelines = ecs_field(it, Pipeline, 4);
+
+    for (int i = 0; i < it->count; i++) {
+        time_t vLastAccess = vertSources[i].accessTime;
+        time_t fLastAccess = fragSources[i].accessTime;
+
+        struct stat fileStat;
+        int err = stat(vertSources[i].path, &fileStat);
+        if (err != 0) continue;
+        time_t vModifyTime = fileStat.st_mtime;
+
+        err = stat(fragSources[i].path, &fileStat);
+        if (err != 0) continue;
+        time_t fModifyTime = fileStat.st_mtime;
+
+        if (vModifyTime > vLastAccess || fModifyTime > fLastAccess) {
+            vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
+            PipelineDescription pd = pipelineDescriptions[i];
+            Pipeline p;
+            int err = bc_loadShader(vertSources[i].path, fragSources[i].path, pd.shader_desc, &p.shader);
+            err |= bc_createPipeline(pd.pipeline_desc, &p.shader, &p.pipeline);
+            if (err == 0) {
+                sg_destroy_pipeline(pipelines[i].pipeline);
+                sg_destroy_shader(pipelines[i].shader);
+
+                pipelines[i] = p;
+            } else {
+                // TODO: find a good way to represent that pipeline couldn't be updated
+            }
+        }
+    }
+}
+
 void CreateModelQueries(ecs_iter_t *it) {
     QueryDesc *terms = ecs_field(it, QueryDesc, 1);
 
@@ -103,6 +160,27 @@ void DestroyModelQueries(ecs_iter_t *it) {
     }
 }
 
+void DrawInstances(ecs_iter_t *it) {
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
+    InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
+    Elements *eles = ecs_field(it, Elements, 3);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
+
+    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = ibs[0].buffer
+        };
+
+        sg_apply_pipeline(pipelines[i].pipeline);
+        sg_apply_bindings(&bind);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
+
+        bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+    }
+}
+
 void BcviewSystemsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystems);
 
@@ -128,6 +206,23 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] PVMatrix($)
     );
 
+    ECS_SYSTEM(world, SetupPipelines, EcsOnUpdate,
+        [inout] (ResourceFile, bcview.VertexShaderSource),
+        [inout] (ResourceFile, bcview.FragmentShaderSource),
+        [in] PipelineDescription,
+        [out] !Pipeline,
+    );
+
+    // TODO: allow setting a limited update rate for this system
+    ECS_SYSTEM(world, ReloadPipelines, EcsOnUpdate,
+        [inout] (ResourceFile, bcview.VertexShaderSource),
+        [inout] (ResourceFile, bcview.FragmentShaderSource),
+        [in] PipelineDescription,
+        [out] Pipeline,
+    );
+
+    //ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
+
     ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
         [in] QueryDesc,
         [in] ModelWorld($),
@@ -152,6 +247,15 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_OBSERVER(world, DestroyModelQueries, EcsOnRemove,
         ModelQuery,
         [none] ModelWorld($)
+    );
+
+    // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
+    ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
+               [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
+               [in] InstanceBuffer,
+               [in] Elements,
+               [in] PVMatrix($),
+               [none] WrapInstanceOffsets($),
     );
 
     // A system with no query will run once per frame. However, an end of frame call is already being handled by the core engine. Something like this might be useful for starting and ending individual render passes

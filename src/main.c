@@ -83,7 +83,6 @@ int main(int argc, char *argv[])
 {
     bc_StartupSettings settings = parseArgs(argc, argv);
     chdir(settings.dataDirectory);
-    printf("A new start?\?");
 
     bc_startEngine(settings);
 

@@ -148,6 +148,12 @@ ECS_STRUCT(ModelMatrix, {
 extern ECS_TAG_DECLARE(VertexShaderSource);
 extern ECS_TAG_DECLARE(FragmentShaderSource);
 
+// NOTE: could also set this up as 2 different basaltic_components
+ECS_STRUCT(PipelineDescription, {
+    sg_pipeline_desc *pipeline_desc;
+    sg_shader_desc *shader_desc;
+});
+
 ECS_STRUCT(Pipeline, {
     sg_pipeline pipeline;
     sg_shader shader;

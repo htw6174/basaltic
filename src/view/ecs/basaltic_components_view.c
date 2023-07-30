@@ -81,6 +81,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
 
+    ECS_COMPONENT_DEFINE(world, PipelineDescription);
     ECS_COMPONENT_DEFINE(world, Pipeline);
     ECS_TAG_DEFINE(world, RenderPipeline);
     ecs_add_id(world, RenderPipeline, EcsTraversable);

@@ -6,7 +6,6 @@
 #include "htw_core.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
-#include <sys/stat.h>
 #ifdef _WIN32
 #include <GL/glew.h>
 #else
@@ -41,14 +40,73 @@ typedef struct {
     //int64_t aligner;
 } terrainCellData;
 
+// NOTE: can eliminate most of the shader spec later when using reflection utils
+static sg_shader_desc terrainShaderDescription = {
+    .vs.uniform_blocks[0] = {
+        .size = sizeof(PVMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    },
+    .vs.uniform_blocks[1] = {
+        .size = sizeof(ModelMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4}
+        }
+    },
+    .vs.images[0] = {
+        .name = "terrain",
+        .image_type = SG_IMAGETYPE_2D,
+        .sampler_type = SG_SAMPLERTYPE_SINT
+    },
+    .vs.source = NULL,
+    .fs.uniform_blocks[0] = {
+        // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
+        .size = sizeof(vec2),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
+        }
+    },
+    .fs.uniform_blocks[1] = {
+        .size = sizeof(s32),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
+        }
+    },
+    .fs.source = NULL
+};
+
+static sg_pipeline_desc terrianPipelineDescription = {
+    .shader = {0}, // TODO: setup a fallback shader here
+    .layout = {
+        .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+        .attrs = {
+            [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
+            [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
+            [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT2},
+            [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
+            [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
+            [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_SHORT2N}
+        }
+    },
+    .index_type = SG_INDEXTYPE_UINT32,
+    .depth = {
+        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+        .write_enabled = true
+    },
+    .cull_mode = SG_CULLMODE_NONE
+};
+
 vec3 barycentric(vec2 p, vec2 left, vec2 right);
 vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
 
 Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
 void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
-
-Pipeline createHexTerrainPipeline(const char *vertSourcePath, const char *fragSourcePath);
 
 void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex);
 
@@ -755,129 +813,6 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
     }
 }
 
-Pipeline createHexTerrainPipeline(const char *vertSourcePath, const char *fragSourcePath) {
-    char *vert = htw_load(vertSourcePath);
-    char *frag = htw_load(fragSourcePath);
-
-    // TODO: better way to setup uniform block descriptions? Maybe add description as component to each uniform component, or use sokol's shader reflection to autogen
-    sg_shader_uniform_block_desc vsdGlobal = {
-        .size = sizeof(PVMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
-        }
-    };
-
-    sg_shader_uniform_block_desc vsdLocal = {
-        .size = sizeof(ModelMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4}
-        }
-    };
-
-    sg_shader_image_desc vsdDataImage = {
-        .name = "terrain",
-        .image_type = SG_IMAGETYPE_2D,
-        .sampler_type = SG_SAMPLERTYPE_SINT
-    };
-
-    // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
-    sg_shader_uniform_block_desc fsdGlobal = {
-        .size = sizeof(vec2),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
-        }
-    };
-
-    sg_shader_uniform_block_desc fsdLocal = {
-        .size = sizeof(s32),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
-        }
-    };
-
-    sg_shader_desc tsd = {
-        .vs.uniform_blocks[0] = vsdGlobal,
-        .vs.uniform_blocks[1] = vsdLocal,
-        .vs.images[0] = vsdDataImage,
-        .vs.source = vert,
-        .fs.uniform_blocks[0] = fsdGlobal,
-        .fs.uniform_blocks[1] = fsdLocal,
-        .fs.source = frag
-    };
-    sg_shader terrainShader = sg_make_shader(&tsd);
-
-    free(vert);
-    free(frag);
-
-    sg_pipeline_desc pd = {
-        .shader = terrainShader,
-        .layout = {
-            .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
-            .attrs = {
-                [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
-                [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
-                [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT2},
-                [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
-                [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
-                [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_SHORT2N}
-            }
-        },
-        .index_type = SG_INDEXTYPE_UINT32,
-        .depth = {
-            .compare = SG_COMPAREFUNC_LESS_EQUAL,
-            .write_enabled = true
-        },
-        .cull_mode = SG_CULLMODE_NONE
-    };
-    sg_pipeline pip = sg_make_pipeline(&pd);
-
-    sg_reset_state_cache();
-
-    return (Pipeline){pip, terrainShader};
-}
-
-void SetupPipelineHexTerrain(ecs_iter_t *it) {
-    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
-    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
-
-    for (int i = 0; i < it->count; i++) {
-        vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
-        Pipeline pip = createHexTerrainPipeline(vertSources[i].path, fragSources[i].path);
-        ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(pip), &pip);
-    }
-}
-
-void ReloadPipelineHexTerrain(ecs_iter_t *it) {
-    ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
-    ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
-    Pipeline *pipelines = ecs_field(it, Pipeline, 3);
-
-    for (int i = 0; i < it->count; i++) {
-        time_t vLastAccess = vertSources[i].accessTime;
-        time_t fLastAccess = fragSources[i].accessTime;
-
-        struct stat fileStat = {0};
-        //int err = stat(vertSources[i].path, &fileStat);
-        //assert(err == 0);
-        time_t vModifyTime = 0; //fileStat.st_mtime;
-        int err = stat(fragSources[i].path, &fileStat);
-        assert(err == 0);
-        time_t fModifyTime = fileStat.st_mtime;
-
-        if (vModifyTime > vLastAccess || fModifyTime > fLastAccess) {
-            vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
-            sg_destroy_pipeline(pipelines[i].pipeline);
-            sg_destroy_shader(pipelines[i].shader);
-            Pipeline pip = createHexTerrainPipeline(vertSources[i].path, fragSources[i].path);
-            ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(pip), &pip);
-        }
-    }
-}
-
 void InitTerrainBuffers(ecs_iter_t *it) {
     RenderDistance *rd = ecs_field(it, RenderDistance, 1);
 
@@ -1125,35 +1060,12 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
 
-    ECS_OBSERVER(world, SetupPipelineHexTerrain, EcsOnAdd,
-               [inout] (ResourceFile, bcview.VertexShaderSource),
-               [inout] (ResourceFile, bcview.FragmentShaderSource),
-               [out] Pipeline,
-               [none] bcview.TerrainRender,
-    );
-
-    ECS_SYSTEM(world, ReloadPipelineHexTerrain, EcsOnUpdate,
-               [inout] (ResourceFile, bcview.VertexShaderSource),
-               [inout] (ResourceFile, bcview.FragmentShaderSource),
-               [out] Pipeline,
-               [none] bcview.TerrainRender,
-    );
-
-    //ecs_enable(world, ReloadPipelineHexTerrain, false);
-
     ECS_OBSERVER(world, InitTerrainBuffers, EcsOnAdd,
         [in] RenderDistance($),
         [out] TerrainBuffer,
         [out] ?QueryDesc,
         [none] bcview.TerrainRender,
     );
-
-    // ECS_SYSTEM(world, UpdateHexTerrainBuffers, OnModelChanged,
-    //            [in] ModelQuery,
-    //            [inout] TerrainBuffer,
-    //            [none] ModelWorld($),
-    //            [none] bcview.TerrainRender,
-    // );
 
     ECS_OBSERVER(world, InitTerrainInstances, EcsOnAdd,
                [out] InstanceBuffer,
@@ -1217,12 +1129,11 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     // Pipeline, only need to create one per type
     ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "TerrainPipeline");
-    ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
-    // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last
-    ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
     ecs_add_pair(world, terrainPipeline, EcsChildOf, RenderPipeline);
-    ecs_add(world, terrainPipeline, Pipeline);
-    ecs_add(world, terrainPipeline, TerrainRender);
+    ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
+    // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
+    ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
+    ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrianPipelineDescription});
 
     // Init mesh TODO: give this a better home?
     //Mesh mesh = createHexmapMesh();
