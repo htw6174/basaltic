@@ -181,7 +181,7 @@ ECS_STRUCT(InstanceBuffer, {
 
 /** Immutable buffers */
 ECS_STRUCT(Mesh, {
-    sg_buffer vertexBuffers[SG_MAX_SHADERSTAGE_BUFFERS - 1]; // 0th vertex buffer reserved for instance buffer
+    sg_buffer vertexBuffers[SG_MAX_VERTEX_BUFFERS - 1]; // 0th vertex buffer reserved for instance buffer
     sg_buffer indexBuffer;
     s32 elements;
 });
@@ -205,6 +205,7 @@ ECS_STRUCT(Texture, {
 // Mutable texture
 ECS_STRUCT(DataTexture, {
     sg_image image;
+    sg_sampler sampler;
     u32 width;
     u32 height;
     void *data;

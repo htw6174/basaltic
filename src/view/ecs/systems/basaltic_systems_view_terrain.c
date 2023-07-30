@@ -57,9 +57,19 @@ static sg_shader_desc terrainShaderDescription = {
         }
     },
     .vs.images[0] = {
-        .name = "terrain",
+        .used = true,
         .image_type = SG_IMAGETYPE_2D,
-        .sampler_type = SG_SAMPLERTYPE_SINT
+        .sample_type = SG_IMAGESAMPLETYPE_SINT,
+    },
+    .vs.samplers[0] = {
+        .used = true,
+        .sampler_type = SG_SAMPLERTYPE_SAMPLE,
+    },
+    .vs.image_sampler_pairs[0] = {
+        .used = true,
+        .image_slot = 0,
+        .sampler_slot = 0,
+        .glsl_name = "terrain"
     },
     .vs.source = NULL,
     .fs.uniform_blocks[0] = {
@@ -932,11 +942,14 @@ void InitTerrainDataTexture(ecs_iter_t *it) {
                 u32 texWidth = bc_chunkSize * cm->chunkCountX;
                 u32 texHeight = bc_chunkSize * cm->chunkCountY;
 
-                sg_image_desc desc = {
+                sg_image_desc id = {
                     .width = texWidth,
                     .height = texHeight,
                     .usage = SG_USAGE_DYNAMIC,
                     .pixel_format = SG_PIXELFORMAT_RGBA32SI,
+                };
+
+                sg_sampler_desc sd = {
                     .min_filter = SG_FILTER_NEAREST,
                     .mag_filter = SG_FILTER_NEAREST
                 };
@@ -946,7 +959,7 @@ void InitTerrainDataTexture(ecs_iter_t *it) {
                 // TODO: destructor
                 void *texHostData = malloc(texSize);
 
-                ecs_set(it->world, it->entities[i], DataTexture, {sg_make_image(&desc), texWidth, texHeight, texHostData, texSize, formatSize});
+                ecs_set(it->world, it->entities[i], DataTexture, {sg_make_image(&id), sg_make_sampler(&sd), texWidth, texHeight, texHostData, texSize, formatSize});
             }
         }
     }
@@ -1022,15 +1035,17 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             .vertex_buffers[0] = instanceBuffers[i].buffer,
             .vertex_buffers[1] = mesh[i].vertexBuffers[0],
             .index_buffer = mesh[i].indexBuffer,
-            .vs_images[0] = dataTextures[i].image
+            .vs.images[0] = dataTextures[i].image,
+            .vs.samplers[0] = dataTextures[i].sampler
         };
 
         // Get images, add to fs_images
-        if (textures != NULL) {
-            for (int img = 0; img < SG_MAX_SHADERSTAGE_IMAGES; img++) {
-                bind.fs_images[img] = textures[i].images[img];
-            }
-        }
+        // if (textures != NULL) {
+        //     for (int img = 0; img < SG_MAX_SHADERSTAGE_IMAGES; img++) {
+        //         bind.fs.images[img] = textures[i].images[img];
+        //     }
+        //     bind.fs.samplers[0] = textures[i].sampler;
+        // }
 
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);

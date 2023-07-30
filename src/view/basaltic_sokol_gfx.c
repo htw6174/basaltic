@@ -30,15 +30,20 @@ sg_image bc_loadImage(const char *filename) {
     // If you don't do this, there is no error or warning, and any sample taken from the image will be black
     int mipCount = log2(width) + 1;
 
-    sg_image_desc desc = {
+    sg_image_desc id = {
         .width = width,
         .height = height,
         .num_mipmaps = mipCount,
         .usage = SG_USAGE_IMMUTABLE,
         .pixel_format = SG_PIXELFORMAT_RGBA8,
-        .min_filter = SG_FILTER_LINEAR_MIPMAP_LINEAR,
-        .mag_filter = SG_FILTER_NEAREST, // NOTE: mag filter must be nearest or liner, can't use mipmaps (and wouldn't make sense to anyway)
         .data = {.subimage[0][0] = {.ptr = imgData, .size = imgDataSize}}
+    };
+
+    // TODO: newer versions of sokol need samplers
+    sg_sampler_desc sd = {
+        .min_filter = SG_FILTER_LINEAR,
+        .mag_filter = SG_FILTER_NEAREST, // NOTE: mag filter must be nearest or liner, can't use mipmaps (and wouldn't make sense to anyway)
+        .mipmap_filter = SG_FILTER_LINEAR,
     };
 
     // generate mips
@@ -58,10 +63,10 @@ sg_image bc_loadImage(const char *filename) {
                 }
             }
         }
-        desc.data.subimage[0][mip] = (sg_range){.ptr = mData[mip], .size = mSize};
+        id.data.subimage[0][mip] = (sg_range){.ptr = mData[mip], .size = mSize};
     }
 
-    sg_image img = sg_make_image(&desc);
+    sg_image img = sg_make_image(&id);
 
     stbi_image_free(imgData);
     for (int m = 1; m < mipCount; m++) {
