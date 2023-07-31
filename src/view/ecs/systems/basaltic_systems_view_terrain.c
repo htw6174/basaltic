@@ -73,6 +73,13 @@ static sg_shader_desc terrainShaderDescription = {
     },
     .vs.source = NULL,
     .fs.uniform_blocks[0] = {
+        .size = sizeof(float),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "time", .type = SG_UNIFORMTYPE_FLOAT}
+        }
+    },
+    .fs.uniform_blocks[1] = {
         // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
         .size = sizeof(vec2),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
@@ -80,7 +87,7 @@ static sg_shader_desc terrainShaderDescription = {
             [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
         }
     },
-    .fs.uniform_blocks[1] = {
+    .fs.uniform_blocks[2] = {
         .size = sizeof(s32),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
@@ -1025,6 +1032,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     Texture *textures = ecs_field(it, Texture, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
+    Clock *clock = ecs_field(it, Clock, ++f);
     FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
     HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
 
@@ -1050,7 +1058,8 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(mouse[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(clock[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
 
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
 
@@ -1059,7 +1068,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         } else {
             mat4x4 model;
             mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 2, &SG_RANGE(model));
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
@@ -1125,6 +1134,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] ?Texture,
                [in] PVMatrix($),
                [in] Mouse($),
+               [in] Clock($),
                [in] FeedbackBuffer($),
                [out] HoveredCell($),
                [none] ModelWorld($),

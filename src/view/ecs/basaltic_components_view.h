@@ -145,6 +145,10 @@ ECS_STRUCT(ModelMatrix, {
     mat4x4 model;
 });
 
+ECS_STRUCT(Clock, {
+    float seconds;
+});
+
 extern ECS_TAG_DECLARE(VertexShaderSource);
 extern ECS_TAG_DECLARE(FragmentShaderSource);
 

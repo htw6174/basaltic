@@ -1,7 +1,7 @@
 #version 430
 
 // toggle for a more mobile-friendly version of this shader
-#define LIGHTWEIGHT
+//#define LIGHTWEIGHT
 
 //precision mediump float;
 
@@ -23,6 +23,7 @@
 // NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
 
+uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
 
@@ -227,6 +228,8 @@ void main()
 
 	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
 
+	vec3 cliffColor = vec3(0.6, 0.5, 0.5);
+
 	float noiseFreq = isCliff ? 20.0 : 4.0;
 	float noiseMag = isCliff ? 0.1 : 0.5;
 	float bandFreq = isCliff ? 20.0 : 2.0;
@@ -240,11 +243,11 @@ void main()
 	//float noisyZ = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
 	float strataSample = floor(noisyZ * bandFreq);
 	float cliffValue = (rand(strataSample) * 0.2) + 0.4;
-	vec3 albedo = isCliff ? vec3(cliffValue) : biomeColor * (1.0 + (cliffValue - 0.5));
+	vec3 albedo = isCliff ? cliffValue * cliffColor : biomeColor * (1.0 + (cliffValue - 0.5));
 
 	// TODO: proper water level recoloring
-	// TODO: global constant for sea level; this is effectively 20m below height 0
-	float elevation = inout_pos.z;
+	float waveHeight = sin((inout_pos.x * 5.0) + time) * 0.01;
+	float elevation = inout_pos.z - waveHeight;
 	if (elevation < -0.02) {
 		vec3 oceanFloor = vec3(0.5, 0.3, 0.1) / -(elevation - 1.0);
 		vec3 oceanSurface = vec3(0.05, 0.2, 0.9);

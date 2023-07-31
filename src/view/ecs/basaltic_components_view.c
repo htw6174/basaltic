@@ -77,6 +77,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Mouse);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
+    ECS_META_COMPONENT(world, Clock);
 
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
@@ -140,6 +141,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, PVMatrix);
+    ecs_singleton_add(world, Clock);
 
     /* Renderer Uniforms */
     //ecs_entity_t window;

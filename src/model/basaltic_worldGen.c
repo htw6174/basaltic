@@ -14,7 +14,7 @@ void bc_elevationBrush(htw_ChunkMap *chunkMap, htw_geo_GridCoord pos, s32 value,
         float dist = htw_geo_hexCartesianDistance(chunkMap, (htw_geo_GridCoord){0, 0}, htw_geo_cubeToGridCoord(relative));
         float curve = 1.0 - (1.0 * (dist / radius));
         curve *= curve;
-        s32 valueHere = curve * value;// + htw_randRange(3);
+        s32 valueHere = curve * value + htw_randRange(3);
         htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(start, relative);
         htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
         CellData *cellData = htw_geo_getCell(chunkMap, worldCoord);

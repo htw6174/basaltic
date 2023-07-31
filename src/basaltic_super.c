@@ -103,6 +103,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         wc->lastFrameDuration = frameStart - lastFrameStart;
         lastFrameStart = frameStart;
 
+        wc->milliSeconds = SDL_GetTicks64();
+
         if (sc.isModelDataReady == true && isModelPassedToView == false) {
             md = sc.modelData;
             bc_view_onModelStart(md);

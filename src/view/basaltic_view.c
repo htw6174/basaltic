@@ -84,6 +84,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
 
     float dT = (float)wc->lastFrameDuration / wc->performanceFrequency; // in seconds
     ecs_singleton_set(vc.ecsWorld, DeltaTime, {dT});
+    ecs_singleton_set(vc.ecsWorld, Clock, {(float)wc->milliSeconds / 1000.0});
 
     ecs_progress(vc.ecsWorld, dT);
 
