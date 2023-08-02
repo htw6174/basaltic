@@ -62,6 +62,55 @@ void UniformCameraToPVMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, PVMatrix);
 }
 
+void UniformSunToMatrix(ecs_iter_t *it) {
+    const SunLight *sun = ecs_singleton_get(it->world, SunLight);
+    SunMatrix *pv = ecs_singleton_get_mut(it->world, SunMatrix);
+
+    mat4x4 p, v;
+    vec3 sunPosition;
+
+    float pitch = sun->inclination * DEG_TO_RAD;
+    float yaw = sun->azimuth * DEG_TO_RAD;
+    float dist = 512.0;
+    float radius = cos(pitch) * dist;
+    float height = sin(pitch) * dist;
+    sunPosition = (vec3){
+        .x = radius * sin(yaw),
+        .y = radius * -cos(yaw),
+        .z = height
+    };
+
+    mat4x4Orthographic(p, 300.0, 300.0, 0.1, 1024.0);
+    mat4x4LookAt(v,
+        sunPosition,
+        (vec3){{0.f, 0.f, 0.f}},
+        (vec3){{0.f, 0.f, 1.f}}
+    );
+
+    mat4x4MultiplyMatrix(pv->pv, v, p);
+
+    ecs_singleton_modified(it->world, SunMatrix);
+}
+
+void BeginShadowPass(ecs_iter_t *it) {
+    ShadowPass *sp = ecs_field(it, ShadowPass, 1);
+
+    sg_begin_pass(sp[0].pass, &sp[0].action);
+};
+
+void EndShadowPass(ecs_iter_t *it) {
+    sg_end_pass();
+};
+
+void BeginRenderPass(ecs_iter_t *it) {
+    WindowSize *ws = ecs_field(it, WindowSize, 1);
+    sg_begin_default_passf(&(sg_pass_action){0}, ws->x, ws->y);
+};
+
+void EndRenderPass(ecs_iter_t *it) {
+    sg_end_pass();
+};
+
 void SetupPipelines(ecs_iter_t *it) {
     ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
     ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
@@ -160,13 +209,12 @@ void DestroyModelQueries(ecs_iter_t *it) {
     }
 }
 
-void DrawInstances(ecs_iter_t *it) {
+void DrawInstanceShadows(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
     Elements *eles = ecs_field(it, Elements, 3);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
-
-    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
+    SunMatrix *pvs = ecs_field(it, SunMatrix, 4);
+    WrapInstanceOffsets *wraps = ecs_field(it, WrapInstanceOffsets, 5);
 
     for (int i = 0; i < it->count; i++) {
         sg_bindings bind = {
@@ -177,7 +225,27 @@ void DrawInstances(ecs_iter_t *it) {
         sg_apply_bindings(&bind);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
 
-        bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+        bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps[i].offsets);
+    }
+}
+
+void DrawInstances(ecs_iter_t *it) {
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
+    InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
+    Elements *eles = ecs_field(it, Elements, 3);
+    PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
+    WrapInstanceOffsets *wraps = ecs_field(it, WrapInstanceOffsets, 5);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = ibs[0].buffer
+        };
+
+        sg_apply_pipeline(pipelines[i].pipeline);
+        sg_apply_bindings(&bind);
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
+
+        bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps[i].offsets);
     }
 }
 
@@ -204,6 +272,28 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] Camera($),
         [in] WindowSize($),
         [out] PVMatrix($)
+    );
+
+    ECS_SYSTEM(world, UniformSunToMatrix, EcsPreUpdate,
+        [in] SunLight($),
+        [out] SunMatrix($)
+    );
+
+    // Render pass begin and end
+    ECS_SYSTEM(world, BeginShadowPass, PreShadowPass,
+        [in] ShadowPass($)
+    );
+
+    ECS_SYSTEM(world, EndShadowPass, PostShadowPass,
+        [none] ShadowPass($)
+    );
+
+    ECS_SYSTEM(world, BeginRenderPass, PreRenderPass,
+        [in] WindowSize($)
+    );
+
+    ECS_SYSTEM(world, EndRenderPass, PostRenderPass,
+        [none] WindowSize($)
     );
 
     ECS_SYSTEM(world, SetupPipelines, EcsOnUpdate,
@@ -249,13 +339,22 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [none] ModelWorld($)
     );
 
+    ECS_SYSTEM(world, DrawInstanceShadows, OnShadowPass,
+        [in] Pipeline(up(bcview.ShadowPipeline)),
+        [in] InstanceBuffer,
+        [in] Elements,
+        [in] SunMatrix($),
+        [in] WrapInstanceOffsets($),
+        [none] ShadowPass($),
+    );
+
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
-    ECS_SYSTEM(world, DrawInstances, EcsOnUpdate,
-               [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
-               [in] InstanceBuffer,
-               [in] Elements,
-               [in] PVMatrix($),
-               [none] WrapInstanceOffsets($),
+    ECS_SYSTEM(world, DrawInstances, OnRenderPass,
+        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
+        [in] InstanceBuffer,
+        [in] Elements,
+        [in] PVMatrix($),
+        [in] WrapInstanceOffsets($),
     );
 
     // A system with no query will run once per frame. However, an end of frame call is already being handled by the core engine. Something like this might be useful for starting and ending individual render passes

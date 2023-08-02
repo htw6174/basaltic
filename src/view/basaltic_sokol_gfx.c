@@ -3,6 +3,48 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define SOKOL_IMPL
+#define SOKOL_GLCORE33
+#define SOKOL_NO_DEPRECATED
+#ifdef DEBUG
+#define SOKOL_DEBUG
+#endif
+#include "sokol_gfx.h"
+#include "sokol_log.h"
+
+void bc_glCheck(void) {
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        printf("GL ERROR: %x\n", err);
+    }
+}
+
+void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
+    if (severity > GL_DEBUG_SEVERITY_NOTIFICATION) {
+        // TODO: pretty print the source, type, and severity. Maybe allow configuring severity threshold?
+        fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+                ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+                type, severity, message );
+    }
+    //assert(severity != GL_DEBUG_SEVERITY_HIGH);
+}
+
+void bc_sg_setup(void) {
+    sg_desc sgd = {
+        .logger.func = slog_func,
+    };
+    sg_setup(&sgd);
+    assert(sg_isvalid());
+
+    //glEnable(GL_DEBUG_OUTPUT);
+    //glDebugMessageCallback(MessageCallback, 0);
+}
+
+uint32_t bc_sg_getImageGluint(sg_image image) {
+    _sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
+    return img->gl.tex[0];
+}
+
 void bc_drawWrapInstances(int base_element, int num_elements, int num_instances, int modelMatrixUniformBlockIndex, vec3 position, const vec3 *offsets) {
     static mat4x4 model;
     for (int i = 0; i < 4; i++) {
@@ -95,6 +137,9 @@ int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const 
         *out_shader = shd;
         return 0;
     } else {
+        if (shaderState == SG_RESOURCESTATE_FAILED) {
+            sg_destroy_shader(shd);
+        }
         return -1; // TODO: optionally get more detailed error info from sokol
     }
 }
@@ -114,6 +159,9 @@ int bc_createPipeline(const sg_pipeline_desc *pipelineDescription, const sg_shad
         *out_pipeline = p;
         return 0;
     } else {
+        if (pipelineState == SG_RESOURCESTATE_FAILED) {
+            sg_destroy_pipeline(p);
+        }
         return -1; // TODO: optionally get more detailed error info from sokol
     }
 }

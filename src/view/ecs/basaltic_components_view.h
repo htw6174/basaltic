@@ -141,12 +141,30 @@ ECS_STRUCT(PVMatrix, {
     mat4x4 pv;
 });
 
+ECS_STRUCT(SunMatrix, {
+    mat4x4 pv;
+});
+
 ECS_STRUCT(ModelMatrix, {
     mat4x4 model;
 });
 
 ECS_STRUCT(Clock, {
     float seconds;
+});
+
+ECS_STRUCT(SunLight, {
+    float azimuth;
+    float inclination;
+    Color directColor;
+    Color indirectColor;
+});
+
+ECS_STRUCT(ShadowPass, {
+    sg_pass pass;
+    sg_pass_action action;
+    sg_image image;
+    sg_sampler sampler;
 });
 
 extern ECS_TAG_DECLARE(VertexShaderSource);
@@ -163,9 +181,11 @@ ECS_STRUCT(Pipeline, {
     sg_shader shader;
 });
 
-// Relationship where the target is a Pipeline entity
+// Relationships where the target is a Pipeline entity
+extern ECS_TAG_DECLARE(ShadowPipeline);
 extern ECS_TAG_DECLARE(RenderPipeline);
 
+// Used to differentiate different render types for specalized draw systems
 extern ECS_TAG_DECLARE(TerrainRender);
 extern ECS_TAG_DECLARE(DebugRender);
 
@@ -203,6 +223,7 @@ ECS_STRUCT(FeedbackBuffer, {
 
 // Immutable texture array, all get bound to the fragment stage
 ECS_STRUCT(Texture, {
+    sg_sampler sampler;
     sg_image images[SG_MAX_SHADERSTAGE_IMAGES];
 });
 

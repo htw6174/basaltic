@@ -1,5 +1,6 @@
 #include "basaltic_view.h"
 #include "basaltic_window.h"
+#include "basaltic_sokol_gfx.h"
 #include "basaltic_editor.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
@@ -7,15 +8,6 @@
 #include "basaltic_phases_view.h"
 #include "basaltic_systems_view.h"
 #include "flecs.h"
-
-#define SOKOL_IMPL
-#define SOKOL_GLCORE33
-#define SOKOL_NO_DEPRECATED
-#ifdef DEBUG
-#define SOKOL_DEBUG
-#endif
-#include "sokol/sokol_log.h"
-#include "sokol/sokol_gfx.h"
 
 typedef struct {
     ecs_world_t *ecsWorld;
@@ -26,11 +18,7 @@ typedef struct {
 static bc_ViewContext vc;
 
 void bc_view_setup(bc_WindowContext* wc) {
-    sg_desc sgd = {
-        .logger.func = slog_func,
-    };
-    sg_setup(&sgd);
-    assert(sg_isvalid());
+    bc_sg_setup();
 
     vc.ecsWorld = ecs_init();
     ECS_IMPORT(vc.ecsWorld, Bcview);
@@ -38,17 +26,6 @@ void bc_view_setup(bc_WindowContext* wc) {
     ECS_IMPORT(vc.ecsWorld, BcviewSystems);
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
-
-// #ifndef _WIN32
-// // TODO: create a proper toggle for this in build settings
-// #ifdef FLECS_REST
-//     printf("Initializing flecs REST API\n");
-//     ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
-//     //ECS_IMPORT(newWorld->ecsWorld, FlecsMonitor);
-//     //FlecsMonitorImport(vc.ecsWorld);
-//     ecs_set_scope(vc.ecsWorld, 0);
-// #endif
-// #endif
 
     vc.ui = bc_createUiState();
 }
@@ -62,11 +39,9 @@ void bc_view_beginFrame(bc_WindowContext* wc) {
     sg_pass_action pa = { 0
         //.colors[0] = { .action=SG_ACTION_CLEAR, .value={1.0f, 0.0f, 0.0f, 1.0f} }
     };
-    sg_begin_default_pass(&pa, wc->width, wc->height);
 }
 
 void bc_view_endFrame(bc_WindowContext* wc) {
-    sg_end_pass();
     sg_commit();
 }
 

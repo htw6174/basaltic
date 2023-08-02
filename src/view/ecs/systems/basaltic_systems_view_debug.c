@@ -16,6 +16,45 @@ typedef struct {
     float scale;
 } DebugInstanceData;
 
+static sg_shader_desc debugShadowShaderDescription = {
+    .vs.uniform_blocks[0] = {
+        .size = sizeof(PVMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    },
+    .vs.uniform_blocks[1] = {
+        .size = sizeof(ModelMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    },
+    .vs.source = NULL,
+    .fs.source = NULL
+};
+
+static sg_pipeline_desc debugShadowPipelineDescription = {
+    .shader = {0},
+    .layout = {
+        .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+        .buffers[0].stride = sizeof(DebugInstanceData),
+        .attrs = {
+            [0].format = SG_VERTEXFORMAT_FLOAT4,
+        }
+    },
+    .depth = {
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
+        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+        .write_enabled = true
+    },
+    .cull_mode = SG_CULLMODE_FRONT, // said to prevent 'shadow acne' on front-faces
+    .sample_count = 1,
+    // important: 'deactivate' the default color target for 'depth-only-rendering'
+    .colors[0].pixel_format = SG_PIXELFORMAT_NONE
+};
+
 static sg_shader_desc debugShaderDescription = {
     .vs.uniform_blocks[0] = {
         .size = sizeof(PVMatrix),
@@ -50,6 +89,33 @@ static sg_pipeline_desc debugPipelineDescription = {
         .write_enabled = true
     },
     .cull_mode = SG_CULLMODE_NONE
+};
+
+static sg_shader_desc debugRTShaderDescription = {
+    .fs.images[0] = {
+        .used = true,
+        .image_type = SG_IMAGETYPE_2D,
+        .sample_type = SG_IMAGESAMPLETYPE_DEPTH
+    },
+    .fs.samplers[0] = {
+        .used = true,
+        .sampler_type = SG_SAMPLERTYPE_SAMPLE
+    },
+    .fs.image_sampler_pairs[0] = {
+        .used = true,
+        .image_slot = 0,
+        .sampler_slot = 0,
+        .glsl_name = "renderTarget"
+    },
+};
+
+static sg_pipeline_desc debugRTPipelineDescription = {
+    .layout = {
+        .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
+    },
+    .shader = {0},
+    .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+    .label = "debug-RT-pipeline",
 };
 
 // TODO: can generalize this by requiring instance size and count
@@ -110,6 +176,26 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
     }
 }
 
+void DrawRenderTargetPreviews(ecs_iter_t *it) {
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
+    Mesh *meshes = ecs_field(it, Mesh, 2);
+    Texture *textures = ecs_field(it, Texture, 3);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = meshes[0].vertexBuffers[0],
+            .fs.images[0] = textures[0].images[0],
+            .fs.samplers[0] = textures[0].sampler
+        };
+
+        sg_apply_pipeline(pipelines[i].pipeline);
+        sg_apply_bindings(&bind);
+
+        sg_apply_viewport(0, 0, 512, 512, false);
+        sg_draw(0, 4, 1);
+    }
+}
+
 void BcviewSystemsDebugImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystemsDebug);
 
@@ -129,7 +215,14 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [in] Scale($),
         [in] ModelWorld($),
         [none] bcview.DebugRender
-    )
+    );
+
+    ECS_SYSTEM(world, DrawRenderTargetPreviews, PostRenderPass,
+        [in] Pipeline(up(bcview.RenderPipeline)),
+        [in] Mesh,
+        [in] Texture,
+        [none] bcview.DebugRender
+    );
 
     // Always override, so instance's model query can become a subquery of the original
     //ecs_add_id(world, ecs_id(ModelQuery), EcsAlwaysOverride);
@@ -137,12 +230,24 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     //ecs_add_id(world, ecs_id(ModelQuery), EcsDontInherit);
     //ecs_add_id(world, ecs_id(QueryDesc), EcsDontInherit);
 
-    // Pipeline, only need to create one per type
-    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugPipeline");
+    // Pipelines, only need to create one per type
+    ecs_entity_t debugShadowPipeline = ecs_set_name(world, 0, "DebugShadowPipeline");
+    ecs_add_pair(world, debugShadowPipeline, EcsChildOf, ShadowPipeline);
+    ecs_set_pair(world, debugShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_default.vert"});
+    ecs_set_pair(world, debugShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
+    ecs_set(world, debugShadowPipeline, PipelineDescription, {.shader_desc = &debugShadowShaderDescription, .pipeline_desc = &debugShadowPipelineDescription});
+
+    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugRenderPipeline");
     ecs_add_pair(world, debugPipeline, EcsChildOf, RenderPipeline);
     ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
+
+    ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
+    ecs_add_pair(world, debugRTPipeline, EcsChildOf, RenderPipeline);
+    ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug_RT.vert"});
+    ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
+    ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
 
     // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
     // aka "Draw Query"
@@ -159,7 +264,8 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         .expr = "Position, (bc.planes.IsOn, _)"
     });
     ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
-    ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
+    //ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline); // TEST: disable normal render pass to see shadows better
+    ecs_override_pair(world, debugPrefab, ShadowPipeline, debugShadowPipeline);
     ecs_override(world, debugPrefab, InstanceBuffer);
     ecs_override(world, debugPrefab, QueryDesc);
     ecs_override(world, debugPrefab, Color);
@@ -195,4 +301,28 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     });
 
     //ecs_enable(world, ecs_id(DrawInstances), false);
+
+    // Render target debug rect
+    ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "Shadow Map");
+    ecs_add_id(world, renderTargetVis, DebugRender);
+    ecs_add_pair(world, renderTargetVis, RenderPipeline, debugRTPipeline);
+
+    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    ecs_set(world, renderTargetVis, Mesh, {
+        .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
+            .data = SG_RANGE(dbg_vertices)
+        })
+    });
+
+    ecs_enable(world, renderTargetVis, false);
+
+    ecs_set(world, renderTargetVis, Texture, {
+        .images[0] = ecs_singleton_get(world, ShadowPass)->image,
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_NEAREST,
+            .mag_filter = SG_FILTER_NEAREST,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        })
+    });
 }

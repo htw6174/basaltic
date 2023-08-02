@@ -15,6 +15,7 @@ ECS_TAG_DECLARE(Previous);
 ECS_TAG_DECLARE(VertexShaderSource);
 ECS_TAG_DECLARE(FragmentShaderSource);
 
+ECS_TAG_DECLARE(ShadowPipeline);
 ECS_TAG_DECLARE(RenderPipeline);
 ECS_TAG_DECLARE(TerrainRender);
 ECS_TAG_DECLARE(DebugRender);
@@ -36,22 +37,41 @@ void BcviewImport(ecs_world_t *world) {
     //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
 
     // Create one ecs_member_t array per vector type, reuse for each component type
-    ecs_member_t vec3Members[3] = {
+    ecs_member_t vecMembers[4] = {
         [0] = {.name = "x", .type = ecs_id(ecs_f32_t)},
         [1] = {.name = "y", .type = ecs_id(ecs_f32_t)},
         [2] = {.name = "z", .type = ecs_id(ecs_f32_t)},
+        [3] = {.name = "w", .type = ecs_id(ecs_f32_t)},
+    };
+
+    ecs_member_t colorMembers[4] = {
+        [0] = {.name = "r", .type = ecs_id(ecs_f32_t)},
+        [1] = {.name = "g", .type = ecs_id(ecs_f32_t)},
+        [2] = {.name = "b", .type = ecs_id(ecs_f32_t)},
+        [3] = {.name = "a", .type = ecs_id(ecs_f32_t)},
     };
 
     ECS_COMPONENT_DEFINE(world, vec3);
     ecs_struct(world, {.entity = ecs_id(vec3), .members = {
-        [0] = vec3Members[0],
-        [1] = vec3Members[1],
-        [2] = vec3Members[2]
+        [0] = vecMembers[0],
+        [1] = vecMembers[1],
+        [2] = vecMembers[2]
     }});
 
-    // TODO: figure out how to re-use vec3's struct_desc for Scale
     ECS_COMPONENT_DEFINE(world, Scale);
+    ecs_struct(world, {.entity = ecs_id(Scale), .members = {
+        [0] = vecMembers[0],
+        [1] = vecMembers[1],
+        [2] = vecMembers[2]
+    }});
+
     ECS_COMPONENT_DEFINE(world, Color);
+    ecs_struct(world, {.entity = ecs_id(Color), .members = {
+        [0] = colorMembers[0],
+        [1] = colorMembers[1],
+        [2] = colorMembers[2],
+        [3] = colorMembers[3]
+    }});
 
     ECS_META_COMPONENT(world, ResourceFile);
 
@@ -76,18 +96,24 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
+    ECS_COMPONENT_DEFINE(world, SunMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
     ECS_META_COMPONENT(world, Clock);
+    ECS_META_COMPONENT(world, SunLight);
+
+    ECS_COMPONENT_DEFINE(world, ShadowPass);
 
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
 
     ECS_COMPONENT_DEFINE(world, PipelineDescription);
     ECS_COMPONENT_DEFINE(world, Pipeline);
+    ECS_TAG_DEFINE(world, ShadowPipeline);
+    ecs_add_id(world, ShadowPipeline, EcsTraversable);
+    ecs_add_id(world, ShadowPipeline, EcsOneOf);
     ECS_TAG_DEFINE(world, RenderPipeline);
     ecs_add_id(world, RenderPipeline, EcsTraversable);
     ecs_add_id(world, RenderPipeline, EcsOneOf);
-    ecs_add_id(world, RenderPipeline, EcsExclusive);
 
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
@@ -119,6 +145,38 @@ void BcviewImport(ecs_world_t *world) {
         .rotation = 90.0f
     });
 
+    // Render passes TODO this setup needs a better home
+    sg_image shadowMap = sg_make_image(&(sg_image_desc){
+        .render_target = true,
+        .width = 2048,
+        .height = 2048,
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
+        .sample_count = 1,
+        .label = "shadow-map",
+    });
+    ecs_singleton_set(world, ShadowPass, {
+        .image = shadowMap,
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_LINEAR,
+            .mag_filter = SG_FILTER_LINEAR,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+            .compare = SG_COMPAREFUNC_LESS,
+            .label = "shadow-sampler",
+        }),
+        .action = {
+            .depth = {
+                .load_action = SG_LOADACTION_CLEAR,
+                .store_action = SG_STOREACTION_STORE,
+                .clear_value = 1.0f
+            }
+        },
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .depth_stencil_attachment.image = shadowMap,
+            .label = "shadow-pass"
+        })
+    });
+
     // Global scale for world rendering
     ecs_singleton_set(world, Scale, {{1.0, 1.0, 0.1}});
 
@@ -141,7 +199,14 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, PVMatrix);
+    ecs_singleton_add(world, SunMatrix);
     ecs_singleton_add(world, Clock);
+    ecs_singleton_set(world, SunLight, {
+        .azimuth = 120.0,
+        .inclination = 30.0,
+        .directColor = (vec4){{0.9, 0.9, 0.7, 1.0}},
+        .indirectColor = (vec4){{0.2, 0.2, 0.4, 1.0}}
+    });
 
     /* Renderer Uniforms */
     //ecs_entity_t window;

@@ -14,11 +14,18 @@
 #include "basaltic_commandBuffer.h"
 #include "basaltic_components_view.h"
 #include "basaltic_components.h"
+#include "basaltic_sokol_gfx.h"
 #include "flecs.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 #include "cimgui_impl.h"
+
+// #define SOKOL_GLCORE33
+// #include "sokol_gfx.h"
+// #define SOKOL_IMGUI_NO_SOKOL_APP
+// #define SOKOL_IMGUI_IMPL
+// #include "util/sokol_imgui.h"
 
 #define MAX_CUSTOM_QUERIES 4
 
@@ -86,6 +93,7 @@ void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
+void renderTargetInspector(ecs_world_t *world);
 
 /* Misc Functions*/
 void possessEntity(ecs_world_t *world, ecs_entity_t target);
@@ -109,10 +117,12 @@ void bc_setupEditor(void) {
     };
 
     modelInspector = (EcsInspectionContext){0};
+
+    //simgui_setup(&(simgui_desc_t){0});
 }
 
 void bc_teardownEditor(void) {
-    // TODO: nothing?
+    //simgui_shutdown();
 }
 
 void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
@@ -131,8 +141,10 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     }
     */
 
-    igBegin("View Inspector", NULL, ImGuiWindowFlags_None);
-    ecsWorldInspector(viewWorld, &viewInspector);
+    if (igBegin("View Inspector", NULL, ImGuiWindowFlags_None)) {
+        //renderTargetInspector(viewWorld);
+        ecsWorldInspector(viewWorld, &viewInspector);
+    }
     igEnd();
 
 
@@ -1138,4 +1150,25 @@ void coordInspector(const char *label, htw_geo_GridCoord coord) {
     igValue_Int("X", coord.x);
     igSameLine(igGetCursorPosX() + 64.0, -1);
     igValue_Int("Y", coord.y);
+}
+
+void renderTargetInspector(ecs_world_t *world) {
+    const ShadowPass *sp = ecs_singleton_get(world, ShadowPass);
+
+    // FIXME: neither method of getting a TextureID for the shadow map works, always causes OpenGL errors when presenting
+    // static simgui_image_t spImage = {0};
+    // if (spImage.id == 0) {
+    //     spImage = simgui_make_image(&(simgui_image_desc_t){
+    //         .image = sp->image,
+    //         //.sampler = sp->sampler // Might need different sampler
+    //     });
+    // }
+    // ImTextureID texID = simgui_imtextureid(spImage);
+
+    //u32 gluint = bc_sg_getImageGluint(sp->image);
+    //ImTextureID texID = &gluint;
+
+    ImGuiIO *io = igGetIO();
+    ImVec4 white = { 1, 1, 1, 1 };
+    igImage(io->Fonts->TexID, (ImVec2){512, 512}, (ImVec2){0.0, 0.0}, (ImVec2){1.0, 1.0}, white, white);
 }

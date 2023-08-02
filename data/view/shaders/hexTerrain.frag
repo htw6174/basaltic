@@ -1,7 +1,7 @@
 #version 430
 
 // toggle for a more mobile-friendly version of this shader
-//#define LIGHTWEIGHT
+#define LIGHTWEIGHT
 
 //precision mediump float;
 
@@ -27,6 +27,9 @@ uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
 
+uniform sampler2DShadow shadowMap;
+//uniform sampler2D shadowMap;
+
 layout(std430, binding = 0) buffer feedbackBuffer {
 	int hoveredX;
 	int hoveredY;
@@ -35,6 +38,7 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 in vec4 inout_color;
 in vec3 inout_pos;
 in vec3 inout_normal;
+in vec4 inout_light_proj_pos;
 in float inout_radius; // approximate distance from center of cell, based on vert barycentric. == 1 at cell corners, == 0.75 at center of edge
 flat in ivec2 inout_cellCoord;
 
@@ -260,7 +264,17 @@ void main()
 	//vN = flatNormal;
 
 	// Apply lighting
-	vec3 litColor = albedo * phong(vN, normalize(vec3(1.5, -3.0, 3.0)));
+	vec3 lightPos = inout_light_proj_pos.xyz / inout_light_proj_pos.w;
+	//vec3 shadowMapPos = vec3((lightPos.xy + 1.0) * 0.5, lightPos.z);
+	vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
+
+	float shadow = texture(shadowMap, shadowMapPos.xyz);
+	//float shadow = texture(shadowMap, shadowMapPos.xy).x;
+	vec3 litColor = albedo * shadow;// phong(vN, normalize(vec3(1.5, -3.0, 3.0)));
+	//vec3 litColor = shadow.xxx;
+	//float dist = fract((shadow - lightPos.z) * 1000.0 + time);
+	//float dist = shadow - ((lightPos.z + 1.0) * 0.5);
+	//vec3 litColor = dist > 0.0 ? vec3(dist, 0.0, 0.0) : vec3(0.0, 0.0, 1.0 - dist);
 
 	// display white outline on hovered cell
  	if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {

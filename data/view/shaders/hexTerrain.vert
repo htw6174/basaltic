@@ -32,6 +32,7 @@ vec4 neighborPositions[6] = vec4[](
 
 uniform mat4 pv;
 uniform mat4 m;
+uniform mat4 light;
 
 uniform isampler2D terrain;
 
@@ -47,6 +48,7 @@ layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16
 out vec4 inout_color;
 out vec3 inout_pos;
 out vec3 inout_normal;
+out vec4 inout_light_proj_pos;
 out float inout_radius;
 flat out ivec2 inout_cellCoord;
 //flat out uint inout_cellIndex;
@@ -156,6 +158,8 @@ void main()
     inout_pos = worldPosition.xyz; // NB: Output before applying camera transform
 
     gl_Position = pv * worldPosition;
+    inout_light_proj_pos = light * worldPosition;
+    //inout_light_proj_pos.y = -inout_light_proj_pos.y;
 
     //inout_radius = length(in_barycentric.yz) * 2.0; // * sqrt(0.75) * (4.0 / 3.0);
     inout_radius = (1.0 - in_barycentric.x) * 1.5;

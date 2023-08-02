@@ -43,10 +43,11 @@ typedef struct {
 // NOTE: can eliminate most of the shader spec later when using reflection utils
 static sg_shader_desc terrainShaderDescription = {
     .vs.uniform_blocks[0] = {
-        .size = sizeof(PVMatrix),
+        .size = sizeof(PVMatrix) + sizeof(SunMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
             [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+            [1] = {.name = "light", .type = SG_UNIFORMTYPE_MAT4}
         }
     },
     .vs.uniform_blocks[1] = {
@@ -94,6 +95,21 @@ static sg_shader_desc terrainShaderDescription = {
             [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
         }
     },
+    .fs.images[0] = {
+        .used = true,
+        .image_type = SG_IMAGETYPE_2D,
+        .sample_type = SG_IMAGESAMPLETYPE_DEPTH
+    },
+    .fs.samplers[0] = {
+        .used = true,
+        .sampler_type = SG_SAMPLERTYPE_COMPARE
+    },
+    .fs.image_sampler_pairs[0] = {
+        .used = true,
+        .image_slot = 0,
+        .sampler_slot = 0,
+        .glsl_name = "shadowMap"
+    },
     .fs.source = NULL
 };
 
@@ -133,15 +149,6 @@ void UpdateTerrainInstances(ecs_iter_t *it);
 void InitTerrainDataTexture(ecs_iter_t *it);
 void UpdateTerrainDataTexture(ecs_iter_t *it);
 void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it);
-
-void GlCheck(void);
-
-void GlCheck(void) {
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR) {
-        printf("GL ERROR: %x\n", err);
-    }
-}
 
 // could use simpler 2d only version but w/e
 vec3 barycentric(vec2 p, vec2 left, vec2 right) {
@@ -1031,6 +1038,8 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
     Texture *textures = ecs_field(it, Texture, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
+    SunMatrix *sun = ecs_field(it, SunMatrix, ++f);
+    ShadowPass *shadow = ecs_field(it, ShadowPass, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
     Clock *clock = ecs_field(it, Clock, ++f);
     FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
@@ -1044,7 +1053,9 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             .vertex_buffers[1] = mesh[i].vertexBuffers[0],
             .index_buffer = mesh[i].indexBuffer,
             .vs.images[0] = dataTextures[i].image,
-            .vs.samplers[0] = dataTextures[i].sampler
+            .vs.samplers[0] = dataTextures[i].sampler,
+            .fs.images[0] = shadow[i].image,
+            .fs.samplers[0] = shadow[i].sampler
         };
 
         // Get images, add to fs_images
@@ -1057,7 +1068,13 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
 
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
+
+        // TODO: consider making structs for the common global vert and frag stage uniforms
+        mat4x4 vsGlobalParams[2];
+        mat4x4Copy(vsGlobalParams[0], pvs[i].pv);
+        mat4x4Copy(vsGlobalParams[1], sun[i].pv);
+
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(vsGlobalParams));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(clock[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
 
@@ -1068,7 +1085,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         } else {
             mat4x4 model;
             mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 2, &SG_RANGE(model));
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
@@ -1125,7 +1142,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
-    ECS_SYSTEM(world, DrawPipelineHexTerrain, EcsOnUpdate,
+    ECS_SYSTEM(world, DrawPipelineHexTerrain, OnRenderPass,
                [in] Pipeline(up(bcview.RenderPipeline)),
                [in] InstanceBuffer,
                [in] Mesh,
@@ -1133,6 +1150,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] DataTexture,
                [in] ?Texture,
                [in] PVMatrix($),
+               [in] SunMatrix($),
+               [in] ShadowPass($), // TODO: separate shadow pass and shadow map into different globals? only need shadow map here
                [in] Mouse($),
                [in] Clock($),
                [in] FeedbackBuffer($),
@@ -1146,7 +1165,6 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     glGenBuffers(1, &feedbackBuffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(HoveredCell), NULL, GL_DYNAMIC_READ);
-    GlCheck();
 
     sg_reset_state_cache();
 
