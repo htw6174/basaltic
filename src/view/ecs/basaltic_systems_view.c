@@ -8,6 +8,108 @@
 #include "basaltic_sokol_gfx.h"
 #include <sys/stat.h>
 
+typedef struct {
+    InverseMatrices invs;
+} LightingUniformsVS0;
+
+typedef struct {
+    PVMatrix cam;
+    SunMatrix sun;
+    vec2 invZ;
+    vec3 camPos;
+    vec3 toSun;
+    // TODO: light colors
+} LightingUniformsFS0;
+
+static sg_shader_desc lightingShaderDescription = {
+    .vs.uniform_blocks[0] = {
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .size = sizeof(LightingUniformsVS0),
+        .uniforms = {
+            {.name = "inverse_view", .type = SG_UNIFORMTYPE_MAT4},
+            {.name = "inverse_projection", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    },
+    .fs.uniform_blocks[0] = {
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .size = sizeof(LightingUniformsFS0),
+        .uniforms = {
+            {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+            {.name = "sun", .type = SG_UNIFORMTYPE_MAT4},
+            {.name = "invZ", .type = SG_UNIFORMTYPE_FLOAT2},
+            {.name = "camera_position", .type = SG_UNIFORMTYPE_FLOAT3},
+            {.name = "toSun", .type = SG_UNIFORMTYPE_FLOAT3}
+        }
+    },
+    .fs.images = {
+        [0] = {
+            .used = true,
+            .image_type = SG_IMAGETYPE_2D,
+            .sample_type = SG_IMAGESAMPLETYPE_FLOAT
+        },
+        [1] = {
+            .used = true,
+            .image_type = SG_IMAGETYPE_2D,
+            .sample_type = SG_IMAGESAMPLETYPE_FLOAT
+        },
+        [2] = {
+            .used = true,
+            .image_type = SG_IMAGETYPE_2D,
+            .sample_type = SG_IMAGESAMPLETYPE_DEPTH
+        },
+        [3] = {
+            .used = true,
+            .image_type = SG_IMAGETYPE_2D,
+            .sample_type = SG_IMAGESAMPLETYPE_DEPTH
+        }
+    },
+    .fs.samplers = {
+        [0] = {
+            .used = true,
+            .sampler_type = SG_SAMPLERTYPE_SAMPLE
+        },
+        [1] = {
+            .used = true,
+            .sampler_type = SG_SAMPLERTYPE_COMPARE
+        }
+    },
+    .fs.image_sampler_pairs = {
+        [0] = {
+            .used = true,
+            .image_slot = 0,
+            .sampler_slot = 0,
+            .glsl_name = "diffuse"
+        },
+        [1] = {
+            .used = true,
+            .image_slot = 1,
+            .sampler_slot = 0,
+            .glsl_name = "normal"
+        },
+        [2] = {
+            .used = true,
+            .image_slot = 2,
+            .sampler_slot = 0,
+            .glsl_name = "depth"
+        },
+        [3] = {
+            .used = true,
+            .image_slot = 3,
+            .sampler_slot = 1,
+            .glsl_name = "shadowMap"
+        }
+    },
+};
+
+static sg_pipeline_desc lightingPipelineDescription = {
+    .layout = {
+        .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
+    },
+    .shader = {0},
+    .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+    .label = "lighting-pipeline",
+};
+
 void UniformPointerToMouse(ecs_iter_t *it) {
     Pointer *pointers = ecs_field(it, Pointer, 1);
     const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
@@ -24,72 +126,122 @@ void UniformCameraToPVMatrix(ecs_iter_t *it) {
     const Camera *cam = ecs_singleton_get(it->world, Camera);
     const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
     PVMatrix *pv = ecs_singleton_get_mut(it->world, PVMatrix);
+    InverseMatrices *invs = ecs_singleton_get_mut(it->world, InverseMatrices);
 
     // TODO: figure out if inner loops should be used for singleton-only systems
     //for (int i = 0; i < it->count; i++) {
     {
+        vec3 cameraPosition = bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0));
+        cameraPosition = vec3Add(cameraPosition, cam->origin);
+
         mat4x4 p, v;
-        vec4 cameraPosition;
-        vec4 cameraFocalPoint;
-
-        float pitch = cam->pitch * DEG_TO_RAD;
-        float yaw = cam->yaw * DEG_TO_RAD;
-        float correctedDistance = powf(cam->distance, 2.0);
-        float radius = cos(pitch) * correctedDistance;
-        float height = sin(pitch) * correctedDistance;
-        float floor = cam->origin.z; //ui->activeLayer == BC_WORLD_LAYER_SURFACE ? 0 : -8;
-        cameraPosition = (vec4){
-            .x = cam->origin.x + radius * sin(yaw),
-            .y = cam->origin.y + radius * -cos(yaw),
-            .z = floor + height
-        };
-        cameraFocalPoint = (vec4){
-            .x = cam->origin.x,
-            .y = cam->origin.y,
-            .z = floor
-        };
-
-        mat4x4Perspective(p, PI / 3.f, (float)w->x / w->y, 0.1f, 10000.f);
+        mat4x4Perspective(p, PI / 3.f, (float)w->x / w->y, cam->zNear, cam->zFar);
         mat4x4LookAt(v,
-            cameraPosition.xyz,
-            cameraFocalPoint.xyz,
+            cameraPosition,
+            cam->origin,
             (vec3){ {0.f, 0.f, 1.f} }
         );
 
-        mat4x4MultiplyMatrix(pv->pv, v, p);
+        mat4x4MultiplyMatrix(pv[0], v, p);
+
+        // inverse matricies
+        mat4x4Inverse(invs->view, v);
+        mat4x4Inverse(invs->projection, p);
     }
 
     ecs_singleton_modified(it->world, PVMatrix);
+    ecs_singleton_modified(it->world, InverseMatrices);
 }
 
 void UniformSunToMatrix(ecs_iter_t *it) {
     const SunLight *sun = ecs_singleton_get(it->world, SunLight);
+    const Camera *cam = ecs_singleton_get(it->world, Camera);
     SunMatrix *pv = ecs_singleton_get_mut(it->world, SunMatrix);
 
+    vec3 sunPosition = bc_sphereToCartesian(sun->azimuth, sun->inclination, cam->zFar / 2.0);
+
     mat4x4 p, v;
-    vec3 sunPosition;
-
-    float pitch = sun->inclination * DEG_TO_RAD;
-    float yaw = sun->azimuth * DEG_TO_RAD;
-    float dist = 512.0;
-    float radius = cos(pitch) * dist;
-    float height = sin(pitch) * dist;
-    sunPosition = (vec3){
-        .x = radius * sin(yaw),
-        .y = radius * -cos(yaw),
-        .z = height
-    };
-
-    mat4x4Orthographic(p, 300.0, 300.0, 0.1, 1024.0);
+    mat4x4Orthographic(p, sun->projectionSize, sun->projectionSize, cam->zNear, cam->zFar);
     mat4x4LookAt(v,
-        sunPosition,
-        (vec3){{0.f, 0.f, 0.f}},
+        vec3Add(sunPosition, cam->origin),
+        cam->origin,
         (vec3){{0.f, 0.f, 1.f}}
     );
 
-    mat4x4MultiplyMatrix(pv->pv, v, p);
-
+    mat4x4MultiplyMatrix(*pv, v, p);
     ecs_singleton_modified(it->world, SunMatrix);
+}
+
+void SetupRenderPass(ecs_iter_t *it) {
+    WindowSize *ws = ecs_field(it, WindowSize, 1);
+
+    int width = ws->x;
+    int height = ws->y;
+
+    OffscreenTargets ots = {
+        .diffuse = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .normal = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_RGBA16F,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .depth = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_R32F,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .zbuffer = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_DEPTH,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_LINEAR,
+            .mag_filter = SG_FILTER_LINEAR,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        })
+    };
+
+    // Used instead of singleton_set for convenience of setting with direct pointer
+    ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, &ots);
+
+    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
+    ecs_singleton_set(it->world, RenderPass, {
+        .action = {
+            .colors = {
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+            },
+            .depth = {
+                .load_action = SG_LOADACTION_CLEAR,
+                .store_action = SG_STOREACTION_STORE,
+                .clear_value = 1.0f
+            }
+        },
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .color_attachments = {
+                [0].image = ots.diffuse,
+                [1].image = ots.normal,
+                [2].image = ots.depth,
+            },
+            .depth_stencil_attachment.image = ots.zbuffer,
+            .label = "render-pass"
+        })
+    });
 }
 
 void BeginShadowPass(ecs_iter_t *it) {
@@ -103,11 +255,24 @@ void EndShadowPass(ecs_iter_t *it) {
 };
 
 void BeginRenderPass(ecs_iter_t *it) {
-    WindowSize *ws = ecs_field(it, WindowSize, 1);
-    sg_begin_default_passf(&(sg_pass_action){0}, ws->x, ws->y);
+    RenderPass *rp = ecs_field(it, RenderPass, 1);
+
+    sg_begin_pass(rp[0].pass, &rp[0].action);
 };
 
 void EndRenderPass(ecs_iter_t *it) {
+    sg_end_pass();
+};
+
+void BeginFinalPass(ecs_iter_t *it) {
+    WindowSize *ws = ecs_field(it, WindowSize, 1);
+
+    sg_pass_action pa = {0};
+
+    sg_begin_default_pass(&pa, ws->x, ws->y);
+};
+
+void EndFinalPass(ecs_iter_t *it) {
     sg_end_pass();
 };
 
@@ -115,7 +280,6 @@ void SetupPipelines(ecs_iter_t *it) {
     ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
     ResourceFile *fragSources = ecs_field(it, ResourceFile, 2);
     PipelineDescription *pipelineDescriptions = ecs_field(it, PipelineDescription, 3);
-    Pipeline *pipelines = ecs_field(it, Pipeline, 4);
 
     for (int i = 0; i < it->count; i++) {
         vertSources[i].accessTime = fragSources[i].accessTime = time(NULL);
@@ -249,6 +413,61 @@ void DrawInstances(ecs_iter_t *it) {
     }
 }
 
+void DrawLighting(ecs_iter_t *it) {
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
+    Mesh *meshes = ecs_field(it, Mesh, 2);
+    // Singletons
+    OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
+    ShadowMap *sm = ecs_field(it, ShadowMap, 4);
+    PVMatrix *pv = ecs_field(it, PVMatrix, 5);
+    InverseMatrices *invs = ecs_field(it, InverseMatrices, 6);
+    SunMatrix *sun = ecs_field(it, SunMatrix, 7);
+    Camera *cam = ecs_field(it, Camera, 8);
+    SunLight *light = ecs_field(it, SunLight, 9);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = meshes[0].vertexBuffers[0],
+            .fs.images = {
+                ots[0].diffuse,
+                ots[0].normal,
+                ots[0].zbuffer,
+                //sm[0].image,
+                sm[0].image
+            },
+            .fs.samplers = {
+                ots[0].sampler,
+                sm[0].sampler
+            }
+        };
+
+        sg_apply_pipeline(pipelines[i].pipeline);
+        sg_apply_bindings(&bind);
+
+        LightingUniformsVS0 lvs0 = {0};
+        // /mat4x4Inverse(lvs0.invs.view, invs[0].view);
+        mat4x4Copy(lvs0.invs.view, invs[0].view);
+        mat4x4Copy(lvs0.invs.projection, invs[0].projection);
+
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(lvs0));
+
+        LightingUniformsFS0 lu0 = {
+            .invZ = {
+                .x = -(cam->zFar + cam->zNear) / (cam->zFar - cam->zNear),
+                .y = -(2.f * cam->zFar * cam->zNear) / (cam->zFar - cam->zNear)
+            },
+            .camPos = bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0)),
+            .toSun = bc_sphereToCartesian(light->azimuth, light->inclination, 1.0)
+        };
+        mat4x4Copy(lu0.cam, pv[0]);
+        mat4x4Copy(lu0.cam, sun[0]);
+
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(lu0));
+
+        sg_draw(0, 4, 1);
+    }
+}
+
 void BcviewSystemsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystems);
 
@@ -265,21 +484,32 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
         [in] Pointer,
         [in] WindowSize($),
-        [out] Mouse($)
+        [out] ?Mouse($)
     );
 
     ECS_SYSTEM(world, UniformCameraToPVMatrix, EcsPreUpdate,
         [in] Camera($),
         [in] WindowSize($),
-        [out] PVMatrix($)
+        [out] ?PVMatrix($),
+        [out] ?InverseMatrices($)
     );
 
     ECS_SYSTEM(world, UniformSunToMatrix, EcsPreUpdate,
         [in] SunLight($),
-        [out] SunMatrix($)
+        [in] Camera($),
+        [out] ?SunMatrix($)
+    );
+
+    // Render pass setup
+    // Some setup depends on screen initialization, and render targets need to be resized if the screen size changes
+    ECS_SYSTEM(world, SetupRenderPass, EcsPreUpdate,
+        [in] WindowSize($),
+        [out] !OffscreenTargets($),
+        [out] !RenderPass($)
     );
 
     // Render pass begin and end
+    // Give both begin and end the same requirements, simply so they can both be disabled easily
     ECS_SYSTEM(world, BeginShadowPass, PreShadowPass,
         [in] ShadowPass($)
     );
@@ -289,10 +519,31 @@ void BcviewSystemsImport(ecs_world_t *world) {
     );
 
     ECS_SYSTEM(world, BeginRenderPass, PreRenderPass,
-        [in] WindowSize($)
+        [in] RenderPass($)
     );
 
     ECS_SYSTEM(world, EndRenderPass, PostRenderPass,
+        [none] RenderPass($)
+    );
+
+    ECS_SYSTEM(world, BeginFinalPass, OnLightingPass,
+        [in] WindowSize($)
+    );
+
+    ECS_SYSTEM(world, DrawLighting, OnLightingPass,
+        [in] Pipeline,
+        [in] Mesh,
+        [in] OffscreenTargets($),
+        [in] ShadowMap($),
+        [in] PVMatrix($),
+        [in] InverseMatrices($),
+        [in] SunMatrix($),
+        [in] Camera($),
+        [in] SunLight($),
+        [none] bcview.LightingPipeline
+    );
+
+    ECS_SYSTEM(world, EndFinalPass, OnLightingPass,
         [none] WindowSize($)
     );
 
@@ -357,6 +608,60 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] WrapInstanceOffsets($),
     );
 
+    //ecs_enable(world, DrawInstances, false);
+
     // A system with no query will run once per frame. However, an end of frame call is already being handled by the core engine. Something like this might be useful for starting and ending individual render passes
     //ECS_SYSTEM(world, SokolCommit, EcsOnStore, 0);
+
+    // Shadow pass setup
+    sg_image shadowMap = sg_make_image(&(sg_image_desc){
+        .render_target = true,
+        .width = 2048,
+        .height = 2048,
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
+        .sample_count = 1,
+        .label = "shadow-map",
+    });
+
+    ecs_singleton_set(world, ShadowMap, {
+        .image = shadowMap,
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_LINEAR,
+            .mag_filter = SG_FILTER_LINEAR,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+            .compare = SG_COMPAREFUNC_LESS,
+            .label = "shadow-sampler",
+        })
+    });
+
+    ecs_singleton_set(world, ShadowPass, {
+        .action = {
+            .depth = {
+                .load_action = SG_LOADACTION_CLEAR,
+                .store_action = SG_STOREACTION_STORE,
+                .clear_value = 1.0f
+            }
+        },
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .depth_stencil_attachment.image = shadowMap,
+            .label = "shadow-pass"
+        })
+    });
+
+    // Render pass setup
+
+    // Combined pipeline and mesh to draw lit world on a screen uv quad
+    ecs_entity_t finalPass = ecs_set_name(world, 0, "Final Pass");
+    ecs_add(world, finalPass, LightingPipeline);
+    ecs_set_pair(world, finalPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/lighting.vert"});
+    ecs_set_pair(world, finalPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/lighting.frag"});
+    ecs_set(world, finalPass, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
+
+    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    ecs_set(world, finalPass, Mesh, {
+        .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
+            .data = SG_RANGE(dbg_vertices)
+        })
+    });
 }

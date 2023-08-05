@@ -11,6 +11,16 @@ void bc_sg_setup(void);
 
 uint32_t bc_sg_getImageGluint(sg_image image);
 
+/**
+ * @brief ...
+ *
+ * @param inclination in degrees
+ * @param azimuth in degrees
+ * @param radius p_radius:...
+ * @return vec3
+ */
+vec3 bc_sphereToCartesian(float inclination, float azimuth, float radius);
+
 // TODO: issue with this approach is that it prevents the model matrix uniform block from using any other uniforms (so only 4/16 slots are used). Bad if I need many uniforms
 void bc_drawWrapInstances(int base_element, int num_elements, int num_instances, int modelMatrixUniformBlockIndex, vec3 position, const vec3 *offsets);
 

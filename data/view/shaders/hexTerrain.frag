@@ -7,15 +7,6 @@
 
 #define PI 3.14159
 
-#define SPECULAR 0.5
-#define DIFFUSE 0.7
-#define REFLECTION 1.0
-#define SHININESS 10.0
-
-#define LIGHT_AMBIENT 0.3
-#define LIGHT1_SPECULAR 1.0
-#define LIGHT1_DIFFUSE 1.0
-
 //#include "uniforms.h"
 
 //const vec3 cliffColor = vec3(0.3, 0.2, 0.1);
@@ -27,9 +18,6 @@ uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
 
-uniform sampler2DShadow shadowMap;
-//uniform sampler2D shadowMap;
-
 layout(std430, binding = 0) buffer feedbackBuffer {
 	int hoveredX;
 	int hoveredY;
@@ -38,11 +26,11 @@ layout(std430, binding = 0) buffer feedbackBuffer {
 in vec4 inout_color;
 in vec3 inout_pos;
 in vec3 inout_normal;
-in vec4 inout_light_proj_pos;
 in float inout_radius; // approximate distance from center of cell, based on vert barycentric. == 1 at cell corners, == 0.75 at center of edge
 flat in ivec2 inout_cellCoord;
 
 out vec4 out_color;
+out vec3 out_normal;
 
 // BookOfShaders rand and 2d rand
 float rand(float x) {
@@ -138,17 +126,6 @@ float fbm(vec2 x, float H) {
 		a *= G;
 	}
 	return t;
-}
-
-float phong(vec3 normal, vec3 lightDir) {
-	float ambient = REFLECTION * LIGHT_AMBIENT;
-	vec3 reflection = normalize(reflect(-lightDir, normal));
-	float dotLN = dot(lightDir, normal);
-	if (dotLN < 0.0) {
-		return ambient;
-	}
-	float diffuse = DIFFUSE * dotLN * LIGHT1_DIFFUSE;
-	return ambient + diffuse;
 }
 
 void main()
@@ -263,18 +240,7 @@ void main()
 	//albedo = randColor(rand2(inout_cellCoord));
 	//vN = flatNormal;
 
-	// Apply lighting
-	vec3 lightPos = inout_light_proj_pos.xyz / inout_light_proj_pos.w;
-	//vec3 shadowMapPos = vec3((lightPos.xy + 1.0) * 0.5, lightPos.z);
-	vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
-
-	float shadow = texture(shadowMap, shadowMapPos.xyz);
-	//float shadow = texture(shadowMap, shadowMapPos.xy).x;
-	vec3 litColor = albedo * shadow;// phong(vN, normalize(vec3(1.5, -3.0, 3.0)));
-	//vec3 litColor = shadow.xxx;
-	//float dist = fract((shadow - lightPos.z) * 1000.0 + time);
-	//float dist = shadow - ((lightPos.z + 1.0) * 0.5);
-	//vec3 litColor = dist > 0.0 ? vec3(dist, 0.0, 0.0) : vec3(0.0, 0.0, 1.0 - dist);
+	vec3 litColor = albedo;
 
 	// display white outline on hovered cell
  	if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
@@ -290,4 +256,6 @@ void main()
 	//out_color = inout_color;
 	out_color = vec4(litColor, 1.0);
 	//out_color = vec4(inout_uv, 0.0, 1.0);
+
+	out_normal = vN;
 }

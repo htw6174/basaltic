@@ -949,6 +949,7 @@ void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
                     break;
                 case EcsStructType:
                     // recurse componentInspector
+                    // TODO: component members with special componentInspector handling should also get their custom inspectors here
                     ecsMetaInspector(world, cursor, focusEntity);
                     break;
                 case EcsEnumType:

@@ -40,14 +40,72 @@ typedef struct {
     //int64_t aligner;
 } terrainCellData;
 
-// NOTE: can eliminate most of the shader spec later when using reflection utils
-static sg_shader_desc terrainShaderDescription = {
+static sg_shader_desc terrainShadowShaderDescription = {
     .vs.uniform_blocks[0] = {
-        .size = sizeof(PVMatrix) + sizeof(SunMatrix),
+        .size = sizeof(PVMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
             [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
-            [1] = {.name = "light", .type = SG_UNIFORMTYPE_MAT4}
+        }
+    },
+    .vs.uniform_blocks[1] = {
+        .size = sizeof(ModelMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    },
+    .vs.images[0] = {
+        .used = true,
+        .image_type = SG_IMAGETYPE_2D,
+        .sample_type = SG_IMAGESAMPLETYPE_SINT,
+    },
+    .vs.samplers[0] = {
+        .used = true,
+        .sampler_type = SG_SAMPLERTYPE_SAMPLE,
+    },
+    .vs.image_sampler_pairs[0] = {
+        .used = true,
+        .image_slot = 0,
+        .sampler_slot = 0,
+        .glsl_name = "terrain"
+    },
+    .vs.source = NULL,
+    .fs.source = NULL
+};
+
+static sg_pipeline_desc terrainShadowPipelineDescription = {
+    .shader = {0},
+    .layout = {
+        .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+        .attrs = {
+            [0] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT4},
+            [1] = {.buffer_index = 0, .format = SG_VERTEXFORMAT_FLOAT2},
+            [2] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT2},
+            [3] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT},
+            [4] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_FLOAT3},
+            [5] = {.buffer_index = 1, .format = SG_VERTEXFORMAT_SHORT2N}
+        }
+    },
+    .index_type = SG_INDEXTYPE_UINT32,
+    .depth = {
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
+        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+        .write_enabled = true
+    },
+    .cull_mode = SG_CULLMODE_FRONT, // said to prevent 'shadow acne' on front-faces
+    .sample_count = 1,
+    // important: 'deactivate' the default color target for 'depth-only-rendering'
+    .colors[0].pixel_format = SG_PIXELFORMAT_NONE
+};
+
+// NOTE: can eliminate most of the shader spec later when using reflection utils
+static sg_shader_desc terrainShaderDescription = {
+    .vs.uniform_blocks[0] = {
+        .size = sizeof(PVMatrix),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4}
         }
     },
     .vs.uniform_blocks[1] = {
@@ -95,25 +153,10 @@ static sg_shader_desc terrainShaderDescription = {
             [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
         }
     },
-    .fs.images[0] = {
-        .used = true,
-        .image_type = SG_IMAGETYPE_2D,
-        .sample_type = SG_IMAGESAMPLETYPE_DEPTH
-    },
-    .fs.samplers[0] = {
-        .used = true,
-        .sampler_type = SG_SAMPLERTYPE_COMPARE
-    },
-    .fs.image_sampler_pairs[0] = {
-        .used = true,
-        .image_slot = 0,
-        .sampler_slot = 0,
-        .glsl_name = "shadowMap"
-    },
     .fs.source = NULL
 };
 
-static sg_pipeline_desc terrianPipelineDescription = {
+static sg_pipeline_desc terrainPipelineDescription = {
     .shader = {0}, // TODO: setup a fallback shader here
     .layout = {
         .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
@@ -128,10 +171,17 @@ static sg_pipeline_desc terrianPipelineDescription = {
     },
     .index_type = SG_INDEXTYPE_UINT32,
     .depth = {
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
         .compare = SG_COMPAREFUNC_LESS_EQUAL,
         .write_enabled = true
     },
-    .cull_mode = SG_CULLMODE_NONE
+    .cull_mode = SG_CULLMODE_BACK,
+    .color_count = 3,
+    .colors = {
+        [0].pixel_format = SG_PIXELFORMAT_RGBA8,
+        [1].pixel_format = SG_PIXELFORMAT_RGBA16F,
+        [2].pixel_format = SG_PIXELFORMAT_R32F,
+    }
 };
 
 vec3 barycentric(vec2 p, vec2 left, vec2 right);
@@ -1029,17 +1079,49 @@ void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
 }
 
 // TODO: restrict number of instances drawn, add LOD meshes and draw different instances for each LOD
+void DrawHexTerrainShadows(ecs_iter_t *it) {
+    int f = 0;
+    Pipeline *pips = ecs_field(it, Pipeline, ++f);
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, ++f);
+    Mesh *mesh = ecs_field(it, Mesh, ++f);
+    DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
+    SunMatrix *sun = ecs_field(it, SunMatrix, ++f);
+
+    const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
+
+    for (int i = 0; i < it->count; i++) {
+        sg_bindings bind = {
+            .vertex_buffers[0] = instanceBuffers[i].buffer,
+            .vertex_buffers[1] = mesh[i].vertexBuffers[0],
+            .index_buffer = mesh[i].indexBuffer,
+            .vs.images[0] = dataTextures[i].image,
+            .vs.samplers[0] = dataTextures[i].sampler
+        };
+
+        sg_apply_pipeline(pips[i].pipeline);
+        sg_apply_bindings(&bind);
+
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(sun[i]));
+
+        if (wraps != NULL) {
+            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+        } else {
+            mat4x4 model;
+            mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+            sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
+        }
+    }
+}
+
+// TODO: restrict number of instances drawn, add LOD meshes and draw different instances for each LOD
 void DrawPipelineHexTerrain(ecs_iter_t *it) {
     int f = 0;
     Pipeline *pips = ecs_field(it, Pipeline, ++f);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, ++f);
     Mesh *mesh = ecs_field(it, Mesh, ++f);
-    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, ++f);
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
-    Texture *textures = ecs_field(it, Texture, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
-    SunMatrix *sun = ecs_field(it, SunMatrix, ++f);
-    ShadowPass *shadow = ecs_field(it, ShadowPass, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
     Clock *clock = ecs_field(it, Clock, ++f);
     FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
@@ -1053,28 +1135,13 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             .vertex_buffers[1] = mesh[i].vertexBuffers[0],
             .index_buffer = mesh[i].indexBuffer,
             .vs.images[0] = dataTextures[i].image,
-            .vs.samplers[0] = dataTextures[i].sampler,
-            .fs.images[0] = shadow[i].image,
-            .fs.samplers[0] = shadow[i].sampler
+            .vs.samplers[0] = dataTextures[i].sampler
         };
-
-        // Get images, add to fs_images
-        // if (textures != NULL) {
-        //     for (int img = 0; img < SG_MAX_SHADERSTAGE_IMAGES; img++) {
-        //         bind.fs.images[img] = textures[i].images[img];
-        //     }
-        //     bind.fs.samplers[0] = textures[i].sampler;
-        // }
 
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
 
-        // TODO: consider making structs for the common global vert and frag stage uniforms
-        mat4x4 vsGlobalParams[2];
-        mat4x4Copy(vsGlobalParams[0], pvs[i].pv);
-        mat4x4Copy(vsGlobalParams[1], sun[i].pv);
-
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(vsGlobalParams));
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(clock[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
 
@@ -1142,16 +1209,23 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
+    ECS_SYSTEM(world, DrawHexTerrainShadows, OnShadowPass,
+               [in] Pipeline(up(bcview.ShadowPipeline)),
+               [in] InstanceBuffer,
+               [in] Mesh,
+               [in] DataTexture,
+               [in] SunMatrix($),
+               [none] ModelWorld($),
+               [none] WrapInstanceOffsets($),
+               [none] bcview.TerrainRender,
+    );
+
     ECS_SYSTEM(world, DrawPipelineHexTerrain, OnRenderPass,
                [in] Pipeline(up(bcview.RenderPipeline)),
                [in] InstanceBuffer,
                [in] Mesh,
-               [in] TerrainBuffer,
                [in] DataTexture,
-               [in] ?Texture,
                [in] PVMatrix($),
-               [in] SunMatrix($),
-               [in] ShadowPass($), // TODO: separate shadow pass and shadow map into different globals? only need shadow map here
                [in] Mouse($),
                [in] Clock($),
                [in] FeedbackBuffer($),
@@ -1171,12 +1245,18 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 
     // Pipeline, only need to create one per type
-    ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "TerrainPipeline");
+    ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "Terrain Pipeline");
     ecs_add_pair(world, terrainPipeline, EcsChildOf, RenderPipeline);
     ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
     // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
     ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
-    ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrianPipelineDescription});
+    ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrainPipelineDescription});
+
+    ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");
+    ecs_add_pair(world, terrainShadowPipeline, EcsChildOf, ShadowPipeline);
+    ecs_set_pair(world, terrainShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_terrain.vert"});
+    ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
+    ecs_set(world, terrainShadowPipeline, PipelineDescription, {.shader_desc = &terrainShadowShaderDescription, .pipeline_desc = &terrainShadowPipelineDescription});
 
     // Init mesh TODO: give this a better home?
     //Mesh mesh = createHexmapMesh();
@@ -1184,6 +1264,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ecs_entity_t terrainDraw = ecs_set_name(world, 0, "TerrainDraw");
     ecs_add_pair(world, terrainDraw, RenderPipeline, terrainPipeline);
+    ecs_add_pair(world, terrainDraw, ShadowPipeline, terrainShadowPipeline);
     ecs_add(world, terrainDraw, TerrainRender);
     ecs_add(world, terrainDraw, TerrainBuffer);
     ecs_add(world, terrainDraw, InstanceBuffer);

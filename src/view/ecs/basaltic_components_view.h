@@ -9,22 +9,27 @@
 #include "sokol_gfx.h"
 #include "flecs.h"
 
+// Ensure meta symbols are only defined once
 #undef ECS_META_IMPL
+#undef BC_DECL
 #ifndef BASALTIC_VIEW_IMPL
-#define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
+#define ECS_META_IMPL EXTERN
+#define BC_DECL extern
+#else
+#define BC_DECL
 #endif
 
 #define MAX_QUERY_EXPR_LENGTH 1024
 
 /* Common types */
-extern ECS_COMPONENT_DECLARE(s32);
-extern ECS_COMPONENT_DECLARE(vec3);
+BC_DECL ECS_COMPONENT_DECLARE(s32);
+BC_DECL ECS_COMPONENT_DECLARE(vec3);
 
 typedef vec3 Scale;
-extern ECS_COMPONENT_DECLARE(Scale);
+BC_DECL ECS_COMPONENT_DECLARE(Scale);
 
 typedef vec4 Color;
-extern ECS_COMPONENT_DECLARE(Color);
+BC_DECL ECS_COMPONENT_DECLARE(Color);
 
 ECS_STRUCT(ResourceFile, {
     // NOTE: should be explicitly time_t; need to add meta info first
@@ -50,13 +55,13 @@ ECS_STRUCT(QueryDesc, {
 });
 
 typedef u64 ModelLastRenderedStep;
-extern ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
+BC_DECL ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 
 
 /* User Interface */
 
-extern ECS_TAG_DECLARE(Previous); // Relationship where target is previous value of a component
+BC_DECL ECS_TAG_DECLARE(Previous); // Relationship where target is previous value of a component
 
 ECS_STRUCT(DeltaTime, {
     float seconds;
@@ -72,10 +77,12 @@ ECS_STRUCT(Pointer, {
 
 // TODO: setup camera 'real' position and 'target' position, smoothly interpolate each frame
 ECS_STRUCT(Camera, {
-    vec3 origin; // TODO: figure out how reflection info for this works? seems to run without complaints, even though there isn't an 'inner' reflection info defined
+    vec3 origin;
     float distance;
     float pitch;
     float yaw;
+    float zNear;
+    float zFar;
 });
 
 // max camera distance from origin, in hex coordinate space
@@ -127,8 +134,8 @@ ECS_STRUCT(DirtyChunkBuffer, {
 /* Rendering */
 
 ECS_STRUCT(WindowSize, {
-    float x;
-    float y;
+    s32 x;
+    s32 y;
 });
 
 // Pixel coordinates formatted for shader uniform use; origin at bottom-left, lie on half integer boundary (+0.5, +0.5)
@@ -137,16 +144,18 @@ ECS_STRUCT(Mouse, {
     float y;
 });
 
-ECS_STRUCT(PVMatrix, {
-    mat4x4 pv;
-});
+typedef mat4x4 PVMatrix;
+BC_DECL ECS_COMPONENT_DECLARE(PVMatrix);
 
-ECS_STRUCT(SunMatrix, {
-    mat4x4 pv;
-});
+typedef mat4x4 ModelMatrix;
+BC_DECL ECS_COMPONENT_DECLARE(ModelMatrix);
 
-ECS_STRUCT(ModelMatrix, {
-    mat4x4 model;
+typedef mat4x4 SunMatrix;
+BC_DECL ECS_COMPONENT_DECLARE(SunMatrix);
+
+ECS_STRUCT(InverseMatrices, {
+    mat4x4 view;
+    mat4x4 projection;
 });
 
 ECS_STRUCT(Clock, {
@@ -156,6 +165,7 @@ ECS_STRUCT(Clock, {
 ECS_STRUCT(SunLight, {
     float azimuth;
     float inclination;
+    float projectionSize;
     Color directColor;
     Color indirectColor;
 });
@@ -163,12 +173,31 @@ ECS_STRUCT(SunLight, {
 ECS_STRUCT(ShadowPass, {
     sg_pass pass;
     sg_pass_action action;
+});
+
+ECS_STRUCT(RenderPass, {
+    sg_pass pass;
+    sg_pass_action action;
+});
+
+// Don't need state for lighting (default) pass, Sokol's defaults work fine
+
+ECS_STRUCT(ShadowMap, {
     sg_image image;
     sg_sampler sampler;
 });
 
-extern ECS_TAG_DECLARE(VertexShaderSource);
-extern ECS_TAG_DECLARE(FragmentShaderSource);
+ECS_STRUCT(OffscreenTargets, {
+    sg_image diffuse;
+    sg_image normal;
+    sg_image depth;
+    sg_image zbuffer;
+    sg_sampler sampler;
+});
+
+// Target of a ResourceFile relationship
+BC_DECL ECS_TAG_DECLARE(VertexShaderSource);
+BC_DECL ECS_TAG_DECLARE(FragmentShaderSource);
 
 // NOTE: could also set this up as 2 different basaltic_components
 ECS_STRUCT(PipelineDescription, {
@@ -182,12 +211,14 @@ ECS_STRUCT(Pipeline, {
 });
 
 // Relationships where the target is a Pipeline entity
-extern ECS_TAG_DECLARE(ShadowPipeline);
-extern ECS_TAG_DECLARE(RenderPipeline);
+BC_DECL ECS_TAG_DECLARE(ShadowPipeline);
+BC_DECL ECS_TAG_DECLARE(RenderPipeline);
+
+BC_DECL ECS_TAG_DECLARE(LightingPipeline);
 
 // Used to differentiate different render types for specalized draw systems
-extern ECS_TAG_DECLARE(TerrainRender);
-extern ECS_TAG_DECLARE(DebugRender);
+BC_DECL ECS_TAG_DECLARE(TerrainRender);
+BC_DECL ECS_TAG_DECLARE(DebugRender);
 
 ECS_STRUCT(WrapInstanceOffsets, {
     vec3 offsets[4];
@@ -214,8 +245,6 @@ ECS_STRUCT(Mesh, {
 ECS_STRUCT(Elements, {
     s32 count;
 });
-
-// TODO: textures
 
 ECS_STRUCT(FeedbackBuffer, {
     u32 gluint;

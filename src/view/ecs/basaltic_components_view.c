@@ -1,24 +1,5 @@
 #define BASALTIC_VIEW_IMPL
 #include "basaltic_components_view.h"
-#include "assert.h"
-
-ECS_COMPONENT_DECLARE(s32);
-ECS_COMPONENT_DECLARE(vec3);
-
-ECS_COMPONENT_DECLARE(Scale);
-ECS_COMPONENT_DECLARE(Color);
-
-ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
-
-ECS_TAG_DECLARE(Previous);
-
-ECS_TAG_DECLARE(VertexShaderSource);
-ECS_TAG_DECLARE(FragmentShaderSource);
-
-ECS_TAG_DECLARE(ShadowPipeline);
-ECS_TAG_DECLARE(RenderPipeline);
-ECS_TAG_DECLARE(TerrainRender);
-ECS_TAG_DECLARE(DebugRender);
 
 // TODO: consider rearranging module paths. It would be convenient if the view and model were at the same depth, with different top level names
 void BcviewImport(ecs_world_t *world) {
@@ -98,10 +79,14 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, SunMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
+    ECS_COMPONENT_DEFINE(world, InverseMatrices);
     ECS_META_COMPONENT(world, Clock);
     ECS_META_COMPONENT(world, SunLight);
 
     ECS_COMPONENT_DEFINE(world, ShadowPass);
+    ECS_COMPONENT_DEFINE(world, RenderPass);
+    ECS_COMPONENT_DEFINE(world, ShadowMap);
+    ECS_COMPONENT_DEFINE(world, OffscreenTargets);
 
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
@@ -114,6 +99,8 @@ void BcviewImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, RenderPipeline);
     ecs_add_id(world, RenderPipeline, EcsTraversable);
     ecs_add_id(world, RenderPipeline, EcsOneOf);
+
+    ECS_TAG_DEFINE(world, LightingPipeline);
 
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
@@ -137,44 +124,14 @@ void BcviewImport(ecs_world_t *world) {
         .origin = {{0, 0, 0}},
         .distance = 10.0f,
         .pitch = 45.0f,
-        .yaw = 0.0f
+        .yaw = 0.0f,
+        .zNear = 0.1f,
+        .zFar = 1000.0f
     });
 
     ecs_singleton_set(world, CameraSpeed, {
         .movement = 10.0f,
         .rotation = 90.0f
-    });
-
-    // Render passes TODO this setup needs a better home
-    sg_image shadowMap = sg_make_image(&(sg_image_desc){
-        .render_target = true,
-        .width = 2048,
-        .height = 2048,
-        .pixel_format = SG_PIXELFORMAT_DEPTH,
-        .sample_count = 1,
-        .label = "shadow-map",
-    });
-    ecs_singleton_set(world, ShadowPass, {
-        .image = shadowMap,
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_LINEAR,
-            .mag_filter = SG_FILTER_LINEAR,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-            .compare = SG_COMPAREFUNC_LESS,
-            .label = "shadow-sampler",
-        }),
-        .action = {
-            .depth = {
-                .load_action = SG_LOADACTION_CLEAR,
-                .store_action = SG_STOREACTION_STORE,
-                .clear_value = 1.0f
-            }
-        },
-        .pass = sg_make_pass(&(sg_pass_desc){
-            .depth_stencil_attachment.image = shadowMap,
-            .label = "shadow-pass"
-        })
     });
 
     // Global scale for world rendering
@@ -198,12 +155,11 @@ void BcviewImport(ecs_world_t *world) {
     // Global uniforms
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
-    ecs_singleton_add(world, PVMatrix);
-    ecs_singleton_add(world, SunMatrix);
     ecs_singleton_add(world, Clock);
     ecs_singleton_set(world, SunLight, {
         .azimuth = 120.0,
         .inclination = 30.0,
+        .projectionSize = 50.0,
         .directColor = (vec4){{0.9, 0.9, 0.7, 1.0}},
         .indirectColor = (vec4){{0.2, 0.2, 0.4, 1.0}}
     });

@@ -45,6 +45,17 @@ uint32_t bc_sg_getImageGluint(sg_image image) {
     return img->gl.tex[0];
 }
 
+vec3 bc_sphereToCartesian(float azimuth, float inclination, float radius) {
+    azimuth *= DEG_TO_RAD;
+    inclination *= DEG_TO_RAD;
+    float xyDist = cos(inclination) * radius;
+    return (vec3){
+        .x = xyDist * sin(azimuth),
+        .y = xyDist * -cos(azimuth),
+        .z = sin(inclination) * radius
+    };
+}
+
 void bc_drawWrapInstances(int base_element, int num_elements, int num_instances, int modelMatrixUniformBlockIndex, vec3 position, const vec3 *offsets) {
     static mat4x4 model;
     for (int i = 0; i < 4; i++) {

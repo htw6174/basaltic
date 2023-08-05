@@ -166,7 +166,7 @@ void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
 }
 
 static void translateCamera(ecs_world_t *world, Camera camDelta) {
-    const Camera *cam = ecs_singleton_get(world, Camera);
+    Camera *cam = ecs_singleton_get_mut(world, Camera);
     const CameraWrap *wrap = ecs_singleton_get(world, CameraWrap);
     float yaw = cam->yaw * DEG_TO_RAD;
     float sinYaw = sin(yaw);
@@ -204,12 +204,12 @@ static void translateCamera(ecs_world_t *world, Camera camDelta) {
         wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
     }
 
-    ecs_singleton_set(world, Camera, {
-        .origin = {{wrappedX, wrappedY, cam->origin.z + camDelta.origin.z}},
-        .distance = cam->distance + camDelta.distance,
-        .pitch = cam->pitch + camDelta.pitch,
-        .yaw = cam->yaw + camDelta.yaw
-    });
+    cam->origin = (vec3){{wrappedX, wrappedY, cam->origin.z + camDelta.origin.z}};
+    cam->distance += camDelta.distance;
+    cam->pitch += camDelta.pitch;
+    cam->yaw += camDelta.yaw;
+
+    ecs_singleton_modified(world, Camera);
 }
 
 static void selectCell(ecs_world_t *world) {

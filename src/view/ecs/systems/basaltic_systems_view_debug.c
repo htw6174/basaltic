@@ -85,10 +85,17 @@ static sg_pipeline_desc debugPipelineDescription = {
         }
     },
     .depth = {
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
         .compare = SG_COMPAREFUNC_LESS_EQUAL,
         .write_enabled = true
     },
-    .cull_mode = SG_CULLMODE_NONE
+    .cull_mode = SG_CULLMODE_BACK,
+    .color_count = 3,
+    .colors = {
+        [0].pixel_format = SG_PIXELFORMAT_RGBA8,
+        [1].pixel_format = SG_PIXELFORMAT_RGBA16F,
+        [2].pixel_format = SG_PIXELFORMAT_R32F,
+    }
 };
 
 static sg_shader_desc debugRTShaderDescription = {
@@ -179,13 +186,15 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
 void DrawRenderTargetPreviews(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     Mesh *meshes = ecs_field(it, Mesh, 2);
-    Texture *textures = ecs_field(it, Texture, 3);
+    // Singletons
+    ShadowMap *sm = ecs_field(it, ShadowMap, 3);
+    OffscreenTargets *ot = ecs_field(it, OffscreenTargets, 4);
 
     for (int i = 0; i < it->count; i++) {
         sg_bindings bind = {
             .vertex_buffers[0] = meshes[0].vertexBuffers[0],
-            .fs.images[0] = textures[0].images[0],
-            .fs.samplers[0] = textures[0].sampler
+            .fs.images[0] = sm->image,
+            .fs.samplers[0] = ot->sampler
         };
 
         sg_apply_pipeline(pipelines[i].pipeline);
@@ -220,7 +229,8 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ECS_SYSTEM(world, DrawRenderTargetPreviews, PostRenderPass,
         [in] Pipeline(up(bcview.RenderPipeline)),
         [in] Mesh,
-        [in] Texture,
+        [in] ShadowMap($),
+        [in] OffscreenTargets($),
         [none] bcview.DebugRender
     );
 
@@ -245,7 +255,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
     ecs_add_pair(world, debugRTPipeline, EcsChildOf, RenderPipeline);
-    ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug_RT.vert"});
+    ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
     ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
 
@@ -264,7 +274,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         .expr = "Position, (bc.planes.IsOn, _)"
     });
     ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
-    //ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline); // TEST: disable normal render pass to see shadows better
+    ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
     ecs_override_pair(world, debugPrefab, ShadowPipeline, debugShadowPipeline);
     ecs_override(world, debugPrefab, InstanceBuffer);
     ecs_override(world, debugPrefab, QueryDesc);
@@ -303,26 +313,17 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     //ecs_enable(world, ecs_id(DrawInstances), false);
 
     // Render target debug rect
-    ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "Shadow Map");
-    ecs_add_id(world, renderTargetVis, DebugRender);
-    ecs_add_pair(world, renderTargetVis, RenderPipeline, debugRTPipeline);
+    // FIXME: doesn't fit into the render or lighting pass anymore
+    // ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "Shadow Map");
+    // ecs_add_id(world, renderTargetVis, DebugRender);
+    // ecs_add_pair(world, renderTargetVis, RenderPipeline, debugRTPipeline);
+    //
+    // float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    // ecs_set(world, renderTargetVis, Mesh, {
+    //     .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
+    //         .data = SG_RANGE(dbg_vertices)
+    //     })
+    // });
 
-    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
-    ecs_set(world, renderTargetVis, Mesh, {
-        .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
-            .data = SG_RANGE(dbg_vertices)
-        })
-    });
-
-    ecs_enable(world, renderTargetVis, false);
-
-    ecs_set(world, renderTargetVis, Texture, {
-        .images[0] = ecs_singleton_get(world, ShadowPass)->image,
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_NEAREST,
-            .mag_filter = SG_FILTER_NEAREST,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        })
-    });
+    // ecs_enable(world, renderTargetVis, false);
 }
