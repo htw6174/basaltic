@@ -18,6 +18,7 @@ typedef struct {
     vec2 invZ;
     vec3 camPos;
     vec3 toSun;
+    mat4x4 iv;
     // TODO: light colors
 } LightingUniformsFS0;
 
@@ -38,7 +39,8 @@ static sg_shader_desc lightingShaderDescription = {
             {.name = "sun", .type = SG_UNIFORMTYPE_MAT4},
             {.name = "invZ", .type = SG_UNIFORMTYPE_FLOAT2},
             {.name = "camera_position", .type = SG_UNIFORMTYPE_FLOAT3},
-            {.name = "toSun", .type = SG_UNIFORMTYPE_FLOAT3}
+            {.name = "toSun", .type = SG_UNIFORMTYPE_FLOAT3},
+            {.name = "inverse_view", .type = SG_UNIFORMTYPE_MAT4}
         }
     },
     .fs.images = {
@@ -460,7 +462,8 @@ void DrawLighting(ecs_iter_t *it) {
             .toSun = bc_sphereToCartesian(light->azimuth, light->inclination, 1.0)
         };
         mat4x4Copy(lu0.cam, pv[0]);
-        mat4x4Copy(lu0.cam, sun[0]);
+        mat4x4Copy(lu0.sun, sun[0]);
+        mat4x4Copy(lu0.iv, invs[0].view);
 
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(lu0));
 

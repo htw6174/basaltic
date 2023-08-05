@@ -1,11 +1,11 @@
 #version 330
 
 #define SPECULAR 0.5
-#define DIFFUSE 0.7
+#define DIFFUSE 0.8
 #define REFLECTION 1.0
 #define SHININESS 10.0
 
-#define LIGHT_AMBIENT 0.3
+#define LIGHT_AMBIENT 0.2
 #define LIGHT1_SPECULAR 1.0
 #define LIGHT1_DIFFUSE 1.0
 
@@ -19,6 +19,7 @@ uniform mat4 sun;
 uniform vec2 invZ;
 uniform vec3 camera_position;
 uniform vec3 toSun;
+uniform mat4 inverse_view;
 
 // TODO: sunlight and shadow colors, others
 
@@ -58,31 +59,44 @@ void main() {
 
     float viewZ = reconstructDepth(dep);
     vec4 viewPos = view_dir * viewZ;
-    vec4 worldPos = world_dir * viewZ + vec4(camera_position, 1.0);
-
-    vec4 light_proj_pos = sun * worldPos;
-    vec3 lightPos = light_proj_pos.xyz / light_proj_pos.w;
-    vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
-
-    float shadow = texture(shadowMap, shadowMapPos.xyz);
+    vec4 worldPos = inverse_view * vec4(viewPos.xyz, 1.0);
+    //worldPos.xyz = worldPos.xyz / worldPos.w;
+    //vec4 worldPos = world_dir * viewZ + vec4(camera_position, 1.0);
 
     // Shadows and lighting TODO:
-    // - get sun direction vector, use for phong
-    // - Where dotLN < 0, don't use shadowMap
     // - Shadows and backfacing sides should have same ambient light
     // - Use sun params for direct and indirect light color + intensity
 
-    vec3 lit = diff.xyz * phong(norm, toSun) * shadow;
+    float directLight = 1.0;
+    // avoid sampling shadowMap on faces that are pointing fully away from the sun
+    // not sure if this helps due to how shader branching works
+    float dotLN = dot(toSun, norm);
+    if (dotLN < 0.0) {
+        directLight = 0.0;
+    } else {
+        vec4 light_proj_pos = sun * worldPos;
+        vec3 lightPos = light_proj_pos.xyz / light_proj_pos.w;
+        vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
 
-    // TODO: write to the diffuse target before other lighting?
+        directLight = texture(shadowMap, shadowMapPos.xyz);
+        directLight = min(directLight, dotLN);
+    }
+
+    float ambient = LIGHT_AMBIENT;
+    float diffuse = directLight * DIFFUSE;
+    float totalLight = ambient + diffuse;
+
+    vec3 lit = diff.rgb * totalLight;
+
+    // TODO: write to the diffuse target before lighting pass?
     vec3 sky = vec3(0.5, 0.5, 0.7);
 
-    //vec3 wtf = vec3(fract(viewZ));
-    vec3 wtf = fract(viewPos.xyz);
+    //vec3 wtf = lightPos.xyz;
+    //vec3 wtf = fract(worldPos.xyz);
     //vec3 wtf = world_dir.xyz;
 
-    vec3 color = mix(sky, wtf, diff.a);
-    //vec3 color = mix(sky, lit, diff.a);
+    //vec3 color = mix(sky, wtf, diff.a);
+    vec3 color = mix(sky, lit, diff.a);
 
     //vec3 depthVis = vec3(fract(viewZ));
     //frag_color = diffuse;// + (vec4(normal, depth) * shadow);
