@@ -29,12 +29,12 @@ in vec4 world_dir;
 
 out vec4 frag_color;
 
-// Returns view-space z coord. Note that OpenGL faces down the z axis, i.e. this will typically be negative.
+// Returns view-space z coord. Note that OpenGL faces down the z axis, so this should be negative, but I flip it for more predictable behavior.
 // NB: invZ is really just the projection matrix [4, 3] and [3, 3]. Wouldn't be required if proj and view were supplied separately
 // From David Lenaerts: https://www.derschmale.com/2014/01/26/reconstructing-positions-from-the-depth-buffer/
 float reconstructDepth(in float rawDepth) {
     //return -p[3][2] / ((2.0 * rawDepth - 1.0) + p[2][2]);
-    return -invZ.y / ((2.0 * rawDepth - 1.0) + invZ.x);
+    return invZ.y / ((2.0 * rawDepth - 1.0) + invZ.x);
 }
 
 vec3 reconstructViewPos(in float z) {
@@ -59,12 +59,11 @@ void main() {
 
     float viewZ = reconstructDepth(dep);
     vec4 viewPos = view_dir * viewZ;
-    vec4 worldPos = inverse_view * vec4(viewPos.xyz, 1.0);
-    //worldPos.xyz = worldPos.xyz / worldPos.w;
-    //vec4 worldPos = world_dir * viewZ + vec4(camera_position, 1.0);
+    //vec4 worldPos = inverse_view * vec4(viewPos.xyz, 1.0);
+    vec4 wd = -(world_dir - vec4(camera_position, 1.0));
+    vec4 worldPos = vec4(camera_position, 1.0) + viewZ * wd;
 
     // Shadows and lighting TODO:
-    // - Shadows and backfacing sides should have same ambient light
     // - Use sun params for direct and indirect light color + intensity
 
     float directLight = 1.0;
@@ -74,7 +73,8 @@ void main() {
     if (dotLN < 0.0) {
         directLight = 0.0;
     } else {
-        vec4 light_proj_pos = sun * worldPos;
+        vec4 normalBias = vec4(norm * 0.05 + worldPos.xyz, worldPos.w);
+        vec4 light_proj_pos = sun * normalBias;
         vec3 lightPos = light_proj_pos.xyz / light_proj_pos.w;
         vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
 
@@ -89,11 +89,18 @@ void main() {
     vec3 lit = diff.rgb * totalLight;
 
     // TODO: write to the diffuse target before lighting pass?
-    vec3 sky = vec3(0.5, 0.5, 0.7);
+    vec3 skyBlue = vec3(0.5, 0.5, 0.7);
+    vec3 sunWhite = vec3(1.0, 1.0, 0.9);
+    vec3 voidBlack = vec3(0.1, 0.1, 0.1);
+    float sunSpot = smoothstep(0.99, 1.0, dot(toSun, normalize(wd.xyz)));
+    vec3 sky = mix(skyBlue, sunWhite, sunSpot);
+    float horizon = smoothstep(-0.1, 0.0, wd.z);
+    sky = mix(voidBlack, sky, horizon);
+
 
     //vec3 wtf = lightPos.xyz;
-    //vec3 wtf = fract(worldPos.xyz);
-    //vec3 wtf = world_dir.xyz;
+    vec3 wtf = fract(worldPos.xyz);
+    //vec3 wtf = wd.xyz;
 
     //vec3 color = mix(sky, wtf, diff.a);
     vec3 color = mix(sky, lit, diff.a);
@@ -103,5 +110,6 @@ void main() {
     //frag_color = vec4(mix(sky, diff.rgb, diff.a), 1.0);
     //frag_color = vec4(vec3(dep), 1.0);
     //frag_color = vec4(norm * 0.5 + 0.5, 1.0);
+    //frag_color = vec4(wtf, 1.0);
     frag_color = vec4(color, 1.0);
 }

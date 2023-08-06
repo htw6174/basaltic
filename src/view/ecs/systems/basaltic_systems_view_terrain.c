@@ -91,9 +91,11 @@ static sg_pipeline_desc terrainShadowPipelineDescription = {
     .depth = {
         .pixel_format = SG_PIXELFORMAT_DEPTH,
         .compare = SG_COMPAREFUNC_LESS_EQUAL,
-        .write_enabled = true
+        .write_enabled = true,
+        .bias = 0.01f,
+        .bias_slope_scale = 1.0f
     },
-    .cull_mode = SG_CULLMODE_FRONT, // said to prevent 'shadow acne' on front-faces
+    .cull_mode = SG_CULLMODE_BACK,
     .sample_count = 1,
     // important: 'deactivate' the default color target for 'depth-only-rendering'
     .colors[0].pixel_format = SG_PIXELFORMAT_NONE

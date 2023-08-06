@@ -162,11 +162,26 @@ void UniformSunToMatrix(ecs_iter_t *it) {
 
     vec3 sunPosition = bc_sphereToCartesian(sun->azimuth, sun->inclination, cam->zFar / 2.0);
 
+    // Should be minimally larger than part of terrain camera can see
+    // TODO more reliable for lower cam inclinations
+    float viewSize = powf(cam->distance, 2.0) + cam->origin.z;
+    float width = viewSize * 4;
+
+    // Remap to tightly wrap shadow casters affecting visible area
+    // min = max terrain height in world units ~= 25, at inclination = 0
+    // max = width, at inclination = 90 deg
+    float heightScale = sin(sun->inclination * DEG_TO_RAD);
+    float height = lerp(25.0, width, heightScale);
+    height = fmaxf(height, 25.0);
+
     mat4x4 p, v;
-    mat4x4Orthographic(p, sun->projectionSize, sun->projectionSize, cam->zNear, cam->zFar);
+    mat4x4Orthographic(p, width, height, cam->zNear, cam->zFar);
+
+    // Don't follow camera z, and position in middle of terrain z range, so frustrum can always cover terrain z extents
+    vec3 camCenter = {.xy = cam->origin.xy, .z = 12.5};
     mat4x4LookAt(v,
-        vec3Add(sunPosition, cam->origin),
-        cam->origin,
+        vec3Add(sunPosition, camCenter),
+        camCenter,
         (vec3){{0.f, 0.f, 1.f}}
     );
 
@@ -177,8 +192,8 @@ void UniformSunToMatrix(ecs_iter_t *it) {
 void SetupRenderPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
 
-    int width = ws->x;
-    int height = ws->y;
+    int width = ws->x / 2;
+    int height = ws->y / 2;
 
     OffscreenTargets ots = {
         .diffuse = sg_make_image(&(sg_image_desc){
@@ -458,7 +473,8 @@ void DrawLighting(ecs_iter_t *it) {
                 .x = -(cam->zFar + cam->zNear) / (cam->zFar - cam->zNear),
                 .y = -(2.f * cam->zFar * cam->zNear) / (cam->zFar - cam->zNear)
             },
-            .camPos = bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0)),
+            // TODO: Should store and retrieve these positions instead of trying to recalc them
+            .camPos = vec3Add(bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0)), cam->origin),
             .toSun = bc_sphereToCartesian(light->azimuth, light->inclination, 1.0)
         };
         mat4x4Copy(lu0.cam, pv[0]);
