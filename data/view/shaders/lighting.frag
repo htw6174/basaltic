@@ -1,7 +1,7 @@
 #version 330
 
 #define SPECULAR 0.5
-#define DIFFUSE 0.8
+#define DIFFUSE 1.25
 #define REFLECTION 1.0
 #define SHININESS 10.0
 
@@ -66,32 +66,40 @@ void main() {
     // Shadows and lighting TODO:
     // - Use sun params for direct and indirect light color + intensity
 
-    float directLight = 1.0;
-    // avoid sampling shadowMap on faces that are pointing fully away from the sun
-    // not sure if this helps due to how shader branching works
+    // constants
+    vec3 sunLightColor = vec3(1.65, 1.6, 1.1);// vec3(1.65, 1.27, 0.99); // better for sunset
+    vec3 shadowColor = vec3(1.0, 1.2, 1.5);
+    vec3 skyLightColor = vec3(0.16, 0.2, 0.28);
+
+    vec3 sunWhite = vec3(1.0, 1.0, 0.8);
+    vec3 skyBlue = vec3(0.4, 0.4, 0.8);
+    vec3 midnightBlue = vec3(0.1, 0.1, 0.1);
+
+    // contribution magnitudes
     float dotLN = dot(toSun, norm);
-    if (dotLN < 0.0) {
-        directLight = 0.0;
-    } else {
-        vec4 normalBias = vec4(norm * 0.05 + worldPos.xyz, worldPos.w);
-        vec4 light_proj_pos = sun * normalBias;
-        vec3 lightPos = light_proj_pos.xyz / light_proj_pos.w;
-        vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
+    float sunMag = max(dotLN, 0.0);
+    sunMag *= step(0.0, toSun.z);
+    float skyMag = max(0.5 * norm.z + 0.5, 0.0);
 
-        directLight = texture(shadowMap, shadowMapPos.xyz);
-        directLight = min(directLight, dotLN);
-    }
+    // sample shadow map
+    vec4 normalBias = vec4(norm * 0.05 + worldPos.xyz, worldPos.w);
+    vec4 light_proj_pos = sun * normalBias;
+    vec3 lightPos = light_proj_pos.xyz / light_proj_pos.w;
+    vec3 shadowMapPos = (lightPos + 1.0) * 0.5;
+    float shadowSample = texture(shadowMap, shadowMapPos.xyz);
+    //directLight = min(directLight, dotLN);
 
-    float ambient = LIGHT_AMBIENT;
-    float diffuse = directLight * DIFFUSE;
-    float totalLight = ambient + diffuse;
+//     float ambient = LIGHT_AMBIENT;
+//     float diffuse = directLight * DIFFUSE;
+//     float totalLight = ambient + diffuse;
 
-    vec3 lit = diff.rgb * totalLight;
+    // accumulate lights
+    vec3 lightColor = sunMag * sunLightColor * pow(vec3(shadowSample), shadowColor);
+    lightColor += skyMag * skyLightColor;
+
+    vec3 lit = (diff.rgb * 0.75) * lightColor;
 
     // TODO: write to the diffuse target before lighting pass?
-    vec3 skyBlue = vec3(0.4, 0.4, 0.8);
-    vec3 sunWhite = vec3(1.0, 1.0, 0.8);
-    vec3 midnightBlue = vec3(0.1, 0.1, 0.2);
     float sunSpot = smoothstep(0.995, 1.0, dot(toSun, normalize(wd.xyz)));
     vec3 sky = mix(skyBlue, sunWhite, sunSpot);
     float horizon = smoothstep(-0.1, 0.0, wd.z);
@@ -104,6 +112,13 @@ void main() {
 
     //vec3 color = mix(sky, wtf, diff.a);
     vec3 color = mix(sky, lit, diff.a);
+
+    // area to draw reference values
+    if (uv.x < 0.1) {
+        float swatches = floor(uv.y * 11.0) / 10.0;
+
+        //color = vec3(swatches);
+    }
 
     //vec3 depthVis = vec3(fract(viewZ));
     //frag_color = diffuse;// + (vec4(normal, depth) * shadow);
