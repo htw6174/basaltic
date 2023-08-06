@@ -24,10 +24,7 @@ bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc)
     bc_EditorEngineContext newEditor = {
         .isActive = isActiveAtStart,
         .showDemoWindow = false,
-        .maxFrameDuration = 0,
-        .maxStepsPerSecond = 0,
-        .frameDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
-        .tickDurationHistory = calloc(bc_frameHistoryLength, sizeof(float)),
+        .frameTimeSeconds = calloc(bc_frameHistoryLength, sizeof(float))
     };
 
     return newEditor;
@@ -79,44 +76,36 @@ void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_Sup
     // enable docking over entire screen
     igDockSpaceOverViewport(igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
 
-    igBegin("Engine Options", NULL, 0);
+    if (igBegin("Engine Options", NULL, 0)) {
+        igText("Press backquote (`/~) to toggle editor");
 
-    igText("Press backquote (`/~) to toggle editor");
+        igInputInt("Framerate Limit", &engineSettings->frameRateLimit, 1, 10, 0);
+        igInputInt("Tickrate Limit", &engineSettings->tickRateLimit, 1, 10, 0);
+        // TODO: option to save engine settings
 
-    igInputInt("Framerate Limit", &engineSettings->frameRateLimit, 1, 10, 0);
-    igInputInt("Tickrate Limit", &engineSettings->tickRateLimit, 1, 10, 0);
-    // TODO: option to save engine settings
-
-    igCheckbox("Demo Window", &eec->showDemoWindow);
-    if (eec->showDemoWindow) {
-        igShowDemoWindow(&eec->showDemoWindow);
+        igCheckbox("Demo Window", &eec->showDemoWindow);
+        if (eec->showDemoWindow) {
+            igShowDemoWindow(&eec->showDemoWindow);
+        }
     }
-
     igEnd();
 
-    igBegin("Performance", NULL, 0);
+    if (igBegin("Performance", NULL, 0)) {
+        u64 frameMod = (wc->frame - 1) % bc_frameHistoryLength; // Need to get info for previous frame because current frame time hasn't been recorded yet
 
-    u64 frameMod = (wc->frame - 1) % bc_frameHistoryLength; // Need to get info for previous frame because current frame time hasn't been recorded yet
-    float lastFrameDuration = (float)superInfo->frameDurations[frameMod] / wc->performanceFrequency; // in seconds
-    eec->maxFrameDuration = fmaxf(eec->maxFrameDuration, lastFrameDuration);
-    eec->frameDurationHistory[frameMod] = lastFrameDuration;
-    igPlotLines_FloatPtr("Frame time", eec->frameDurationHistory, bc_frameHistoryLength, frameMod, "", 0.0, eec->maxFrameDuration, (ImVec2){0, 0}, sizeof(float));
+        float sumOfTimes = 0.0;
+        float maxDuration = 0.0;
+        for (int i = 0; i < bc_frameHistoryLength; i++) {
+            float secs = (float)superInfo->frameDurations[i] / wc->performanceFrequency;
+            eec->frameTimeSeconds[i] = secs;
+            maxDuration = fmaxf(maxDuration, secs);
+            sumOfTimes += superInfo->frameDurations[i];
+        }
+        igPlotLines_FloatPtr("Frame time", eec->frameTimeSeconds, bc_frameHistoryLength, frameMod, "", 0.0, maxDuration, (ImVec2){0, 0}, sizeof(float));
 
-    float sumOfTimes = 0.0;
-    for (int i = 0; i < bc_frameHistoryLength; i++) {
-        sumOfTimes += superInfo->frameDurations[i];
+        // Not calculating 'real' fps, because that may be limited by vsync. Instead, this represents the time it took to prepare a frame, and is a better indication of potential max fps
+        float avgFrameTime = ((float)sumOfTimes / bc_frameHistoryLength) / wc->performanceFrequency;
+        igValue_Float("Avg potential fps", 1.0 / avgFrameTime, "%.1f");
     }
-    // Not calculating 'real' fps, because that may be limited by vsync. Instead, this represents the time it took to prepare a frame, and is a better indication of poetntial max fps
-    float avgFrameTime = ((float)sumOfTimes / bc_frameHistoryLength) / wc->performanceFrequency;
-    igValue_Float("Avg potential fps", 1.0 / avgFrameTime, "%.1f");
-
-    // u64 lastWorldStep = superInfo->worldStepHistory[frameMod];
-    // u64 previousSecondFrameMod = (wc->frame - 61) % bc_frameHistoryLength;
-    // u64 previousSecondWorldStep = superInfo->worldStepHistory[previousSecondFrameMod];
-    // float stepsInLastSecond = (float)(lastWorldStep - previousSecondWorldStep);
-    // eec->maxStepsPerSecond = fmaxf(eec->maxStepsPerSecond, stepsInLastSecond);
-    // eec->worldStepsPerSecond[frameMod] = stepsInLastSecond;
-    // igPlotLines_FloatPtr("Steps per second", eec->worldStepsPerSecond, bc_frameHistoryLength, frameMod, "", 0.0, eec->maxStepsPerSecond, (ImVec2){0, 0}, sizeof(float));
-
     igEnd();
 }

@@ -89,13 +89,13 @@ void main() {
     vec3 lit = diff.rgb * totalLight;
 
     // TODO: write to the diffuse target before lighting pass?
-    vec3 skyBlue = vec3(0.5, 0.5, 0.7);
-    vec3 sunWhite = vec3(1.0, 1.0, 0.9);
-    vec3 voidBlack = vec3(0.1, 0.1, 0.1);
-    float sunSpot = smoothstep(0.99, 1.0, dot(toSun, normalize(wd.xyz)));
+    vec3 skyBlue = vec3(0.4, 0.4, 0.8);
+    vec3 sunWhite = vec3(1.0, 1.0, 0.8);
+    vec3 midnightBlue = vec3(0.1, 0.1, 0.2);
+    float sunSpot = smoothstep(0.995, 1.0, dot(toSun, normalize(wd.xyz)));
     vec3 sky = mix(skyBlue, sunWhite, sunSpot);
     float horizon = smoothstep(-0.1, 0.0, wd.z);
-    sky = mix(voidBlack, sky, horizon);
+    sky = mix(midnightBlue, sky, horizon);
 
 
     //vec3 wtf = lightPos.xyz;
