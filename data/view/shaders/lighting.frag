@@ -52,6 +52,22 @@ float phong(vec3 normal, vec3 lightDir) {
     return ambient + diffuse;
 }
 
+vec3 simpleFog(in vec3 color, in float dist) {
+    float b = 0.01;
+    float intensity = 1.0 - exp(-dist * b);
+    vec3 fogColor = vec3(0.5, 0.6, 0.7);
+    return mix(color, fogColor, intensity);
+}
+
+vec3 linearFog(in vec3 color, in vec3 fogColor, in float dist, in vec3 origin, in vec3 dir) {
+    float a = 0.005;
+    float b = 0.005;
+    float intensity = (a / b) * exp(-origin.z * b) * (1.0 - exp(-dist * dir.z * b)) / dir.z;
+    intensity = min(1.0, intensity);
+    return mix(color, fogColor, intensity);
+    //return vec3(intensity);
+}
+
 void main() {
     vec4 diff = texture(diffuse, uv);
     vec3 norm = texture(normal, uv).xyz;
@@ -99,26 +115,42 @@ void main() {
 
     vec3 lit = (diff.rgb * 0.75) * lightColor;
 
-    // TODO: write to the diffuse target before lighting pass?
+    // skybox TODO: write to the diffuse target before lighting pass?
     float sunSpot = smoothstep(0.995, 1.0, dot(toSun, normalize(wd.xyz)));
     vec3 sky = mix(skyBlue, sunWhite, sunSpot);
-    float horizon = smoothstep(-0.1, 0.0, wd.z);
+    float horizon = smoothstep(-0.3, 0.0, wd.z);
     sky = mix(midnightBlue, sky, horizon);
 
+    // fade into skybox at horizontal view limit
+    float viewDist = 128;
+    float horizontalDist = distance(camera_position.xy, worldPos.xy);
+    //(camera_position.x * camera_position.x) + (camera_position.y * camera_position.y);
+    //float skybox = smoothstep(viewDist * 0.9, viewDist, horizontalDist);
+    float skybox = 1.0 - diff.a;
 
+    //float viewEdge = smoothstep(viewDist * 0.9, viewDist, horizontalDist);
+    float viewEdge = smoothstep(viewDist * 0.9, viewDist * 1.5, horizontalDist);
+
+    // fog
+    vec3 fogColor = vec3(0.5, 0.6, 0.7);
+    fogColor = mix(fogColor, sky, viewEdge);
+    //vec3 fogColor = sky;
+    lit = linearFog(lit, fogColor, viewZ, camera_position, wd.xyz);
+
+    // DEBUG
     //vec3 wtf = lightPos.xyz;
     vec3 wtf = fract(worldPos.xyz);
     //vec3 wtf = wd.xyz;
 
     //vec3 color = mix(sky, wtf, diff.a);
-    vec3 color = mix(sky, lit, diff.a);
+    vec3 color = mix(lit, sky, skybox);
 
     // area to draw reference values
-    if (uv.x < 0.1) {
-        float swatches = floor(uv.y * 11.0) / 10.0;
-
-        //color = vec3(swatches);
-    }
+//     if (uv.x < 0.1) {
+//         float swatches = floor(uv.y * 11.0) / 10.0;
+//
+//         color = vec3(swatches);
+//     }
 
     //vec3 depthVis = vec3(fract(viewZ));
     //frag_color = diffuse;// + (vec4(normal, depth) * shadow);
