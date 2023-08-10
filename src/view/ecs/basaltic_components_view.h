@@ -96,10 +96,6 @@ ECS_STRUCT(CameraSpeed, {
     float rotation;
 });
 
-ECS_STRUCT(RenderDistance, {
-    u32 radius;
-});
-
 ECS_STRUCT(FocusPlane, {
     ecs_entity_t entity;
 });
@@ -129,6 +125,17 @@ ECS_STRUCT(DirtyChunkBuffer, {
     u32 *chunks;
 });
 
+
+/* Global Settings */
+
+BC_DECL ECS_TAG_DECLARE(VideoSettings);
+
+typedef float RenderScale;
+BC_DECL ECS_COMPONENT_DECLARE(RenderScale);
+
+ECS_STRUCT(RenderDistance, {
+    u32 radius;
+});
 
 
 /* Rendering */

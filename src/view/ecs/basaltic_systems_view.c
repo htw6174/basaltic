@@ -112,6 +112,79 @@ static sg_pipeline_desc lightingPipelineDescription = {
     .label = "lighting-pipeline",
 };
 
+
+int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp);
+
+int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp) {
+
+    int width = ws.x * rs;
+    int height = ws.y * rs;
+
+    *ots = (OffscreenTargets){
+        .diffuse = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .normal = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_RGBA16F,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .depth = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_R32F,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .zbuffer = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_DEPTH,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_LINEAR,
+            .mag_filter = SG_FILTER_LINEAR,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        })
+    };
+
+    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
+    *rp = (RenderPass){
+        .action = {
+            .colors = {
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+            },
+            .depth = {
+                .load_action = SG_LOADACTION_CLEAR,
+                .store_action = SG_STOREACTION_STORE,
+                .clear_value = 1.0f
+            }
+        },
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .color_attachments = {
+                [0].image = ots->diffuse,
+                [1].image = ots->normal,
+                [2].image = ots->depth,
+            },
+            .depth_stencil_attachment.image = ots->zbuffer,
+            .label = "render-pass"
+        })
+    };
+
+    return 0;
+}
+
 void UniformPointerToMouse(ecs_iter_t *it) {
     Pointer *pointers = ecs_field(it, Pointer, 1);
     const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
@@ -191,74 +264,34 @@ void UniformSunToMatrix(ecs_iter_t *it) {
 
 void SetupRenderPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
+    RenderScale *rs = ecs_field(it, RenderScale, 2);
 
-    int width = ws->x / 2;
-    int height = ws->y / 2;
-
-    OffscreenTargets ots = {
-        .diffuse = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_RGBA8,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .normal = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_RGBA16F,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .depth = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_R32F,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .zbuffer = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_DEPTH,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_LINEAR,
-            .mag_filter = SG_FILTER_LINEAR,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        })
-    };
+    OffscreenTargets ots;
+    RenderPass rp;
+    createOffscreenPass(ws[0], rs[0], &ots, &rp);
 
     // Used instead of singleton_set for convenience of setting with direct pointer
     ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, &ots);
+    ecs_set_ptr(it->world, ecs_id(RenderPass), RenderPass, &rp);
+}
 
-    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
-    ecs_singleton_set(it->world, RenderPass, {
-        .action = {
-            .colors = {
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-            },
-            .depth = {
-                .load_action = SG_LOADACTION_CLEAR,
-                .store_action = SG_STOREACTION_STORE,
-                .clear_value = 1.0f
-            }
-        },
-        .pass = sg_make_pass(&(sg_pass_desc){
-            .color_attachments = {
-                [0].image = ots.diffuse,
-                [1].image = ots.normal,
-                [2].image = ots.depth,
-            },
-            .depth_stencil_attachment.image = ots.zbuffer,
-            .label = "render-pass"
-        })
-    });
+void ReinitializeRenderPass(ecs_iter_t *it) {
+    WindowSize *ws = ecs_field(it, WindowSize, 1);
+    RenderScale *rs = ecs_field(it, RenderScale, 2);
+    OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
+    RenderPass *rp = ecs_field(it, RenderPass, 4);
+
+    // Destroy old pass
+    sg_destroy_pass(rp[0].pass);
+    // Destroy old target images (sampler could be reused, but easier to just recreate it along with everything else)
+    sg_destroy_image(ots[0].diffuse);
+    sg_destroy_image(ots[0].normal);
+    sg_destroy_image(ots[0].depth);
+    sg_destroy_image(ots[0].zbuffer);
+    sg_destroy_sampler(ots[0].sampler);
+
+    // Recreate
+    createOffscreenPass(ws[0], rs[0], &ots[0], &rp[0]);
 }
 
 void BeginShadowPass(ecs_iter_t *it) {
@@ -523,9 +556,22 @@ void BcviewSystemsImport(ecs_world_t *world) {
     // Some setup depends on screen initialization, and render targets need to be resized if the screen size changes
     ECS_SYSTEM(world, SetupRenderPass, EcsPreUpdate,
         [in] WindowSize($),
+        [in] RenderScale(VideoSettings),
         [out] !OffscreenTargets($),
         [out] !RenderPass($)
     );
+
+    // FIXME: triggers from initial setup
+    ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
+        [in] WindowSize($),
+        [in] RenderScale(VideoSettings),
+        [inout] OffscreenTargets($),
+        [inout] RenderPass($)
+    );
+
+    // FIXME: disabling observers does nothing?
+    ecs_enable(world, ReinitializeRenderPass, false);
+    //ecs_add_id(world, ReinitializeRenderPass, EcsDisabled);
 
     // Render pass begin and end
     // Give both begin and end the same requirements, simply so they can both be disabled easily

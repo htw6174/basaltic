@@ -47,4 +47,5 @@ int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const 
  */
 int bc_createPipeline(const sg_pipeline_desc *pipelineDescription, const sg_shader *shader, sg_pipeline *out_pipeline);
 
+
 #endif // BASALTIC_SOKOL_GFX_H_INCLUDED

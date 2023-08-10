@@ -1171,7 +1171,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcviewPhases);
 
     ECS_OBSERVER(world, InitTerrainBuffers, EcsOnAdd,
-        [in] RenderDistance($),
+        [in] RenderDistance(VideoSettings),
         [out] TerrainBuffer,
         [out] ?QueryDesc,
         [none] bcview.TerrainRender,

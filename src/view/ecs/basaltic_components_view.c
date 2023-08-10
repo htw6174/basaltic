@@ -61,19 +61,26 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, QueryDesc);
     ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
+    // Interface
     ECS_TAG_DEFINE(world, Previous);
     ECS_META_COMPONENT(world, DeltaTime);
     ECS_META_COMPONENT(world, Pointer);
     ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);
-    ECS_META_COMPONENT(world, RenderDistance);
     ECS_META_COMPONENT(world, FocusPlane);
     ECS_META_COMPONENT(world, HoveredCell);
     ECS_META_COMPONENT(world, SelectedCell);
     ECS_META_COMPONENT(world, TerrainBrush);
     ECS_META_COMPONENT(world, DirtyChunkBuffer);
 
+    // Settings
+    ECS_TAG_DEFINE(world, VideoSettings);
+    ECS_COMPONENT_DEFINE(world, RenderScale);
+    ecs_primitive(world, {.entity = ecs_id(RenderScale), .kind = EcsF32});
+    ECS_META_COMPONENT(world, RenderDistance);
+
+    // Rendering
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
@@ -114,6 +121,8 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Texture);
     ECS_COMPONENT_DEFINE(world, DataTexture);
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
+
+    /* Setup singleton defaults */
 
     //ecs_singleton_add(world, ModelWorld);
     ecs_singleton_set(world, ModelLastRenderedStep, {0});
@@ -164,6 +173,20 @@ void BcviewImport(ecs_world_t *world) {
         .indirectColor = (vec4){{0.2, 0.2, 0.4, 1.0}}
     });
 
-    /* Renderer Uniforms */
-    //ecs_entity_t window;
+    /* Settings defaults and presets */
+
+    // Video
+    ecs_entity_t videoDefault = ecs_set_name(world, 0, "Video Settings Default");
+    ecs_add(world, videoDefault, VideoSettings);
+    ecs_add_id(world, videoDefault, EcsPrefab);
+    ecs_set(world, videoDefault, RenderScale, {1.0});
+    ecs_set(world, videoDefault, RenderDistance, {.radius = 2});
+
+    ecs_entity_t videoLow = ecs_set_name(world, 0, "Video Settings Low");
+    ecs_add(world, videoLow, VideoSettings);
+    ecs_add_pair(world, videoLow, EcsIsA, videoDefault);
+    ecs_add_id(world, videoLow, EcsPrefab);
+    ecs_set(world, videoLow, RenderScale, {0.5});
+
+    ecs_add_pair(world, ecs_id(VideoSettings), EcsIsA, videoDefault);
 }
