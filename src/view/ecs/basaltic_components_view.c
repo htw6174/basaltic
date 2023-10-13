@@ -201,6 +201,7 @@ void BcviewImport(ecs_world_t *world) {
 
     ecs_add_pair(world, VideoSettings, EcsIsA, videoDefault);
 
+    // NOTE: probably don't want to default initialize these here, makes it very easy to accidentially try rendering with a '0' pass
     // Render passes
     //ecs_set_pair(world, RenderPasses, RenderPass, ShadowPass, {0});
     //ecs_set_pair(world, RenderPasses, RenderPass, MainPass, {0});

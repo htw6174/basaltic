@@ -355,33 +355,9 @@ void UniformSunToMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, SunMatrix);
 }
 
-void SetupRenderPass(ecs_iter_t *it) {
-    WindowSize *ws = ecs_field(it, WindowSize, 1);
-    RenderScale *rs = ecs_field(it, RenderScale, 2);
-
-    OffscreenTargets ots;
-    RenderPass rp;
-    createOffscreenPass(ws[0], rs[0], &ots, &rp);
-
-    LightingTarget lt;
-    RenderPass lp;
-    createLightingPass(*ws, *rs, &lt, &lp);
-
-    // Used instead of singleton_set for convenience of setting with direct pointer
-    ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, &ots);
-    ecs_set_ptr(it->world, ecs_id(LightingTarget), LightingTarget, &lt);
-    //ecs_set_ptr(it->world, ecs_id(RenderPass), RenderPass, &rp);
-    ecs_set_pair(it->world, RenderPasses, RenderPass, MainPass, {.pass = rp.pass, .action = rp.action});
-    ecs_set_pair(it->world, RenderPasses, RenderPass, LightingPass, {.pass = lp.pass, .action = lp.action});
-}
-
 void ReinitializeRenderPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
     RenderScale *rs = ecs_field(it, RenderScale, 2);
-    //OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
-    //LightingTarget *lt = ecs_field(it, LightingTarget, 4);
-    //RenderPass *mainPass = ecs_field(it, RenderPass, 5);
-    //RenderPass *lightingPass = ecs_field(it, RenderPass, 6);
 
     OffscreenTargets *ots = ecs_singleton_get_mut(it->world, OffscreenTargets);
     if (ots != NULL) {
@@ -429,10 +405,8 @@ void ReinitializeRenderPass(ecs_iter_t *it) {
         ecs_set_ptr(it->world, ecs_id(LightingTarget), LightingTarget, lt);
     }
 
-    // TO TEST: if sg handles are 0, should be safe to 'destroy' them. Can use this to 0 initialize RenderPasses pairs, then reinitialize once at start
-    // Problem with this approach: because the entity with a 0-initialized pass component exists, systems requiring those passes will still run
+    // TODO: allow changing shadowmap size, recreate shadow pass (should be a separate system/observer)
     //sg_destroy_pass(shadowPass->pass);
-    //sg_destroy_pass(finalPass->pass);
 }
 
 void BeginRenderPass(ecs_iter_t *it) {
@@ -707,25 +681,12 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] ?SunMatrix($)
     );
 
-    // Render pass setup
+    // Render pass setup and updates
     // Some setup depends on screen initialization, and render targets need to be resized if the screen size changes
-    // ECS_SYSTEM(world, SetupRenderPass, EcsPreUpdate,
-    //     [in] WindowSize($),
-    //     [in] RenderScale(VideoSettings),
-    //     [out] !OffscreenTargets($),
-    //     [out] !LightingTarget($),
-    //     //[out] !RenderPass(RenderPasses, MainPass),
-    //     //[out] !RenderPass(RenderPasses, LightingPass)
-    // );
-
-    // FIXME: stuff not initialized when it needs to be?
+    // FIXME: need to be careful with observers, some situations where new field value isn't available when observer is triggered
     ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
         [in] WindowSize($),
-        [in] RenderScale(VideoSettings),
-        // [inout] OffscreenTargets($),
-        // [inout] LightingTarget($),
-        // [inout] RenderPass(RenderPasses, MainPass),
-        // [inout] RenderPass(RenderPasses, LightingPass)
+        [in] RenderScale(VideoSettings)
     );
 
     // FIXME: disabling observers does nothing?
@@ -735,7 +696,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     // Render pass begin and end
     // Begin and end are the same for all but the default (final) pass, but need to run in different phases. Here multiple systems are created with the same callback but different phases and data sources to handle this
     // Give both begin and end the same requirements, simply so they can both be disabled easily
-
+    // Example with manual system creation:
     // ecs_entity_t ecs_id(BeginShadowPass) = ecs_system(world, {
     //     .entity = ecs_entity(world, {
     //         .name = "BeginShadowPass",
