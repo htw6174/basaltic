@@ -1154,8 +1154,6 @@ void coordInspector(const char *label, htw_geo_GridCoord coord) {
 }
 
 void renderTargetInspector(ecs_world_t *world) {
-    const ShadowPass *sp = ecs_singleton_get(world, ShadowPass);
-
     // FIXME: neither method of getting a TextureID for the shadow map works, always causes OpenGL errors when presenting
     // static simgui_image_t spImage = {0};
     // if (spImage.id == 0) {

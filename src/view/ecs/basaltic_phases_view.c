@@ -9,6 +9,7 @@ ECS_TAG_DECLARE(OnRenderPass);
 ECS_TAG_DECLARE(PostRenderPass);
 
 ECS_TAG_DECLARE(OnLightingPass);
+ECS_TAG_DECLARE(OnFinalPass);
 
 ECS_TAG_DECLARE(OnModelChanged);
 
@@ -26,6 +27,7 @@ void BcviewPhasesImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, PostRenderPass);
 
     ECS_TAG_DEFINE(world, OnLightingPass);
+    ECS_TAG_DEFINE(world, OnFinalPass);
 
     ECS_TAG_DEFINE(world, OnModelChanged);
 
@@ -45,6 +47,9 @@ void BcviewPhasesImport(ecs_world_t *world) {
 
     ecs_add_id(world, OnLightingPass, EcsPhase);
     ecs_add_pair(world, OnLightingPass, EcsDependsOn, PostRenderPass);
+
+    ecs_add_id(world, OnFinalPass, EcsPhase);
+    ecs_add_pair(world, OnFinalPass, EcsDependsOn, OnLightingPass);
 
     // We don't want the default pipeline to run this phase, so don't add the EcsPhase tag
     //ecs_add_id(world, OnModelChanged, EcsPhase);

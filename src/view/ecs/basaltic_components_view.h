@@ -128,6 +128,7 @@ ECS_STRUCT(DirtyChunkBuffer, {
 
 /* Global Settings */
 
+// Single point of access for video settings, inherits from a settings prefab
 BC_DECL ECS_TAG_DECLARE(VideoSettings);
 
 typedef float RenderScale;
@@ -177,17 +178,19 @@ ECS_STRUCT(SunLight, {
     Color indirectColor;
 });
 
-ECS_STRUCT(ShadowPass, {
-    sg_pass pass;
-    sg_pass_action action;
-});
-
 ECS_STRUCT(RenderPass, {
     sg_pass pass;
     sg_pass_action action;
 });
 
-// Don't need state for lighting (default) pass, Sokol's defaults work fine
+// Holds relationships for different render passes
+BC_DECL ECS_DECLARE(RenderPasses);
+// Tags for different RenderPass(s)
+BC_DECL ECS_TAG_DECLARE(ShadowPass);
+BC_DECL ECS_TAG_DECLARE(MainPass);
+BC_DECL ECS_TAG_DECLARE(LightingPass);
+BC_DECL ECS_TAG_DECLARE(FinalPass);
+
 
 ECS_STRUCT(ShadowMap, {
     sg_image image;
@@ -199,6 +202,11 @@ ECS_STRUCT(OffscreenTargets, {
     sg_image normal;
     sg_image depth;
     sg_image zbuffer;
+    sg_sampler sampler;
+});
+
+ECS_STRUCT(LightingTarget, {
+    sg_image image;
     sg_sampler sampler;
 });
 
@@ -220,8 +228,8 @@ ECS_STRUCT(Pipeline, {
 // Relationships where the target is a Pipeline entity
 BC_DECL ECS_TAG_DECLARE(ShadowPipeline);
 BC_DECL ECS_TAG_DECLARE(RenderPipeline);
-
 BC_DECL ECS_TAG_DECLARE(LightingPipeline);
+BC_DECL ECS_TAG_DECLARE(FinalPipeline);
 
 // Used to differentiate different render types for specalized draw systems
 BC_DECL ECS_TAG_DECLARE(TerrainRender);

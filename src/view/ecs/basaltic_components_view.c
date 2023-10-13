@@ -90,10 +90,16 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Clock);
     ECS_META_COMPONENT(world, SunLight);
 
-    ECS_COMPONENT_DEFINE(world, ShadowPass);
     ECS_COMPONENT_DEFINE(world, RenderPass);
+    ECS_ENTITY_DEFINE(world, RenderPasses);
+    ECS_TAG_DEFINE(world, ShadowPass);
+    ECS_TAG_DEFINE(world, MainPass);
+    ECS_TAG_DEFINE(world, LightingPass);
+    ECS_TAG_DEFINE(world, FinalPass);
+
     ECS_COMPONENT_DEFINE(world, ShadowMap);
     ECS_COMPONENT_DEFINE(world, OffscreenTargets);
+    ECS_COMPONENT_DEFINE(world, LightingTarget);
 
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
@@ -107,7 +113,12 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_id(world, RenderPipeline, EcsTraversable);
     ecs_add_id(world, RenderPipeline, EcsOneOf);
 
+    // TEST
+    //ecs_enable(world, ShadowPipeline, false);
+    //ecs_enable(world, RenderPipeline, false);
+
     ECS_TAG_DEFINE(world, LightingPipeline);
+    ECS_TAG_DEFINE(world, FinalPipeline);
 
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
@@ -188,5 +199,11 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_id(world, videoLow, EcsPrefab);
     ecs_set(world, videoLow, RenderScale, {0.5});
 
-    ecs_add_pair(world, ecs_id(VideoSettings), EcsIsA, videoDefault);
+    ecs_add_pair(world, VideoSettings, EcsIsA, videoDefault);
+
+    // Render passes
+    //ecs_set_pair(world, RenderPasses, RenderPass, ShadowPass, {0});
+    //ecs_set_pair(world, RenderPasses, RenderPass, MainPass, {0});
+    //ecs_set_pair(world, RenderPasses, RenderPass, LightingPass, {0});
+    //ecs_set_pair(world, RenderPasses, RenderPass, FinalPass, {0});
 }

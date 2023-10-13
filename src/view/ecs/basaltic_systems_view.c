@@ -7,6 +7,26 @@
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
 #include <sys/stat.h>
+#include <assert.h>
+
+#define ECS_SYSTEM_ALIAS(world, id_, callback_, phase, ...) \
+    ecs_entity_t ecs_id(id_) = 0; \
+    { \
+        ecs_system_desc_t desc = {0}; \
+        ecs_entity_desc_t edesc = {0}; \
+        edesc.id = ecs_id(id_);\
+        edesc.name = #id_;\
+        edesc.add[0] = ((phase) ? ecs_pair(EcsDependsOn, (phase)) : 0); \
+        edesc.add[1] = (phase); \
+        desc.entity = ecs_entity_init(world, &edesc);\
+        desc.query.filter.expr = #__VA_ARGS__; \
+        desc.callback = callback_; \
+        ecs_id(id_) = ecs_system_init(world, &desc); \
+    } \
+    ecs_assert(ecs_id(id_) != 0, ECS_INVALID_PARAMETER, NULL); \
+    ecs_entity_t id_ = ecs_id(id_);\
+    (void)ecs_id(id_); \
+    (void)id_;
 
 typedef struct {
     InverseMatrices invs;
@@ -107,16 +127,50 @@ static sg_pipeline_desc lightingPipelineDescription = {
     .layout = {
         .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
     },
+    .depth.pixel_format = SG_PIXELFORMAT_NONE,
     .shader = {0},
     .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
     .label = "lighting-pipeline",
 };
 
+static sg_shader_desc finalShaderDescription = {
+    .fs.images = {
+        [0] = {
+            .used = true,
+            .image_type = SG_IMAGETYPE_2D,
+            .sample_type = SG_IMAGESAMPLETYPE_FLOAT
+        }
+    },
+    .fs.samplers = {
+        [0] = {
+            .used = true,
+            .sampler_type = SG_SAMPLERTYPE_SAMPLE
+        }
+    },
+    .fs.image_sampler_pairs = {
+        [0] = {
+            .used = true,
+            .image_slot = 0,
+            .sampler_slot = 0,
+            .glsl_name = "image"
+        }
+    },
+};
+
+static sg_pipeline_desc finalPipelineDescription = {
+    .layout = {
+        .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
+    },
+    .shader = {0},
+    .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
+    .label = "final-pipeline",
+};
+
 
 int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp);
+int createLightingPass(WindowSize ws, RenderScale rs, LightingTarget *lt, RenderPass *rp);
 
 int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp) {
-
     int width = ws.x * rs;
     int height = ws.y * rs;
 
@@ -179,6 +233,45 @@ int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, Re
             },
             .depth_stencil_attachment.image = ots->zbuffer,
             .label = "render-pass"
+        })
+    };
+
+    return 0;
+}
+
+int createLightingPass(WindowSize ws, RenderScale rs, LightingTarget *lt, RenderPass *rp) {
+    int width = ws.x * rs;
+    int height = ws.y * rs;
+
+    *lt = (LightingTarget){
+        .image = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .width = width,
+            .height = height,
+            .sample_count = 1
+        }),
+        .sampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = SG_FILTER_NEAREST,
+            .mag_filter = SG_FILTER_NEAREST,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        })
+    };
+
+    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
+    *rp = (RenderPass){
+        .action = {
+            .colors = {
+                [0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
+            },
+            .depth.load_action = SG_LOADACTION_DONTCARE
+        },
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .color_attachments = {
+                [0].image = lt->image,
+            },
+            .label = "lighting-pass"
         })
     };
 
@@ -270,43 +363,53 @@ void SetupRenderPass(ecs_iter_t *it) {
     RenderPass rp;
     createOffscreenPass(ws[0], rs[0], &ots, &rp);
 
+    LightingTarget lt;
+    RenderPass lp;
+    createLightingPass(*ws, *rs, &lt, &lp);
+
     // Used instead of singleton_set for convenience of setting with direct pointer
     ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, &ots);
-    ecs_set_ptr(it->world, ecs_id(RenderPass), RenderPass, &rp);
+    ecs_set_ptr(it->world, ecs_id(LightingTarget), LightingTarget, &lt);
+    //ecs_set_ptr(it->world, ecs_id(RenderPass), RenderPass, &rp);
+    ecs_set_pair(it->world, RenderPasses, RenderPass, MainPass, {.pass = rp.pass, .action = rp.action});
+    ecs_set_pair(it->world, RenderPasses, RenderPass, LightingPass, {.pass = lp.pass, .action = lp.action});
 }
 
 void ReinitializeRenderPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
     RenderScale *rs = ecs_field(it, RenderScale, 2);
     OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
-    RenderPass *rp = ecs_field(it, RenderPass, 4);
+    LightingTarget *lt = ecs_field(it, LightingTarget, 4);
+    RenderPass *mainPass = ecs_field(it, RenderPass, 5);
+    RenderPass *lightingPass = ecs_field(it, RenderPass, 6);
 
+    // TO TEST: if sg handles are 0, should be safe to 'destroy' them. Can use this to 0 initialize RenderPasses pairs, then reinitialize once at start
+    // Problem with this approach: because the entity with a 0-initialized pass component exists, systems requiring those passes will still run
     // Destroy old pass
-    sg_destroy_pass(rp[0].pass);
+    //sg_destroy_pass(shadowPass->pass);
+    sg_destroy_pass(mainPass->pass);
+    sg_destroy_pass(lightingPass->pass);
+    //sg_destroy_pass(finalPass->pass);
+
     // Destroy old target images (sampler could be reused, but easier to just recreate it along with everything else)
-    sg_destroy_image(ots[0].diffuse);
-    sg_destroy_image(ots[0].normal);
-    sg_destroy_image(ots[0].depth);
-    sg_destroy_image(ots[0].zbuffer);
-    sg_destroy_sampler(ots[0].sampler);
+    sg_destroy_image(ots->diffuse);
+    sg_destroy_image(ots->normal);
+    sg_destroy_image(ots->depth);
+    sg_destroy_image(ots->zbuffer);
+    sg_destroy_sampler(ots->sampler);
+
+    sg_destroy_image(lt->image);
+    sg_destroy_sampler(lt->sampler);
 
     // Recreate
-    createOffscreenPass(ws[0], rs[0], &ots[0], &rp[0]);
+    createOffscreenPass(*ws, *rs, ots, mainPass);
+    createLightingPass(*ws, *rs, lt, lightingPass);
 }
-
-void BeginShadowPass(ecs_iter_t *it) {
-    ShadowPass *sp = ecs_field(it, ShadowPass, 1);
-
-    sg_begin_pass(sp[0].pass, &sp[0].action);
-};
-
-void EndShadowPass(ecs_iter_t *it) {
-    sg_end_pass();
-};
 
 void BeginRenderPass(ecs_iter_t *it) {
     RenderPass *rp = ecs_field(it, RenderPass, 1);
 
+    //printf("Begin Pass: %s\n", ecs_get_name(it->world, it->system));
     sg_begin_pass(rp[0].pass, &rp[0].action);
 };
 
@@ -339,6 +442,8 @@ void SetupPipelines(ecs_iter_t *it) {
         err |= bc_createPipeline(pd.pipeline_desc, &p.shader, &p.pipeline);
         if (err == 0) {
             ecs_set_id(it->world, it->entities[i], ecs_id(Pipeline), sizeof(p), &p);
+        } else {
+            printf("Failed creating pipeline for entity %s. Error: %i", ecs_get_name(it->world, it->entities[i]), err);
         }
     }
 }
@@ -520,6 +625,27 @@ void DrawLighting(ecs_iter_t *it) {
     }
 }
 
+void DrawFinal(ecs_iter_t *it) {
+    Pipeline *pipelines = ecs_field(it, Pipeline, 1);
+    Mesh *meshes = ecs_field(it, Mesh, 2);
+    LightingTarget *lt = ecs_field(it, LightingTarget, 3);
+
+    sg_bindings bind = {
+        .vertex_buffers[0] = meshes->vertexBuffers[0],
+        .fs.images = {
+            lt->image
+        },
+        .fs.samplers = {
+            lt->sampler
+        }
+    };
+
+    sg_apply_pipeline(pipelines->pipeline);
+    sg_apply_bindings(&bind);
+
+    sg_draw(0, 4, 1);
+}
+
 void BcviewSystemsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystems);
 
@@ -558,41 +684,57 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] WindowSize($),
         [in] RenderScale(VideoSettings),
         [out] !OffscreenTargets($),
-        [out] !RenderPass($)
+        [out] !LightingTarget($),
+        [out] !RenderPass(RenderPasses, MainPass),
+        [out] !RenderPass(RenderPasses, LightingPass)
     );
 
-    // FIXME: triggers from initial setup
-    ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
-        [in] WindowSize($),
-        [in] RenderScale(VideoSettings),
-        [inout] OffscreenTargets($),
-        [inout] RenderPass($)
-    );
+    // FIXME: should not trigger from initial setup
+    // ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
+    //     [in] WindowSize($),
+    //     [in] RenderScale(VideoSettings),
+    //     [inout] OffscreenTargets($),
+    //     [inout] LightingTarget($),
+    //     [inout] RenderPass(RenderPasses, MainPass),
+    //     [inout] RenderPass(RenderPasses, LightingPass)
+    // );
 
     // FIXME: disabling observers does nothing?
-    ecs_enable(world, ReinitializeRenderPass, false);
+    //ecs_enable(world, ReinitializeRenderPass, false);
     //ecs_add_id(world, ReinitializeRenderPass, EcsDisabled);
 
     // Render pass begin and end
+    // Begin and end are the same for all but the default (final) pass, but need to run in different phases. Here multiple systems are created with the same callback but different phases and data sources to handle this
     // Give both begin and end the same requirements, simply so they can both be disabled easily
-    ECS_SYSTEM(world, BeginShadowPass, PreShadowPass,
-        [in] ShadowPass($)
+
+    // ecs_entity_t ecs_id(BeginShadowPass) = ecs_system(world, {
+    //     .entity = ecs_entity(world, {
+    //         .name = "BeginShadowPass",
+    //         .add = {ecs_dependson(PreShadowPass)}
+    //     }),
+    //     .query.filter.expr = "[in] (RenderPass, ShadowPass)(RenderPasses)",
+    //     .callback = BeginRenderPass
+    // });
+
+    // REMINDER: Query DSL for pair source is `first(source, second)`
+    ECS_SYSTEM_ALIAS(world, BeginShadowPass, BeginRenderPass, PreShadowPass,
+        [in] RenderPass(RenderPasses, ShadowPass)
     );
 
-    ECS_SYSTEM(world, EndShadowPass, PostShadowPass,
-        [none] ShadowPass($)
+    ECS_SYSTEM_ALIAS(world, EndShadowPass, EndRenderPass, PostShadowPass,
+        [none] RenderPass(RenderPasses, ShadowPass)
     );
 
-    ECS_SYSTEM(world, BeginRenderPass, PreRenderPass,
-        [in] RenderPass($)
+    ECS_SYSTEM_ALIAS(world, BeginMainPass, BeginRenderPass, PreRenderPass,
+        [in] RenderPass(RenderPasses, MainPass)
     );
 
-    ECS_SYSTEM(world, EndRenderPass, PostRenderPass,
-        [none] RenderPass($)
+    ECS_SYSTEM_ALIAS(world, EndMainPass, EndRenderPass, PostRenderPass,
+        [none] RenderPass(RenderPasses, MainPass)
     );
 
-    ECS_SYSTEM(world, BeginFinalPass, OnLightingPass,
-        [in] WindowSize($)
+    ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, OnLightingPass,
+        [in] RenderPass(RenderPasses, LightingPass)
     );
 
     ECS_SYSTEM(world, DrawLighting, OnLightingPass,
@@ -605,10 +747,27 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] SunMatrix($),
         [in] Camera($),
         [in] SunLight($),
-        [none] bcview.LightingPipeline
+        [none] bcview.LightingPipeline,
+        [none] RenderPass(RenderPasses, LightingPass)
     );
 
-    ECS_SYSTEM(world, EndFinalPass, OnLightingPass,
+    ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, OnLightingPass,
+        [none] RenderPass(RenderPasses, LightingPass)
+    );
+
+    // For final pass, don't need 3 different phases because systems run in definition order. However, no new draw systems can (or should) be added to the final pass
+    ECS_SYSTEM(world, BeginFinalPass, OnFinalPass,
+        [in] WindowSize($)
+    );
+
+    ECS_SYSTEM(world, DrawFinal, OnFinalPass,
+        [in] Pipeline,
+        [in] Mesh,
+        [in] LightingTarget($),
+        [none] bcview.FinalPipeline
+    );
+
+    ECS_SYSTEM(world, EndFinalPass, OnFinalPass,
         [none] WindowSize($)
     );
 
@@ -627,7 +786,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] Pipeline,
     );
 
-    //ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
+    ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
 
     ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
         [in] QueryDesc,
@@ -661,16 +820,16 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] Elements,
         [in] SunMatrix($),
         [in] WrapInstanceOffsets($),
-        [none] ShadowPass($),
+        [none] ShadowPass($)
     );
 
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
     ECS_SYSTEM(world, DrawInstances, OnRenderPass,
-        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from target of RenderPipeline relationship for $this
+        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from the entity which is target of RenderPipeline relationship for $this
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
-        [in] WrapInstanceOffsets($),
+        [in] WrapInstanceOffsets($)
     );
 
     //ecs_enable(world, DrawInstances, false);
@@ -700,7 +859,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
         })
     });
 
-    ecs_singleton_set(world, ShadowPass, {
+    ecs_set_pair(world, RenderPasses, RenderPass, ShadowPass, {
         .action = {
             .depth = {
                 .load_action = SG_LOADACTION_CLEAR,
@@ -717,16 +876,27 @@ void BcviewSystemsImport(ecs_world_t *world) {
     // Render pass setup
 
     // Combined pipeline and mesh to draw lit world on a screen uv quad
-    ecs_entity_t finalPass = ecs_set_name(world, 0, "Final Pass");
-    ecs_add(world, finalPass, LightingPipeline);
-    ecs_set_pair(world, finalPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/lighting.vert"});
-    ecs_set_pair(world, finalPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/lighting.frag"});
-    ecs_set(world, finalPass, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
+    ecs_entity_t lightingPass = ecs_set_name(world, 0, "Lighting Pass");
+    ecs_add_id(world, lightingPass, LightingPipeline);
+    ecs_set_pair(world, lightingPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/lighting.vert"});
+    ecs_set_pair(world, lightingPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/lighting.frag"});
+    ecs_set(world, lightingPass, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
 
-    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    float quadVerts[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    sg_buffer quadBuffer = sg_make_buffer(&(sg_buffer_desc){
+        .data = SG_RANGE(quadVerts)
+    });
+    ecs_set(world, lightingPass, Mesh, {
+        .vertexBuffers[0] = quadBuffer
+    });
+
+    ecs_entity_t finalPass = ecs_set_name(world, 0, "Final Pass");
+    ecs_add_id(world, finalPass, FinalPipeline);
+    ecs_set_pair(world, finalPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
+    ecs_set_pair(world, finalPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/final.frag"});
+    ecs_set(world, finalPass, PipelineDescription, {.pipeline_desc = &finalPipelineDescription, .shader_desc = &finalShaderDescription});
+
     ecs_set(world, finalPass, Mesh, {
-        .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
-            .data = SG_RANGE(dbg_vertices)
-        })
+        .vertexBuffers[0] = quadBuffer
     });
 }

@@ -255,6 +255,9 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
 
+    // TEST
+    //ecs_enable(world, debugPipeline, false);
+
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
     ecs_add_pair(world, debugRTPipeline, EcsChildOf, RenderPipeline);
     ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});

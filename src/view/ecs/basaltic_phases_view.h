@@ -12,6 +12,7 @@ extern ECS_TAG_DECLARE(OnRenderPass);
 extern ECS_TAG_DECLARE(PostRenderPass);
 
 extern ECS_TAG_DECLARE(OnLightingPass);
+extern ECS_TAG_DECLARE(OnFinalPass);
 
 extern ECS_TAG_DECLARE(OnModelChanged);
 
