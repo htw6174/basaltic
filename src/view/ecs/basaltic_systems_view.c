@@ -378,32 +378,61 @@ void SetupRenderPass(ecs_iter_t *it) {
 void ReinitializeRenderPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
     RenderScale *rs = ecs_field(it, RenderScale, 2);
-    OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
-    LightingTarget *lt = ecs_field(it, LightingTarget, 4);
-    RenderPass *mainPass = ecs_field(it, RenderPass, 5);
-    RenderPass *lightingPass = ecs_field(it, RenderPass, 6);
+    //OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
+    //LightingTarget *lt = ecs_field(it, LightingTarget, 4);
+    //RenderPass *mainPass = ecs_field(it, RenderPass, 5);
+    //RenderPass *lightingPass = ecs_field(it, RenderPass, 6);
+
+    OffscreenTargets *ots = ecs_singleton_get_mut(it->world, OffscreenTargets);
+    if (ots != NULL) {
+        // Destroy old target images (sampler could be reused, but easier to just recreate it along with everything else)
+        sg_destroy_image(ots->diffuse);
+        sg_destroy_image(ots->normal);
+        sg_destroy_image(ots->depth);
+        sg_destroy_image(ots->zbuffer);
+        sg_destroy_sampler(ots->sampler);
+    }
+
+    const RenderPass *mainPass = ecs_get_pair(it->world, RenderPasses, RenderPass, MainPass);
+    if (mainPass != NULL) {
+        // Destroy old pass
+        sg_destroy_pass(mainPass->pass);
+    }
+
+    // Recreate main pass
+    RenderPass newPass;
+    createOffscreenPass(*ws, *rs, ots, &newPass);
+    ecs_set_pair(it->world, RenderPasses, RenderPass, MainPass, {.pass = newPass.pass, .action = newPass.action});
+
+    if (ots == NULL) {
+        // Create singleton
+        // Used instead of singleton_set for convenience of setting with direct pointer
+        ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, ots);
+    }
+
+    LightingTarget *lt = ecs_singleton_get_mut(it->world, LightingTarget);
+    if (lt != NULL) {
+        sg_destroy_image(lt->image);
+        sg_destroy_sampler(lt->sampler);
+    }
+
+    const RenderPass *lightingPass = ecs_get_pair(it->world, RenderPasses, RenderPass, LightingPass);
+    if (lightingPass != NULL) {
+        sg_destroy_pass(lightingPass->pass);
+    }
+
+    // Recreate lighting pass
+    createLightingPass(*ws, *rs, lt, &newPass);
+    ecs_set_pair(it->world, RenderPasses, RenderPass, LightingPass, {.pass = newPass.pass, .action = newPass.action});
+
+    if (lt == NULL) {
+        ecs_set_ptr(it->world, ecs_id(LightingTarget), LightingTarget, lt);
+    }
 
     // TO TEST: if sg handles are 0, should be safe to 'destroy' them. Can use this to 0 initialize RenderPasses pairs, then reinitialize once at start
     // Problem with this approach: because the entity with a 0-initialized pass component exists, systems requiring those passes will still run
-    // Destroy old pass
     //sg_destroy_pass(shadowPass->pass);
-    sg_destroy_pass(mainPass->pass);
-    sg_destroy_pass(lightingPass->pass);
     //sg_destroy_pass(finalPass->pass);
-
-    // Destroy old target images (sampler could be reused, but easier to just recreate it along with everything else)
-    sg_destroy_image(ots->diffuse);
-    sg_destroy_image(ots->normal);
-    sg_destroy_image(ots->depth);
-    sg_destroy_image(ots->zbuffer);
-    sg_destroy_sampler(ots->sampler);
-
-    sg_destroy_image(lt->image);
-    sg_destroy_sampler(lt->sampler);
-
-    // Recreate
-    createOffscreenPass(*ws, *rs, ots, mainPass);
-    createLightingPass(*ws, *rs, lt, lightingPass);
 }
 
 void BeginRenderPass(ecs_iter_t *it) {
@@ -680,24 +709,24 @@ void BcviewSystemsImport(ecs_world_t *world) {
 
     // Render pass setup
     // Some setup depends on screen initialization, and render targets need to be resized if the screen size changes
-    ECS_SYSTEM(world, SetupRenderPass, EcsPreUpdate,
-        [in] WindowSize($),
-        [in] RenderScale(VideoSettings),
-        [out] !OffscreenTargets($),
-        [out] !LightingTarget($),
-        [out] !RenderPass(RenderPasses, MainPass),
-        [out] !RenderPass(RenderPasses, LightingPass)
-    );
-
-    // FIXME: should not trigger from initial setup
-    // ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
+    // ECS_SYSTEM(world, SetupRenderPass, EcsPreUpdate,
     //     [in] WindowSize($),
     //     [in] RenderScale(VideoSettings),
-    //     [inout] OffscreenTargets($),
-    //     [inout] LightingTarget($),
-    //     [inout] RenderPass(RenderPasses, MainPass),
-    //     [inout] RenderPass(RenderPasses, LightingPass)
+    //     [out] !OffscreenTargets($),
+    //     [out] !LightingTarget($),
+    //     //[out] !RenderPass(RenderPasses, MainPass),
+    //     //[out] !RenderPass(RenderPasses, LightingPass)
     // );
+
+    // FIXME: stuff not initialized when it needs to be?
+    ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
+        [in] WindowSize($),
+        [in] RenderScale(VideoSettings),
+        // [inout] OffscreenTargets($),
+        // [inout] LightingTarget($),
+        // [inout] RenderPass(RenderPasses, MainPass),
+        // [inout] RenderPass(RenderPasses, LightingPass)
+    );
 
     // FIXME: disabling observers does nothing?
     //ecs_enable(world, ReinitializeRenderPass, false);
