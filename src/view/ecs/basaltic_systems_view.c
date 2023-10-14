@@ -42,6 +42,36 @@ typedef struct {
     // TODO: light colors
 } LightingUniformsFS0;
 
+#define COLOR_CLEAR {0.0f, 0.0f, 0.0f, 0.0f}
+
+static sg_pass_action shadowPassAction = {
+    .depth = {
+        .load_action = SG_LOADACTION_CLEAR,
+        .store_action = SG_STOREACTION_STORE,
+        .clear_value = 1.0f
+    }
+};
+
+static sg_pass_action gBufferPassAction = {
+    .colors = {
+        {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
+        {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
+        {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
+    },
+    .depth = {
+        .load_action = SG_LOADACTION_CLEAR,
+        .store_action = SG_STOREACTION_STORE,
+        .clear_value = 1.0f
+    }
+};
+
+static sg_pass_action lightingPassAction = {
+    .colors = {
+        [0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
+    },
+    .depth.load_action = SG_LOADACTION_DONTCARE
+};
+
 static sg_shader_desc lightingShaderDescription = {
     .vs.uniform_blocks[0] = {
         .layout = SG_UNIFORMLAYOUT_NATIVE,
@@ -166,114 +196,50 @@ static sg_pipeline_desc finalPipelineDescription = {
     .label = "final-pipeline",
 };
 
+// TODO: return sokol error code (if any)
+int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTarget *rt);
 
-int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp);
-int createLightingPass(WindowSize ws, RenderScale rs, LightingTarget *lt, RenderPass *rp);
+int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTarget *rt) {
+    *rt = (RenderTarget){0};
 
-int createOffscreenPass(WindowSize ws, RenderScale rs, OffscreenTargets *ots, RenderPass *rp) {
-    int width = ws.x * rs;
-    int height = ws.y * rs;
+    sg_pass_desc pd = {0};
 
-    *ots = (OffscreenTargets){
-        .diffuse = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_RGBA8,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .normal = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_RGBA16F,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .depth = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_R32F,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .zbuffer = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_DEPTH,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_LINEAR,
-            .mag_filter = SG_FILTER_LINEAR,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        })
-    };
+    for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
+        sg_pixel_format format = rtd->colorFormats[i];
+        if (format != 0) {
+            rt->images[i] = sg_make_image(&(sg_image_desc){
+                .render_target = true,
+                .pixel_format = format,
+                .width = rtd->width,
+                .height = rtd->height
+            });
+            pd.color_attachments[i].image = rt->images[i];
+        }
+    }
 
-    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
+    if (rtd->depthFormat != 0) {
+        rt->depth_stencil = sg_make_image(&(sg_image_desc){
+            .render_target = true,
+            .pixel_format = rtd->depthFormat,
+            .width = rtd->width,
+            .height = rtd->height
+        });
+        pd.depth_stencil_attachment.image = rt->depth_stencil;
+    }
+
+    rt->sampler = sg_make_sampler(&(sg_sampler_desc){
+        .min_filter = rtd->filter,
+        .mag_filter = rtd->filter,
+        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+        .compare = rtd->compare
+    });
+
     *rp = (RenderPass){
-        .action = {
-            .colors = {
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-                {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-            },
-            .depth = {
-                .load_action = SG_LOADACTION_CLEAR,
-                .store_action = SG_STOREACTION_STORE,
-                .clear_value = 1.0f
-            }
-        },
-        .pass = sg_make_pass(&(sg_pass_desc){
-            .color_attachments = {
-                [0].image = ots->diffuse,
-                [1].image = ots->normal,
-                [2].image = ots->depth,
-            },
-            .depth_stencil_attachment.image = ots->zbuffer,
-            .label = "render-pass"
-        })
+        .action = rtd->action,
+        .pass = sg_make_pass(&pd)
     };
 
-    return 0;
-}
-
-int createLightingPass(WindowSize ws, RenderScale rs, LightingTarget *lt, RenderPass *rp) {
-    int width = ws.x * rs;
-    int height = ws.y * rs;
-
-    *lt = (LightingTarget){
-        .image = sg_make_image(&(sg_image_desc){
-            .render_target = true,
-            .pixel_format = SG_PIXELFORMAT_RGBA8,
-            .width = width,
-            .height = height,
-            .sample_count = 1
-        }),
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_NEAREST,
-            .mag_filter = SG_FILTER_NEAREST,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        })
-    };
-
-    sg_color clear = {0.0f, 0.0f, 0.0f, 0.0f};
-    *rp = (RenderPass){
-        .action = {
-            .colors = {
-                [0] = {.load_action = SG_LOADACTION_CLEAR, .clear_value = clear},
-            },
-            .depth.load_action = SG_LOADACTION_DONTCARE
-        },
-        .pass = sg_make_pass(&(sg_pass_desc){
-            .color_attachments = {
-                [0].image = lt->image,
-            },
-            .label = "lighting-pass"
-        })
-    };
 
     return 0;
 }
@@ -355,58 +321,69 @@ void UniformSunToMatrix(ecs_iter_t *it) {
     ecs_singleton_modified(it->world, SunMatrix);
 }
 
-void ReinitializeRenderPass(ecs_iter_t *it) {
+void InitRenderPasses(ecs_iter_t *it) {
+    RenderPassDescription *rpds = ecs_field(it, RenderPassDescription, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        RenderPass rp;
+        RenderTarget rt;
+        createRenderPass(&rpds[i], &rp, &rt);
+        ecs_set_ptr(it->world, it->entities[i], RenderPass, &rp);
+        ecs_set_ptr(it->world, it->entities[i], RenderTarget, &rt);
+    }
+}
+
+void OnRenderSizeChanged(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
     RenderScale *rs = ecs_field(it, RenderScale, 2);
 
-    OffscreenTargets *ots = ecs_singleton_get_mut(it->world, OffscreenTargets);
-    if (ots != NULL) {
-        // Destroy old target images (sampler could be reused, but easier to just recreate it along with everything else)
-        sg_destroy_image(ots->diffuse);
-        sg_destroy_image(ots->normal);
-        sg_destroy_image(ots->depth);
-        sg_destroy_image(ots->zbuffer);
-        sg_destroy_sampler(ots->sampler);
+    // clamp render scale between 0.1 and 2
+    float scale = fminf(fmaxf(0.1, *rs), 2.0);
+    s32 width = ws->x * scale;
+    s32 height = ws->y * scale;
+
+    // Update render pass descriptions for offscreen passes
+    RenderPassDescription *gBufDesc = ecs_get_mut(it->world, GBufferPass, RenderPassDescription);
+    RenderPassDescription *lightingDesc = ecs_get_mut(it->world, LightingPass, RenderPassDescription);
+    gBufDesc->width = width;
+    gBufDesc->height = height;
+    lightingDesc->width = width;
+    lightingDesc->height = height;
+    ecs_modified(it->world, GBufferPass, RenderPassDescription);
+    ecs_modified(it->world, LightingPass, RenderPassDescription);
+}
+
+void RefreshRenderPasses(ecs_iter_t *it) {
+    RenderPassDescription *rpds = ecs_field(it, RenderPassDescription, 1);
+
+    for (int i = 0; i < it->count; i++) {
+
+        const RenderTarget *rt = ecs_get(it->world, it->entities[i], RenderTarget);
+        if (rt != NULL) {
+            // destroy color attachments
+            for (int q = 0; q < SG_MAX_COLOR_ATTACHMENTS; q++) {
+                if (rt->images[q].id != 0) {
+                    sg_destroy_image(rt->images[q]);
+                }
+            }
+            // destroy depth attachment if exists
+            if (rt->depth_stencil.id != 0) {
+                sg_destroy_image(rt->depth_stencil);
+            }
+            sg_destroy_sampler(rt->sampler);
+        }
+
+        const RenderPass *rp = ecs_get(it->world, it->entities[i], RenderPass);
+        if (rp != NULL) {
+            sg_destroy_pass(rp->pass);
+        }
+
+        RenderPass new_rp;
+        RenderTarget new_rt;
+        createRenderPass(&rpds[i], &new_rp, &new_rt);
+        ecs_set_ptr(it->world, it->entities[i], RenderPass, &new_rp);
+        ecs_set_ptr(it->world, it->entities[i], RenderTarget, &new_rt);
     }
-
-    const RenderPass *mainPass = ecs_get_pair(it->world, RenderPasses, RenderPass, MainPass);
-    if (mainPass != NULL) {
-        // Destroy old pass
-        sg_destroy_pass(mainPass->pass);
-    }
-
-    // Recreate main pass
-    RenderPass newPass;
-    createOffscreenPass(*ws, *rs, ots, &newPass);
-    ecs_set_pair(it->world, RenderPasses, RenderPass, MainPass, {.pass = newPass.pass, .action = newPass.action});
-
-    if (ots == NULL) {
-        // Create singleton
-        // Used instead of singleton_set for convenience of setting with direct pointer
-        ecs_set_ptr(it->world, ecs_id(OffscreenTargets), OffscreenTargets, ots);
-    }
-
-    LightingTarget *lt = ecs_singleton_get_mut(it->world, LightingTarget);
-    if (lt != NULL) {
-        sg_destroy_image(lt->image);
-        sg_destroy_sampler(lt->sampler);
-    }
-
-    const RenderPass *lightingPass = ecs_get_pair(it->world, RenderPasses, RenderPass, LightingPass);
-    if (lightingPass != NULL) {
-        sg_destroy_pass(lightingPass->pass);
-    }
-
-    // Recreate lighting pass
-    createLightingPass(*ws, *rs, lt, &newPass);
-    ecs_set_pair(it->world, RenderPasses, RenderPass, LightingPass, {.pass = newPass.pass, .action = newPass.action});
-
-    if (lt == NULL) {
-        ecs_set_ptr(it->world, ecs_id(LightingTarget), LightingTarget, lt);
-    }
-
-    // TODO: allow changing shadowmap size, recreate shadow pass (should be a separate system/observer)
-    //sg_destroy_pass(shadowPass->pass);
 }
 
 void BeginRenderPass(ecs_iter_t *it) {
@@ -414,11 +391,11 @@ void BeginRenderPass(ecs_iter_t *it) {
 
     //printf("Begin Pass: %s\n", ecs_get_name(it->world, it->system));
     sg_begin_pass(rp[0].pass, &rp[0].action);
-};
+}
 
 void EndRenderPass(ecs_iter_t *it) {
     sg_end_pass();
-};
+}
 
 void BeginFinalPass(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
@@ -426,11 +403,11 @@ void BeginFinalPass(ecs_iter_t *it) {
     sg_pass_action pa = {0};
 
     sg_begin_default_pass(&pa, ws->x, ws->y);
-};
+}
 
 void EndFinalPass(ecs_iter_t *it) {
     sg_end_pass();
-};
+}
 
 void SetupPipelines(ecs_iter_t *it) {
     ResourceFile *vertSources = ecs_field(it, ResourceFile, 1);
@@ -574,9 +551,9 @@ void DrawInstances(ecs_iter_t *it) {
 void DrawLighting(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     Mesh *meshes = ecs_field(it, Mesh, 2);
+    RenderTarget *gBufferTarget = ecs_field(it, RenderTarget, 3);
+    RenderTarget *shadowTarget = ecs_field(it, RenderTarget, 4);
     // Singletons
-    OffscreenTargets *ots = ecs_field(it, OffscreenTargets, 3);
-    ShadowMap *sm = ecs_field(it, ShadowMap, 4);
     PVMatrix *pv = ecs_field(it, PVMatrix, 5);
     InverseMatrices *invs = ecs_field(it, InverseMatrices, 6);
     SunMatrix *sun = ecs_field(it, SunMatrix, 7);
@@ -587,15 +564,14 @@ void DrawLighting(ecs_iter_t *it) {
         sg_bindings bind = {
             .vertex_buffers[0] = meshes[0].vertexBuffers[0],
             .fs.images = {
-                ots[0].diffuse,
-                ots[0].normal,
-                ots[0].zbuffer,
-                //sm[0].image,
-                sm[0].image
+                gBufferTarget[0].images[0],
+                gBufferTarget[0].images[1],
+                gBufferTarget[0].depth_stencil,
+                shadowTarget[0].depth_stencil
             },
             .fs.samplers = {
-                ots[0].sampler,
-                sm[0].sampler
+                gBufferTarget[0].sampler,
+                shadowTarget[0].sampler
             }
         };
 
@@ -631,15 +607,15 @@ void DrawLighting(ecs_iter_t *it) {
 void DrawFinal(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     Mesh *meshes = ecs_field(it, Mesh, 2);
-    LightingTarget *lt = ecs_field(it, LightingTarget, 3);
+    RenderTarget *rt = ecs_field(it, RenderTarget, 3);
 
     sg_bindings bind = {
         .vertex_buffers[0] = meshes->vertexBuffers[0],
         .fs.images = {
-            lt->image
+            rt->images[0]
         },
         .fs.samplers = {
-            lt->sampler
+            rt->sampler
         }
     };
 
@@ -656,11 +632,6 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcviewPhases);
     ECS_IMPORT(world, BcviewSystemsDebug);
     ECS_IMPORT(world, BcviewSystemsTerrain);
-
-    // char *path = ecs_get_fullpath(world, TerrainRender);
-    // printf("%s\n", path);
-    // assert(ecs_lookup_fullpath(world, path) == ecs_id(TerrainRender));
-    // ecs_os_free(path);
 
     ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
         [in] Pointer,
@@ -682,16 +653,36 @@ void BcviewSystemsImport(ecs_world_t *world) {
     );
 
     // Render pass setup and updates
-    // Some setup depends on screen initialization, and render targets need to be resized if the screen size changes
+    // TODO: need systems to setup the renderpassdescriptions for specific passes, and assign sizes based on window size, video settings, etc.
+    // requires these inputs:
+    // [in] WindowSize($),
+    // [in] RenderScale(VideoSettings),
+    // [in] ShadowMapSize(VideoSettings),
+
+    // NOTE: not really needed as observer can handle setup
+    // ECS_SYSTEM(world, InitRenderPasses, EcsOnStart,
+    //     [in] RenderPassDescription,
+    //     [out] !RenderPass,
+    //     [out] !RenderTarget
+    // );
+
+    // Render pass reinitialization observers
+    // Render targets need to be resized if the screen size changes, and corresponding pass needs to be recreated
     // FIXME: need to be careful with observers, some situations where new field value isn't available when observer is triggered
-    ECS_OBSERVER(world, ReinitializeRenderPass, EcsOnSet,
+    // FIXME: observer doesn't trigger from setting RenderScale?
+    // TODO observer to change render pass description sizes with screen size, graphics settings, etc.
+    ECS_OBSERVER(world, OnRenderSizeChanged, EcsOnSet,
         [in] WindowSize($),
-        [in] RenderScale(VideoSettings)
+        [in] RenderScale(VideoSettings),
+    );
+
+    ECS_OBSERVER(world, RefreshRenderPasses, EcsOnSet,
+        [in] RenderPassDescription
     );
 
     // FIXME: disabling observers does nothing?
-    //ecs_enable(world, ReinitializeRenderPass, false);
-    //ecs_add_id(world, ReinitializeRenderPass, EcsDisabled);
+    //ecs_enable(world, RefreshRenderPasses, false);
+    //ecs_add_id(world, RefreshRenderPasses, EcsDisabled);
 
     // Render pass begin and end
     // Begin and end are the same for all but the default (final) pass, but need to run in different phases. Here multiple systems are created with the same callback but different phases and data sources to handle this
@@ -706,58 +697,55 @@ void BcviewSystemsImport(ecs_world_t *world) {
     //     .callback = BeginRenderPass
     // });
 
-    // REMINDER: Query DSL for pair source is `first(source, second)`
-    ECS_SYSTEM_ALIAS(world, BeginShadowPass, BeginRenderPass, PreShadowPass,
-        [in] RenderPass(RenderPasses, ShadowPass)
+    ECS_SYSTEM_ALIAS(world, BeginShadowPass, BeginRenderPass, BeginPassShadow,
+        [in] RenderPass(ShadowPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, EndShadowPass, EndRenderPass, PostShadowPass,
-        [none] RenderPass(RenderPasses, ShadowPass)
+    ECS_SYSTEM_ALIAS(world, EndShadowPass, EndRenderPass, EndPassShadow,
+        [none] RenderPass(ShadowPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, BeginMainPass, BeginRenderPass, PreRenderPass,
-        [in] RenderPass(RenderPasses, MainPass)
+    ECS_SYSTEM_ALIAS(world, BeginGBufferPass, BeginRenderPass, BeginPassGBuffer,
+        [in] RenderPass(GBufferPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, EndMainPass, EndRenderPass, PostRenderPass,
-        [none] RenderPass(RenderPasses, MainPass)
+    ECS_SYSTEM_ALIAS(world, EndGBufferPass, EndRenderPass, EndPassGBuffer,
+        [none] RenderPass(GBufferPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, OnLightingPass,
-        [in] RenderPass(RenderPasses, LightingPass)
+    // For lighting and final pass, don't need 3 different phases because systems run in definition order. However, no new draw systems can (or should) be added to these passes
+    ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, OnPassLighting,
+        [in] RenderPass(LightingPass)
     );
 
-    ECS_SYSTEM(world, DrawLighting, OnLightingPass,
-        [in] Pipeline,
+    ECS_SYSTEM(world, DrawLighting, OnPassLighting,
+        [in] Pipeline(up(bcview.LightingPass)),
         [in] Mesh,
-        [in] OffscreenTargets($),
-        [in] ShadowMap($),
+        [in] RenderTarget(GBufferPass),
+        [in] RenderTarget(ShadowPass),
         [in] PVMatrix($),
         [in] InverseMatrices($),
         [in] SunMatrix($),
         [in] Camera($),
         [in] SunLight($),
-        [none] bcview.LightingPipeline,
-        [none] RenderPass(RenderPasses, LightingPass)
+        [none] RenderPass(LightingPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, OnLightingPass,
-        [none] RenderPass(RenderPasses, LightingPass)
+    ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, OnPassLighting,
+        [none] RenderPass(LightingPass)
     );
 
-    // For final pass, don't need 3 different phases because systems run in definition order. However, no new draw systems can (or should) be added to the final pass
-    ECS_SYSTEM(world, BeginFinalPass, OnFinalPass,
+    ECS_SYSTEM(world, BeginFinalPass, OnPassFinal,
         [in] WindowSize($)
     );
 
-    ECS_SYSTEM(world, DrawFinal, OnFinalPass,
-        [in] Pipeline,
+    ECS_SYSTEM(world, DrawFinal, OnPassFinal,
+        [in] Pipeline(up(bcview.FinalPass)),
         [in] Mesh,
-        [in] LightingTarget($),
-        [none] bcview.FinalPipeline
+        [in] RenderTarget(LightingPass)
     );
 
-    ECS_SYSTEM(world, EndFinalPass, OnFinalPass,
+    ECS_SYSTEM(world, EndFinalPass, OnPassFinal,
         [none] WindowSize($)
     );
 
@@ -804,8 +792,8 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [none] ModelWorld($)
     );
 
-    ECS_SYSTEM(world, DrawInstanceShadows, OnShadowPass,
-        [in] Pipeline(up(bcview.ShadowPipeline)),
+    ECS_SYSTEM(world, DrawInstanceShadows, OnPassShadow,
+        [in] Pipeline(up(bcview.ShadowPass)),
         [in] InstanceBuffer,
         [in] Elements,
         [in] SunMatrix($),
@@ -814,8 +802,8 @@ void BcviewSystemsImport(ecs_world_t *world) {
     );
 
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
-    ECS_SYSTEM(world, DrawInstances, OnRenderPass,
-        [in] Pipeline(up(bcview.RenderPipeline)), // NOTE: the source specifier "up(RenderPipeline)" gets component from the entity which is target of RenderPipeline relationship for $this
+    ECS_SYSTEM(world, DrawInstances, OnPassGBuffer,
+        [in] Pipeline(up(bcview.GBufferPass)), // NOTE: the source specifier "up(GBufferPass)" gets component from the entity which is target of GBufferPass relationship for $this
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
@@ -827,66 +815,67 @@ void BcviewSystemsImport(ecs_world_t *world) {
     // A system with no query will run once per frame. However, an end of frame call is already being handled by the core engine. Something like this might be useful for starting and ending individual render passes
     //ECS_SYSTEM(world, SokolCommit, EcsOnStore, 0);
 
-    // Shadow pass setup
-    sg_image shadowMap = sg_make_image(&(sg_image_desc){
-        .render_target = true,
+    // Pass setup
+    ecs_set(world, ShadowPass, RenderPassDescription, {
+        .action = shadowPassAction,
         .width = 2048,
         .height = 2048,
-        .pixel_format = SG_PIXELFORMAT_DEPTH,
-        .sample_count = 1,
-        .label = "shadow-map",
+        .depthFormat = SG_PIXELFORMAT_DEPTH,
+        .filter = SG_FILTER_LINEAR,
+        .compare = SG_COMPAREFUNC_LESS
     });
 
-    ecs_singleton_set(world, ShadowMap, {
-        .image = shadowMap,
-        .sampler = sg_make_sampler(&(sg_sampler_desc){
-            .min_filter = SG_FILTER_LINEAR,
-            .mag_filter = SG_FILTER_LINEAR,
-            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-            .compare = SG_COMPAREFUNC_LESS,
-            .label = "shadow-sampler",
-        })
-    });
-
-    ecs_set_pair(world, RenderPasses, RenderPass, ShadowPass, {
-        .action = {
-            .depth = {
-                .load_action = SG_LOADACTION_CLEAR,
-                .store_action = SG_STOREACTION_STORE,
-                .clear_value = 1.0f
-            }
+    ecs_set(world, GBufferPass, RenderPassDescription, {
+        .action = gBufferPassAction,
+        .width = 800,
+        .height = 600,
+        .colorFormats = {
+            SG_PIXELFORMAT_RGBA8,
+            SG_PIXELFORMAT_RGBA16F,
+            SG_PIXELFORMAT_R32F
         },
-        .pass = sg_make_pass(&(sg_pass_desc){
-            .depth_stencil_attachment.image = shadowMap,
-            .label = "shadow-pass"
-        })
+        .depthFormat = SG_PIXELFORMAT_DEPTH,
+        .filter = SG_FILTER_LINEAR
     });
 
-    // Render pass setup
+    ecs_set(world, LightingPass, RenderPassDescription, {
+        .action = lightingPassAction,
+        .width = 800,
+        .height = 600,
+        .colorFormats = {
+            SG_PIXELFORMAT_RGBA8
+        },
+        .filter = SG_FILTER_NEAREST
+    });
 
-    // Combined pipeline and mesh to draw lit world on a screen uv quad
-    ecs_entity_t lightingPass = ecs_set_name(world, 0, "Lighting Pass");
-    ecs_add_id(world, lightingPass, LightingPipeline);
-    ecs_set_pair(world, lightingPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/lighting.vert"});
-    ecs_set_pair(world, lightingPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/lighting.frag"});
-    ecs_set(world, lightingPass, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
-
+    // Lighting and final pass pipeline setup
+    // UV quad for drawing from a render target to another render target or the screen
     float quadVerts[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
     sg_buffer quadBuffer = sg_make_buffer(&(sg_buffer_desc){
         .data = SG_RANGE(quadVerts)
     });
-    ecs_set(world, lightingPass, Mesh, {
+
+    ecs_entity_t lightingPipeline = ecs_set_name(world, 0, "LightingPipeline");
+    ecs_add_pair(world, lightingPipeline, EcsChildOf, LightingPass);
+    ecs_set_pair(world, lightingPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/lighting.vert"});
+    ecs_set_pair(world, lightingPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/lighting.frag"});
+    ecs_set(world, lightingPipeline, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
+
+    ecs_entity_t lightingQuad = ecs_set_name(world, 0, "LightingQuad");
+    ecs_add_pair(world, lightingQuad, LightingPass, lightingPipeline);
+    ecs_set(world, lightingQuad, Mesh, {
         .vertexBuffers[0] = quadBuffer
     });
 
-    ecs_entity_t finalPass = ecs_set_name(world, 0, "Final Pass");
-    ecs_add_id(world, finalPass, FinalPipeline);
-    ecs_set_pair(world, finalPass, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
-    ecs_set_pair(world, finalPass, ResourceFile, FragmentShaderSource, {.path = "view/shaders/final.frag"});
-    ecs_set(world, finalPass, PipelineDescription, {.pipeline_desc = &finalPipelineDescription, .shader_desc = &finalShaderDescription});
+    ecs_entity_t finalPipeline = ecs_set_name(world, 0, "FinalPipeline");
+    ecs_add_pair(world, finalPipeline, EcsChildOf, FinalPass);
+    ecs_set_pair(world, finalPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
+    ecs_set_pair(world, finalPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/final.frag"});
+    ecs_set(world, finalPipeline, PipelineDescription, {.pipeline_desc = &finalPipelineDescription, .shader_desc = &finalShaderDescription});
 
-    ecs_set(world, finalPass, Mesh, {
+    ecs_entity_t finalQuad = ecs_set_name(world, 0, "FinalQuad");
+    ecs_add_pair(world, finalQuad, FinalPass, finalPipeline);
+    ecs_set(world, finalQuad, Mesh, {
         .vertexBuffers[0] = quadBuffer
     });
 }

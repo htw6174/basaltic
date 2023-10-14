@@ -189,13 +189,13 @@ void DrawRenderTargetPreviews(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     Mesh *meshes = ecs_field(it, Mesh, 2);
     // Singletons
-    ShadowMap *sm = ecs_field(it, ShadowMap, 3);
-    OffscreenTargets *ot = ecs_field(it, OffscreenTargets, 4);
+    RenderTarget *sm = ecs_field(it, RenderTarget, 3);
+    RenderTarget *ot = ecs_field(it, RenderTarget, 4);
 
     for (int i = 0; i < it->count; i++) {
         sg_bindings bind = {
             .vertex_buffers[0] = meshes[0].vertexBuffers[0],
-            .fs.images[0] = sm->image,
+            .fs.images[0] = sm->depth_stencil,
             .fs.samplers[0] = ot->sampler
         };
 
@@ -228,11 +228,11 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [none] bcview.DebugRender
     );
 
-    ECS_SYSTEM(world, DrawRenderTargetPreviews, PostRenderPass,
-        [in] Pipeline(up(bcview.RenderPipeline)),
+    ECS_SYSTEM(world, DrawRenderTargetPreviews, EndPassGBuffer,
+        [in] Pipeline(up(bcview.GBufferPass)),
         [in] Mesh,
-        [in] ShadowMap($),
-        [in] OffscreenTargets($),
+        [in] RenderTarget(ShadowPass),
+        [in] RenderTarget(GBufferPass),
         [none] bcview.DebugRender
     );
 
@@ -244,13 +244,13 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
 
     // Pipelines, only need to create one per type
     ecs_entity_t debugShadowPipeline = ecs_set_name(world, 0, "DebugShadowPipeline");
-    ecs_add_pair(world, debugShadowPipeline, EcsChildOf, ShadowPipeline);
+    ecs_add_pair(world, debugShadowPipeline, EcsChildOf, ShadowPass);
     ecs_set_pair(world, debugShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_default.vert"});
     ecs_set_pair(world, debugShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
     ecs_set(world, debugShadowPipeline, PipelineDescription, {.shader_desc = &debugShadowShaderDescription, .pipeline_desc = &debugShadowPipelineDescription});
 
     ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugRenderPipeline");
-    ecs_add_pair(world, debugPipeline, EcsChildOf, RenderPipeline);
+    ecs_add_pair(world, debugPipeline, EcsChildOf, GBufferPass);
     ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
@@ -259,7 +259,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     //ecs_enable(world, debugPipeline, false);
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
-    ecs_add_pair(world, debugRTPipeline, EcsChildOf, RenderPipeline);
+    ecs_add_pair(world, debugRTPipeline, EcsChildOf, GBufferPass);
     ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
     ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
@@ -279,8 +279,8 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         .expr = "Position, (bc.planes.IsOn, _)"
     });
     ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
-    ecs_override_pair(world, debugPrefab, RenderPipeline, debugPipeline);
-    ecs_override_pair(world, debugPrefab, ShadowPipeline, debugShadowPipeline);
+    ecs_override_pair(world, debugPrefab, GBufferPass, debugPipeline);
+    ecs_override_pair(world, debugPrefab, ShadowPass, debugShadowPipeline);
     ecs_override(world, debugPrefab, InstanceBuffer);
     ecs_override(world, debugPrefab, QueryDesc);
     ecs_override(world, debugPrefab, Color);

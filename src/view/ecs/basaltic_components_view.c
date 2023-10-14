@@ -78,6 +78,10 @@ void BcviewImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, VideoSettings);
     ECS_COMPONENT_DEFINE(world, RenderScale);
     ecs_primitive(world, {.entity = ecs_id(RenderScale), .kind = EcsF32});
+    // TEST: set meta info min and max to test with UI controls later
+    ecs_set(world, ecs_id(RenderScale), EcsMemberRanges, {.value = {.min = 0.1, .max = 2.0}});
+    ECS_COMPONENT_DEFINE(world, ShadowMapSize);
+    ecs_primitive(world, {.entity = ecs_id(ShadowMapSize), .kind = EcsI32});
     ECS_META_COMPONENT(world, RenderDistance);
 
     // Rendering
@@ -90,35 +94,33 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Clock);
     ECS_META_COMPONENT(world, SunLight);
 
+    ECS_COMPONENT_DEFINE(world, RenderPassDescription);
     ECS_COMPONENT_DEFINE(world, RenderPass);
-    ECS_ENTITY_DEFINE(world, RenderPasses);
+    ECS_COMPONENT_DEFINE(world, RenderTarget);
     ECS_TAG_DEFINE(world, ShadowPass);
-    ECS_TAG_DEFINE(world, MainPass);
+    ECS_TAG_DEFINE(world, GBufferPass);
     ECS_TAG_DEFINE(world, LightingPass);
     ECS_TAG_DEFINE(world, FinalPass);
 
-    ECS_COMPONENT_DEFINE(world, ShadowMap);
-    ECS_COMPONENT_DEFINE(world, OffscreenTargets);
-    ECS_COMPONENT_DEFINE(world, LightingTarget);
+    ecs_add_id(world, ShadowPass, EcsTraversable);
+    ecs_add_id(world, ShadowPass, EcsOneOf);
+
+    ecs_add_id(world, GBufferPass, EcsTraversable);
+    ecs_add_id(world, GBufferPass, EcsOneOf);
+
+    ecs_add_id(world, LightingPass, EcsTraversable);
+    ecs_add_id(world, LightingPass, EcsOneOf);
+
+    ecs_add_id(world, FinalPass, EcsTraversable);
+    ecs_add_id(world, FinalPass, EcsOneOf);
+
 
     ECS_TAG_DEFINE(world, VertexShaderSource);
     ECS_TAG_DEFINE(world, FragmentShaderSource);
 
     ECS_COMPONENT_DEFINE(world, PipelineDescription);
     ECS_COMPONENT_DEFINE(world, Pipeline);
-    ECS_TAG_DEFINE(world, ShadowPipeline);
-    ecs_add_id(world, ShadowPipeline, EcsTraversable);
-    ecs_add_id(world, ShadowPipeline, EcsOneOf);
-    ECS_TAG_DEFINE(world, RenderPipeline);
-    ecs_add_id(world, RenderPipeline, EcsTraversable);
-    ecs_add_id(world, RenderPipeline, EcsOneOf);
 
-    // TEST
-    //ecs_enable(world, ShadowPipeline, false);
-    //ecs_enable(world, RenderPipeline, false);
-
-    ECS_TAG_DEFINE(world, LightingPipeline);
-    ECS_TAG_DEFINE(world, FinalPipeline);
 
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
@@ -191,6 +193,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add(world, videoDefault, VideoSettings);
     ecs_add_id(world, videoDefault, EcsPrefab);
     ecs_set(world, videoDefault, RenderScale, {1.0});
+    ecs_set(world, videoDefault, ShadowMapSize, {4096});
     ecs_set(world, videoDefault, RenderDistance, {.radius = 2});
 
     ecs_entity_t videoLow = ecs_set_name(world, 0, "Video Settings Low");
@@ -198,13 +201,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_pair(world, videoLow, EcsIsA, videoDefault);
     ecs_add_id(world, videoLow, EcsPrefab);
     ecs_set(world, videoLow, RenderScale, {0.5});
+    ecs_set(world, videoLow, ShadowMapSize, {2048});
 
     ecs_add_pair(world, VideoSettings, EcsIsA, videoDefault);
-
-    // NOTE: probably don't want to default initialize these here, makes it very easy to accidentially try rendering with a '0' pass
-    // Render passes
-    //ecs_set_pair(world, RenderPasses, RenderPass, ShadowPass, {0});
-    //ecs_set_pair(world, RenderPasses, RenderPass, MainPass, {0});
-    //ecs_set_pair(world, RenderPasses, RenderPass, LightingPass, {0});
-    //ecs_set_pair(world, RenderPasses, RenderPass, FinalPass, {0});
 }

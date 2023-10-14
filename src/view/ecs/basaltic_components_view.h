@@ -134,6 +134,9 @@ BC_DECL ECS_TAG_DECLARE(VideoSettings);
 typedef float RenderScale;
 BC_DECL ECS_COMPONENT_DECLARE(RenderScale);
 
+typedef s32 ShadowMapSize;
+BC_DECL ECS_COMPONENT_DECLARE(ShadowMapSize);
+
 ECS_STRUCT(RenderDistance, {
     u32 radius;
 });
@@ -178,36 +181,35 @@ ECS_STRUCT(SunLight, {
     Color indirectColor;
 });
 
-ECS_STRUCT(RenderPass, {
-    sg_pass pass;
-    sg_pass_action action;
-});
-
-// Holds relationships for different render passes
-BC_DECL ECS_DECLARE(RenderPasses);
-// Tags for different RenderPass(s)
+// To hold different RenderPasses and RenderTargets
+// Also, relationship where the target is a Pipeline entity to be bound in that pass
 BC_DECL ECS_TAG_DECLARE(ShadowPass);
-BC_DECL ECS_TAG_DECLARE(MainPass);
+BC_DECL ECS_TAG_DECLARE(GBufferPass);
 BC_DECL ECS_TAG_DECLARE(LightingPass);
 BC_DECL ECS_TAG_DECLARE(FinalPass);
 
-
-ECS_STRUCT(ShadowMap, {
-    sg_image image;
-    sg_sampler sampler;
+// Add to an entity to automatically add and setup a RenderPass and RenderTarget
+ECS_STRUCT(RenderPassDescription, {
+    sg_pass_action action;
+    s32 width;
+    s32 height;
+    sg_pixel_format colorFormats[SG_MAX_COLOR_ATTACHMENTS];
+    sg_pixel_format depthFormat;
+    sg_filter filter;
+    sg_compare_func compare;
 });
 
-ECS_STRUCT(OffscreenTargets, {
-    sg_image diffuse;
-    sg_image normal;
-    sg_image depth;
-    sg_image zbuffer;
-    sg_sampler sampler;
+ECS_STRUCT(RenderPass, {
+    sg_pass pass;
+    // TODO: storing this in the pass description and here seems wrong; better place to put it / initialize it?
+    sg_pass_action action;
 });
 
-ECS_STRUCT(LightingTarget, {
-    sg_image image;
+// NOTE: for creating individual render target images, all that's needed is the sg_pixel_format. Everything else is either not needed, or constant for the entire render target (width, height, sample count), which helps because the entire sg_image_desc struct is over 1.5kB
+ECS_STRUCT(RenderTarget, {
     sg_sampler sampler;
+    sg_image depth_stencil;
+    sg_image images[SG_MAX_COLOR_ATTACHMENTS];
 });
 
 // Target of a ResourceFile relationship
@@ -224,12 +226,6 @@ ECS_STRUCT(Pipeline, {
     sg_pipeline pipeline;
     sg_shader shader;
 });
-
-// Relationships where the target is a Pipeline entity
-BC_DECL ECS_TAG_DECLARE(ShadowPipeline);
-BC_DECL ECS_TAG_DECLARE(RenderPipeline);
-BC_DECL ECS_TAG_DECLARE(LightingPipeline);
-BC_DECL ECS_TAG_DECLARE(FinalPipeline);
 
 // Used to differentiate different render types for specalized draw systems
 BC_DECL ECS_TAG_DECLARE(TerrainRender);

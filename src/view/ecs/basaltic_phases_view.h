@@ -3,16 +3,16 @@
 
 #include "flecs.h"
 
-extern ECS_TAG_DECLARE(PreShadowPass);
-extern ECS_TAG_DECLARE(OnShadowPass);
-extern ECS_TAG_DECLARE(PostShadowPass);
+extern ECS_TAG_DECLARE(BeginPassShadow);
+extern ECS_TAG_DECLARE(OnPassShadow);
+extern ECS_TAG_DECLARE(EndPassShadow);
 
-extern ECS_TAG_DECLARE(PreRenderPass);
-extern ECS_TAG_DECLARE(OnRenderPass);
-extern ECS_TAG_DECLARE(PostRenderPass);
+extern ECS_TAG_DECLARE(BeginPassGBuffer);
+extern ECS_TAG_DECLARE(OnPassGBuffer);
+extern ECS_TAG_DECLARE(EndPassGBuffer);
 
-extern ECS_TAG_DECLARE(OnLightingPass);
-extern ECS_TAG_DECLARE(OnFinalPass);
+extern ECS_TAG_DECLARE(OnPassLighting);
+extern ECS_TAG_DECLARE(OnPassFinal);
 
 extern ECS_TAG_DECLARE(OnModelChanged);
 

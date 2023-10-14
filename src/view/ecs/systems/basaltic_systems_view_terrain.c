@@ -1211,8 +1211,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
-    ECS_SYSTEM(world, DrawHexTerrainShadows, OnShadowPass,
-               [in] Pipeline(up(bcview.ShadowPipeline)),
+    ECS_SYSTEM(world, DrawHexTerrainShadows, OnPassShadow,
+               [in] Pipeline(up(bcview.ShadowPass)),
                [in] InstanceBuffer,
                [in] Mesh,
                [in] DataTexture,
@@ -1222,8 +1222,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
-    ECS_SYSTEM(world, DrawPipelineHexTerrain, OnRenderPass,
-               [in] Pipeline(up(bcview.RenderPipeline)),
+    ECS_SYSTEM(world, DrawPipelineHexTerrain, OnPassGBuffer,
+               [in] Pipeline(up(bcview.GBufferPass)),
                [in] InstanceBuffer,
                [in] Mesh,
                [in] DataTexture,
@@ -1248,14 +1248,14 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     // Pipeline, only need to create one per type
     ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "Terrain Pipeline");
-    ecs_add_pair(world, terrainPipeline, EcsChildOf, RenderPipeline);
+    ecs_add_pair(world, terrainPipeline, EcsChildOf, GBufferPass);
     ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
     // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
     ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
     ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrainPipelineDescription});
 
     ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");
-    ecs_add_pair(world, terrainShadowPipeline, EcsChildOf, ShadowPipeline);
+    ecs_add_pair(world, terrainShadowPipeline, EcsChildOf, ShadowPass);
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_terrain.vert"});
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
     ecs_set(world, terrainShadowPipeline, PipelineDescription, {.shader_desc = &terrainShadowShaderDescription, .pipeline_desc = &terrainShadowPipelineDescription});
@@ -1265,8 +1265,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
 
     ecs_entity_t terrainDraw = ecs_set_name(world, 0, "TerrainDraw");
-    ecs_add_pair(world, terrainDraw, RenderPipeline, terrainPipeline);
-    ecs_add_pair(world, terrainDraw, ShadowPipeline, terrainShadowPipeline);
+    ecs_add_pair(world, terrainDraw, GBufferPass, terrainPipeline);
+    ecs_add_pair(world, terrainDraw, ShadowPass, terrainShadowPipeline);
     ecs_add(world, terrainDraw, TerrainRender);
     ecs_add(world, terrainDraw, TerrainBuffer);
     ecs_add(world, terrainDraw, InstanceBuffer);

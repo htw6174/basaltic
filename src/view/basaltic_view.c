@@ -56,6 +56,7 @@ void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool
 u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer) {
     // TODO: should happen in response to SDL resize events instead of every frame
     const WindowSize *currentWindow = ecs_singleton_get(vc.ecsWorld, WindowSize);
+    // Only set if changed so that OnSet observers for WindowSize only run when needed
     if (currentWindow->x != wc->width || currentWindow->y != wc->height) {
         ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     }
