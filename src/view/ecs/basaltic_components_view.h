@@ -227,7 +227,10 @@ ECS_STRUCT(Pipeline, {
     sg_shader shader;
 });
 
-// Used to differentiate different render types for specalized draw systems
+// Tags to differentiate different render types for specalized draw systems
+// Reserved for use by core renderer; other rendering modules should define their own tags
+BC_DECL ECS_TAG_DECLARE(InternalRender);
+
 BC_DECL ECS_TAG_DECLARE(TerrainRender);
 BC_DECL ECS_TAG_DECLARE(DebugRender);
 

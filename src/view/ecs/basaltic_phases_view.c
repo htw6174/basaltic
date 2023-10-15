@@ -8,12 +8,44 @@ ECS_TAG_DECLARE(BeginPassGBuffer);
 ECS_TAG_DECLARE(OnPassGBuffer);
 ECS_TAG_DECLARE(EndPassGBuffer);
 
+ECS_TAG_DECLARE(BeginPassLighting);
 ECS_TAG_DECLARE(OnPassLighting);
+ECS_TAG_DECLARE(EndPassLighting);
+
 ECS_TAG_DECLARE(OnPassFinal);
 
 ECS_TAG_DECLARE(OnModelChanged);
 
 ECS_DECLARE(ModelChangedPipeline);
+
+// returns a dummy phase with the same depth as endPhase; should use this as the dependsOn arg of further calls or phases
+ecs_entity_t createPassPhases(ecs_world_t *world, ecs_entity_t dependsOn, ecs_entity_t beginPhase, ecs_entity_t onPhase, ecs_entity_t endPhase);
+
+ecs_entity_t createPassPhases(ecs_world_t *world, ecs_entity_t dependsOn, ecs_entity_t beginPhase, ecs_entity_t onPhase, ecs_entity_t endPhase) {
+    // Dummy phases to increase depth of later pass phases
+    ecs_entity_t d1 = ecs_new_w_id(world, EcsPhase);
+    ecs_entity_t d2 = ecs_new_w_id(world, EcsPhase);
+    ecs_entity_t d3 = ecs_new_w_id(world, EcsPhase);
+    ecs_add_pair(world, d1, EcsDependsOn, dependsOn);
+    ecs_add_pair(world, d2, EcsDependsOn, d1);
+    ecs_add_pair(world, d3, EcsDependsOn, d2);
+
+    // Ensure phase tag is added
+    ecs_add_id(world, beginPhase, EcsPhase);
+    ecs_add_id(world, onPhase, EcsPhase);
+    ecs_add_id(world, endPhase, EcsPhase);
+
+    // Ending a pass only depends on starting the same pass, not on running it. However, OnPass phases always need to happen in between starting and ending the same pass
+    // Obviously, running a pass still directly depends on starting the same pass
+    ecs_add_pair(world, beginPhase, EcsDependsOn, dependsOn);
+    // dummy phase with same depth as onPhase
+    ecs_entity_t dummyOnPass = ecs_new_w_id(world, EcsPhase);
+    ecs_add_pair(world, dummyOnPass, EcsDependsOn, beginPhase);
+    ecs_add_pair(world, onPhase, EcsDependsOn, beginPhase);
+    ecs_add_pair(world, endPhase, EcsDependsOn, dummyOnPass);
+
+    return d3;
+}
 
 void BcviewPhasesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewPhases);
@@ -26,53 +58,23 @@ void BcviewPhasesImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, OnPassGBuffer);
     ECS_TAG_DEFINE(world, EndPassGBuffer);
 
+    ECS_TAG_DEFINE(world, BeginPassLighting);
     ECS_TAG_DEFINE(world, OnPassLighting);
+    ECS_TAG_DEFINE(world, EndPassLighting);
+
     ECS_TAG_DEFINE(world, OnPassFinal);
 
     ECS_TAG_DEFINE(world, OnModelChanged);
 
-    // TODO: change the relationship between pass phases. Ending a pass only depends on starting the same pass, not on running it. However, OnPass phases always need to happen in between starting and ending the same pass
-    // Obviously, running a pass still directly depends on starting the same pass
-
-    ecs_add_id(world, BeginPassShadow, EcsPhase);
-    ecs_add_pair(world, BeginPassShadow, EcsDependsOn, EcsOnUpdate);
-    // dummy phase with same depth as OnShadowPass
-    ecs_entity_t whileShadowPass = ecs_new_w_id(world, EcsPhase);
-    ecs_add_pair(world, whileShadowPass, EcsDependsOn, BeginPassShadow);
-    ecs_add_id(world, OnPassShadow, EcsPhase);
-    ecs_add_pair(world, OnPassShadow, EcsDependsOn, BeginPassShadow);
-    ecs_add_id(world, EndPassShadow, EcsPhase);
-    ecs_add_pair(world, EndPassShadow, EcsDependsOn, whileShadowPass);
-
-    // Dummy phases to increase depth of post-shadow-pass phases
-    ecs_entity_t d1 = ecs_new_w_id(world, EcsPhase);
-    ecs_entity_t d2 = ecs_new_w_id(world, EcsPhase);
-    ecs_entity_t d3 = ecs_new_w_id(world, EcsPhase);
-    ecs_add_pair(world, d1, EcsDependsOn, EcsOnUpdate);
-    ecs_add_pair(world, d2, EcsDependsOn, d1);
-    ecs_add_pair(world, d3, EcsDependsOn, d2);
-
     // TEST: default disable shadows
     //ecs_enable(world, OnPassShadow, false);
 
-    ecs_add_id(world, BeginPassGBuffer, EcsPhase);
-    ecs_add_pair(world, BeginPassGBuffer, EcsDependsOn, d3);
-    // dummy phase with same depth as OnRenderPass
-    ecs_entity_t whileGBufferPass = ecs_new_w_id(world, EcsPhase);
-    ecs_add_pair(world, whileGBufferPass, EcsDependsOn, BeginPassGBuffer);
-    ecs_add_id(world, OnPassGBuffer, EcsPhase);
-    ecs_add_pair(world, OnPassGBuffer, EcsDependsOn, BeginPassGBuffer);
-    ecs_add_id(world, EndPassGBuffer, EcsPhase);
-    ecs_add_pair(world, EndPassGBuffer, EcsDependsOn, whileGBufferPass);
-
-    // Could do another 3 dummy phases to span d3 to OnLighting, which would allow disabling the gbuffer pass
-    // Might be useful for a more generalized system, but not worth setting up for now
-
-    ecs_add_id(world, OnPassLighting, EcsPhase);
-    ecs_add_pair(world, OnPassLighting, EcsDependsOn, EndPassGBuffer);
+    ecs_entity_t dummyPhase = createPassPhases(world, EcsOnUpdate, BeginPassShadow, OnPassShadow, EndPassShadow);
+    dummyPhase = createPassPhases(world, dummyPhase, BeginPassGBuffer, OnPassGBuffer, EndPassGBuffer);
+    dummyPhase = createPassPhases(world, dummyPhase, BeginPassLighting, OnPassLighting, EndPassLighting);
 
     ecs_add_id(world, OnPassFinal, EcsPhase);
-    ecs_add_pair(world, OnPassFinal, EcsDependsOn, OnPassLighting);
+    ecs_add_pair(world, OnPassFinal, EcsDependsOn, dummyPhase);
 
     // We don't want the default pipeline to run this phase, so don't add the EcsPhase tag
     //ecs_add_id(world, OnModelChanged, EcsPhase);

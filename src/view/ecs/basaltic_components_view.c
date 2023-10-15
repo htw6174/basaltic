@@ -122,6 +122,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Pipeline);
 
 
+    ECS_TAG_DEFINE(world, InternalRender);
     ECS_TAG_DEFINE(world, TerrainRender);
     ECS_TAG_DEFINE(world, DebugRender);
 

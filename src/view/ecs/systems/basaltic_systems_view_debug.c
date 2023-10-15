@@ -122,6 +122,7 @@ static sg_pipeline_desc debugRTPipelineDescription = {
     .layout = {
         .attrs[0].format = SG_VERTEXFORMAT_FLOAT2,
     },
+    .depth.pixel_format = SG_PIXELFORMAT_NONE,
     .shader = {0},
     .primitive_type = SG_PRIMITIVETYPE_TRIANGLE_STRIP,
     .label = "debug-RT-pipeline",
@@ -228,12 +229,13 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [none] bcview.DebugRender
     );
 
-    ECS_SYSTEM(world, DrawRenderTargetPreviews, EndPassGBuffer,
-        [in] Pipeline(up(bcview.GBufferPass)),
+    ECS_SYSTEM(world, DrawRenderTargetPreviews, OnPassLighting,
+        [in] Pipeline(up(bcview.LightingPass)),
         [in] Mesh,
         [in] RenderTarget(ShadowPass),
         [in] RenderTarget(GBufferPass),
-        [none] bcview.DebugRender
+        [none] bcview.DebugRender,
+        [none] RenderPass(LightingPass)
     );
 
     // Always override, so instance's model query can become a subquery of the original
@@ -259,7 +261,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     //ecs_enable(world, debugPipeline, false);
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
-    ecs_add_pair(world, debugRTPipeline, EcsChildOf, GBufferPass);
+    ecs_add_pair(world, debugRTPipeline, EcsChildOf, LightingPass);
     ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
     ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
@@ -318,17 +320,16 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     //ecs_enable(world, ecs_id(DrawInstances), false);
 
     // Render target debug rect
-    // FIXME: doesn't fit into the render or lighting pass anymore
-    // ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "Shadow Map");
-    // ecs_add_id(world, renderTargetVis, DebugRender);
-    // ecs_add_pair(world, renderTargetVis, RenderPipeline, debugRTPipeline);
-    //
-    // float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
-    // ecs_set(world, renderTargetVis, Mesh, {
-    //     .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
-    //         .data = SG_RANGE(dbg_vertices)
-    //     })
-    // });
+    ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "RenderTargetPreview");
+    ecs_add_id(world, renderTargetVis, DebugRender);
+    ecs_add_pair(world, renderTargetVis, LightingPass, debugRTPipeline);
 
-    // ecs_enable(world, renderTargetVis, false);
+    float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
+    ecs_set(world, renderTargetVis, Mesh, {
+        .vertexBuffers[0] = sg_make_buffer(&(sg_buffer_desc){
+            .data = SG_RANGE(dbg_vertices)
+        })
+    });
+
+    //ecs_enable(world, renderTargetVis, false);
 }

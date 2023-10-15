@@ -11,7 +11,10 @@ extern ECS_TAG_DECLARE(BeginPassGBuffer);
 extern ECS_TAG_DECLARE(OnPassGBuffer);
 extern ECS_TAG_DECLARE(EndPassGBuffer);
 
+extern ECS_TAG_DECLARE(BeginPassLighting);
 extern ECS_TAG_DECLARE(OnPassLighting);
+extern ECS_TAG_DECLARE(EndPassLighting);
+
 extern ECS_TAG_DECLARE(OnPassFinal);
 
 extern ECS_TAG_DECLARE(OnModelChanged);

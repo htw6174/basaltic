@@ -712,9 +712,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_SYSTEM_ALIAS(world, EndGBufferPass, EndRenderPass, EndPassGBuffer,
         [none] RenderPass(GBufferPass)
     );
-
-    // For lighting and final pass, don't need 3 different phases because systems run in definition order. However, no new draw systems can (or should) be added to these passes
-    ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, OnPassLighting,
+    ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, BeginPassLighting,
         [in] RenderPass(LightingPass)
     );
 
@@ -728,13 +726,16 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] SunMatrix($),
         [in] Camera($),
         [in] SunLight($),
+        [none] bcview.InternalRender,
         [none] RenderPass(LightingPass)
     );
 
-    ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, OnPassLighting,
+    ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, EndPassLighting,
         [none] RenderPass(LightingPass)
     );
 
+
+    // For final pass, don't need 3 different phases because systems run in definition order. However, no new draw systems can (or should) be added to this pass
     ECS_SYSTEM(world, BeginFinalPass, OnPassFinal,
         [in] WindowSize($)
     );
@@ -742,7 +743,8 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_SYSTEM(world, DrawFinal, OnPassFinal,
         [in] Pipeline(up(bcview.FinalPass)),
         [in] Mesh,
-        [in] RenderTarget(LightingPass)
+        [in] RenderTarget(LightingPass),
+        [none] bcview.InternalRender
     );
 
     ECS_SYSTEM(world, EndFinalPass, OnPassFinal,
@@ -862,6 +864,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ecs_set(world, lightingPipeline, PipelineDescription, {.pipeline_desc = &lightingPipelineDescription, .shader_desc = &lightingShaderDescription});
 
     ecs_entity_t lightingQuad = ecs_set_name(world, 0, "LightingQuad");
+    ecs_add_id(world, lightingQuad, InternalRender);
     ecs_add_pair(world, lightingQuad, LightingPass, lightingPipeline);
     ecs_set(world, lightingQuad, Mesh, {
         .vertexBuffers[0] = quadBuffer
@@ -875,6 +878,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
 
     ecs_entity_t finalQuad = ecs_set_name(world, 0, "FinalQuad");
     ecs_add_pair(world, finalQuad, FinalPass, finalPipeline);
+    ecs_add_id(world, finalQuad, InternalRender);
     ecs_set(world, finalQuad, Mesh, {
         .vertexBuffers[0] = quadBuffer
     });
