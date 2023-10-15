@@ -19,6 +19,7 @@ void BcPlanesImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, Destination);
     ECS_TAG_DEFINE(world, IsOn);
     ecs_add_id(world, IsOn, EcsExclusive);
+    ecs_add_id(world, IsOn, EcsTraversable);
     ECS_TAG_DEFINE(world, CellRoot);
 
     ecs_struct(world, {

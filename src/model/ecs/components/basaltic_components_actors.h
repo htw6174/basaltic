@@ -5,21 +5,26 @@
 #include "flecs.h"
 
 #undef ECS_META_IMPL
-#ifndef BASALTIC_ACTORS_IMPL
-#define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
+#undef BC_DECL
+#ifndef BC_COMPONENT_IMPL
+#define ECS_META_IMPL EXTERN
+#define BC_DECL extern
+#else
+#define BC_DECL
 #endif
 
-extern ECS_TAG_DECLARE(Ego); // Relationship where target is a 'controller': either an AI system or a player
-extern ECS_TAG_DECLARE(EgoNone); // Default ego that disables all AI behavior; should be applied to player controlled actors
-extern ECS_TAG_DECLARE(EgoWanderer); // Example ego to show setup; wanders around in a random direction
+BC_DECL ECS_TAG_DECLARE(Ego); // Relationship where target is a 'controller': either an AI system or a player
+BC_DECL ECS_TAG_DECLARE(EgoNone); // Default ego that disables all AI behavior; should be applied to player controlled actors
+BC_DECL ECS_TAG_DECLARE(EgoWanderer); // Example ego to show setup; wanders around in a random direction
 
-extern ECS_TAG_DECLARE(Action);
-extern ECS_TAG_DECLARE(ActionMove);
+BC_DECL ECS_TAG_DECLARE(Action);
+BC_DECL ECS_TAG_DECLARE(ActionIdle);
+BC_DECL ECS_TAG_DECLARE(ActionMove);
 
-extern ECS_TAG_DECLARE(FollowerOf); // Relationship where target is another actor; will typically follow the leader's actions instead of acting indpendently
+BC_DECL ECS_TAG_DECLARE(FollowerOf); // Relationship where target is another actor; will typically follow the leader's actions instead of acting indpendently
 
 // TODO: is this seperation really necessary? in most cases group.count == 1 would be the same as individual
-extern ECS_TAG_DECLARE(Individual); // Tag for actors that represent a single individual
+BC_DECL ECS_TAG_DECLARE(Individual); // Tag for actors that represent a single individual
 // Used for actors that represent a generic group; exclusive with the Individual tag TODO find a way to enforce this
 ECS_STRUCT(Group, {
     u32 count;

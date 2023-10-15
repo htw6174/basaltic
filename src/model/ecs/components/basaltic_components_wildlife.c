@@ -1,24 +1,6 @@
-#include "basaltic_components_wildlife.h"
 #include "basaltic_components_actors.h"
-
-ECS_TAG_DECLARE(Diet);
-ECS_TAG_DECLARE(Grasses);
-ECS_TAG_DECLARE(Foliage);
-ECS_TAG_DECLARE(Fruit);
-ECS_TAG_DECLARE(Meat);
-
-ECS_TAG_DECLARE(EgoGrazer);
-ECS_TAG_DECLARE(EgoPredator);
-ECS_TAG_DECLARE(EgoHunter);
-
-ECS_TAG_DECLARE(ActionFeed);
-ECS_TAG_DECLARE(ActionFollow);
-ECS_TAG_DECLARE(ActionAttack);
-
-ECS_TAG_DECLARE(Flying);
-ECS_TAG_DECLARE(Climbing);
-ECS_TAG_DECLARE(Amphibious);
-ECS_TAG_DECLARE(Aquatic);
+#define BC_COMPONENT_IMPL
+#include "basaltic_components_wildlife.h"
 
 void BcWildlifeImport(ecs_world_t *world) {
     ECS_MODULE(world, BcWildlife);

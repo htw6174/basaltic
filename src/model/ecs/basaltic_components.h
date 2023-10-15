@@ -5,6 +5,7 @@
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
 #include "components/basaltic_components_wildlife.h"
+#include "components/bc_components_elementals.h"
 
 #undef ECS_META_IMPL
 #ifndef BASALTIC_COMPONENTS_IMPL

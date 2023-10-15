@@ -331,5 +331,5 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         })
     });
 
-    //ecs_enable(world, renderTargetVis, false);
+    ecs_enable(world, renderTargetVis, false);
 }

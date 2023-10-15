@@ -1,16 +1,5 @@
-#define BASALTIC_ACTORS_IMPL
+#define BC_COMPONENT_IMPL
 #include "basaltic_components_actors.h"
-
-ECS_TAG_DECLARE(Ego);
-ECS_TAG_DECLARE(EgoNone);
-ECS_TAG_DECLARE(EgoWanderer);
-
-ECS_TAG_DECLARE(Action);
-ECS_TAG_DECLARE(ActionMove);
-
-ECS_TAG_DECLARE(FollowerOf);
-
-ECS_TAG_DECLARE(Individual);
 
 void BcActorsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcActors);
@@ -30,6 +19,8 @@ void BcActorsImport(ecs_world_t *world) {
     ecs_add_id(world, Action, EcsUnion);
     ecs_add_id(world, Action, EcsOneOf);
 
+    ECS_TAG_DEFINE(world, ActionIdle);
+    ecs_add_pair(world, ActionIdle, EcsChildOf, Action);
     ECS_TAG_DEFINE(world, ActionMove);
     ecs_add_pair(world, ActionMove, EcsChildOf, Action);
 
