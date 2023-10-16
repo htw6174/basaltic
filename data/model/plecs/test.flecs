@@ -1,0 +1,9 @@
+using bc.systems.elementals
+using bc.planes
+using bc.actors
+
+volcano_spawner {
+    - Spawner{prefab: VolcanoSpiritPrefab, count: 200, oneShot: true}
+    - (IsOn, Overworld)
+}
+

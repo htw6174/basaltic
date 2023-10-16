@@ -1,1 +1,1 @@
-target_sources(basaltic_model PRIVATE basaltic_components_planes.c basaltic_components_actors.c basaltic_components_wildlife.c bc_components_elementals.c)
+target_sources(basaltic_model PRIVATE bc_components_common.c basaltic_components_planes.c basaltic_components_actors.c basaltic_components_wildlife.c bc_components_elementals.c)

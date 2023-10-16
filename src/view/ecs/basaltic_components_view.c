@@ -8,15 +8,6 @@ void BcviewImport(ecs_world_t *world) {
     // NOTE: Must have this import before any other definitions, to keep component IDs consistent between model and view
     ECS_IMPORT(world, Bc);
 
-    // Creating meta info for custom primitive types:
-    // 1. Declare and Define a component for the type
-    // 2. Use ecs_primitive to create meta info
-    ECS_COMPONENT_DEFINE(world, s32);
-
-    ecs_primitive(world, {.entity = ecs_id(s32), .kind = EcsI32});
-    // NOTE: because Flecs also happens to use the name u32 for uint32_t prims, I don't need to create reflection data for it
-    //ecs_primitive(world, {.entity = ecs_id(u32), .kind = EcsU32});
-
     // Create one ecs_member_t array per vector type, reuse for each component type
     ecs_member_t vecMembers[4] = {
         [0] = {.name = "x", .type = ecs_id(ecs_f32_t)},
@@ -53,8 +44,6 @@ void BcviewImport(ecs_world_t *world) {
         [2] = colorMembers[2],
         [3] = colorMembers[3]
     }});
-
-    ECS_META_COMPONENT(world, ResourceFile);
 
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);

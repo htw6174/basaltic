@@ -53,9 +53,11 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     ecs_entity_t testSpawner = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab, .count = 200, .oneShot = true});
     ecs_add_pair(newWorld->ecsWorld, testSpawner, IsOn, newWorld->centralPlane);
 
-    ecs_entity_t prefab2 = ecs_lookup_fullpath(newWorld->ecsWorld, "bc.systems.elementals.VolcanoSpiritPrefab");
-    ecs_entity_t testSpawner2 = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab2, .count = 200, .oneShot = true});
-    ecs_add_pair(newWorld->ecsWorld, testSpawner2, IsOn, newWorld->centralPlane);
+    // ecs_entity_t prefab2 = ecs_lookup_fullpath(newWorld->ecsWorld, "bc.systems.elementals.VolcanoSpiritPrefab");
+    // ecs_entity_t testSpawner2 = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab2, .count = 200, .oneShot = true});
+    // ecs_add_pair(newWorld->ecsWorld, testSpawner2, IsOn, newWorld->centralPlane);
+
+    ecs_entity_t plecsTest = ecs_set_pair(newWorld->ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
 
     newWorld->lock = SDL_CreateSemaphore(1);
 

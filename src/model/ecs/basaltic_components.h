@@ -2,6 +2,7 @@
 #define BASALTIC_COMPONENTS_H_INCLUDED
 
 #include "flecs.h"
+#include "components/bc_components_common.h"
 #include "components/basaltic_components_planes.h"
 #include "components/basaltic_components_actors.h"
 #include "components/basaltic_components_wildlife.h"
@@ -12,9 +13,7 @@
 #define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
 #endif
 
-// Common types
-extern ECS_COMPONENT_DECLARE(s16);
-
+// TODO: change to typedef instead of struct; move to BcCommon?
 ECS_STRUCT(Step, {
     u64 step;
 });

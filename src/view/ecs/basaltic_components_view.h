@@ -22,7 +22,6 @@
 #define MAX_QUERY_EXPR_LENGTH 1024
 
 /* Common types */
-BC_DECL ECS_COMPONENT_DECLARE(s32);
 BC_DECL ECS_COMPONENT_DECLARE(vec3);
 
 typedef vec3 Scale;
@@ -30,13 +29,6 @@ BC_DECL ECS_COMPONENT_DECLARE(Scale);
 
 typedef vec4 Color;
 BC_DECL ECS_COMPONENT_DECLARE(Color);
-
-ECS_STRUCT(ResourceFile, {
-    // NOTE: should be explicitly time_t; need to add meta info first
-    u64 accessTime; // update whenever file is read; if modify time on disk is > this, should reload file
-    char path[256];
-});
-
 
 
 /* Connection to Model */
