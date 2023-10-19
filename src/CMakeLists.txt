@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 project(basaltic LANGUAGES C)
 
-add_executable(basaltic_engine WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
+add_executable(basaltic_engine WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c bc_flecs_utils.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
 
 #if(WIN32)
 #    add_library(GLEW SHARED IMPORTED)

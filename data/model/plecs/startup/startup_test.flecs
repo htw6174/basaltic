@@ -1,0 +1,17 @@
+bc.planes {
+    Position :- AlwaysOverride
+    Destination :- AlwaysOverride
+}
+
+bc.actors {
+    Condition :- AlwaysOverride
+    Group :- AlwaysOverride
+}
+
+bc.wildlife {
+    GrowthRate :- AlwaysOverride
+}
+
+bc.elementals {
+    SpiritPower :- AlwaysOverride
+}

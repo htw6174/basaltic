@@ -8,6 +8,7 @@
 #include "basaltic_phases_view.h"
 #include "basaltic_systems_view.h"
 #include "flecs.h"
+#include "bc_flecs_utils.h"
 
 typedef struct {
     ecs_world_t *ecsWorld;
@@ -21,7 +22,15 @@ void bc_view_setup(bc_WindowContext* wc) {
     bc_sg_setup();
 
     vc.ecsWorld = ecs_init();
+
+    // TEST: enable rest api
+    //ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
+
     ECS_IMPORT(vc.ecsWorld, Bcview);
+    // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
+    ecs_plecs_from_file(vc.ecsWorld, "view/plecs/startup/startup_test.flecs");
+    ecs_set_pair(vc.ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "view/plecs/test.flecs"});
+
     ECS_IMPORT(vc.ecsWorld, BcviewPhases);
     ECS_IMPORT(vc.ecsWorld, BcviewSystems);
 
@@ -66,6 +75,9 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     float dT = (float)wc->lastFrameDuration / wc->performanceFrequency; // in seconds
     ecs_singleton_set(vc.ecsWorld, DeltaTime, {dT});
     ecs_singleton_set(vc.ecsWorld, Clock, {(float)wc->milliSeconds / 1000.0});
+
+    // TEST: reload test script
+    bc_reloadFlecsScript(vc.ecsWorld, 0);
 
     ecs_progress(vc.ecsWorld, dT);
 

@@ -1,3 +1,6 @@
+#ifndef BC_FLECS_UTILS_H_INCLUDED
+#define BC_FLECS_UTILS_H_INCLUDED
+
 #include "flecs.h"
 
 // Macro block to use Flecs meta symbols and avoid re-declaring Components, Tags, etc. in source files
@@ -26,3 +29,8 @@
 #include "components_*.h"
 
  */
+
+void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query);
+
+
+#endif // BC_FLECS_UTILS_H_INCLUDED

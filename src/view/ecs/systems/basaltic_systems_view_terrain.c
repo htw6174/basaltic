@@ -894,9 +894,7 @@ void InitTerrainBuffers(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], QueryDesc, {
-            .desc.filter.terms = {{
-                .id = ecs_id(Plane), .inout = EcsIn
-            }}
+            .expr = "[in] bc.planes.Plane"
         });
 
         u32 visibilityRadius = rd[i].radius;
@@ -1170,6 +1168,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
 
+    // NOTE: won't run unless VideoSettings has a RenderDistance component before declaring this observer
     ECS_OBSERVER(world, InitTerrainBuffers, EcsOnAdd,
         [in] RenderDistance(VideoSettings),
         [out] TerrainBuffer,

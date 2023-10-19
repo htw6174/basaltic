@@ -238,12 +238,6 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [none] RenderPass(LightingPass)
     );
 
-    // Always override, so instance's model query can become a subquery of the original
-    //ecs_add_id(world, ecs_id(ModelQuery), EcsAlwaysOverride);
-    // Test: instead use DontInherit, so the CreateModelQueries system picks up subqueries
-    //ecs_add_id(world, ecs_id(ModelQuery), EcsDontInherit);
-    //ecs_add_id(world, ecs_id(QueryDesc), EcsDontInherit);
-
     // Pipelines, only need to create one per type
     ecs_entity_t debugShadowPipeline = ecs_set_name(world, 0, "DebugShadowPipeline");
     ecs_add_pair(world, debugShadowPipeline, EcsChildOf, ShadowPass);
@@ -251,73 +245,17 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set_pair(world, debugShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
     ecs_set(world, debugShadowPipeline, PipelineDescription, {.shader_desc = &debugShadowShaderDescription, .pipeline_desc = &debugShadowPipelineDescription});
 
-    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugRenderPipeline");
+    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugGBufferPipeline");
     ecs_add_pair(world, debugPipeline, EcsChildOf, GBufferPass);
     ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
-
-    // TEST
-    //ecs_enable(world, debugPipeline, false);
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
     ecs_add_pair(world, debugRTPipeline, EcsChildOf, LightingPass);
     ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
     ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
-
-    // Instance buffer, need to create one for every set of instances to be rendered, as well as a subquery used to fill that buffer
-    // aka "Draw Query"
-    ecs_entity_t debugPrefab = ecs_set_name(world, 0, "DebugDrawPrefab");
-    ecs_add_id(world, debugPrefab, EcsPrefab);
-    ecs_add_id(world, debugPrefab, DebugRender);
-    //ecs_add_pair(world, debugInstancesDefault, RenderPipeline, debugPipeline);
-    // NOTE/FIXME: subqueries have their own fields, separate from the parent query. Need to add terms required by UpdateDebugBuffers here, in the right order, or find another solution. Possibility: could store the start of a term list or query expr, and add the draw queries' terms to that. Possibility: don't use fields when iterating the query, just get components that are known to be in the parent query. Should measure perf difference with this approach.
-    ecs_set(world, debugPrefab, QueryDesc, {
-        // .desc.filter.terms = {
-        //     {.id = ecs_id(Position), .inout = EcsIn}, // NOTE: even if the header is included, if the correct module is not imported then entity IDs may default to 0, preventing them from becoming usable filter terms. The query builder Macros can help to detect this at runtime, but having a compile time check would be very helpful
-        //     {.id = ecs_pair(IsOn, EcsAny), .inout = EcsIn}
-        // }
-        .expr = "Position, (bc.planes.IsOn, _)"
-    });
-    ecs_set(world, debugPrefab, Color, {{1.0, 0.0, 1.0, 1.0}});
-    ecs_override_pair(world, debugPrefab, GBufferPass, debugPipeline);
-    ecs_override_pair(world, debugPrefab, ShadowPass, debugShadowPipeline);
-    ecs_override(world, debugPrefab, InstanceBuffer);
-    ecs_override(world, debugPrefab, QueryDesc);
-    ecs_override(world, debugPrefab, Color);
-
-    // Prefab instance
-    // TEST: different colors for each diet type
-    ecs_entity_t meatVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
-    ecs_set_name(world, meatVis, "DrawQuery diet meat");
-    ecs_set(world, meatVis, Color, {{0.7, 0.0, 0.0, 1.0}});
-    ecs_set(world, meatVis, QueryDesc, {
-        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"
-    });
-
-    ecs_entity_t fruitVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
-    ecs_set_name(world, fruitVis, "DrawQuery diet fruit");
-    ecs_set(world, fruitVis, Color, {{0.7, 0.0, 0.7, 1.0}});
-    ecs_set(world, fruitVis, QueryDesc, {
-        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"
-    });
-
-    ecs_entity_t foliageVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
-    ecs_set_name(world, foliageVis, "DrawQuery diet foliage");
-    ecs_set(world, foliageVis, Color, {{0.0, 0.7, 0.7, 1.0}});
-    ecs_set(world, foliageVis, QueryDesc, {
-        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"
-    });
-
-    ecs_entity_t grassVis = ecs_new_w_pair(world, EcsIsA, debugPrefab);
-    ecs_set_name(world, grassVis, "DrawQuery diet grass");
-    ecs_set(world, grassVis, Color, {{0.0, 0.7, 0.0, 1.0}});
-    ecs_set(world, grassVis, QueryDesc, {
-        .expr = "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"
-    });
-
-    //ecs_enable(world, ecs_id(DrawInstances), false);
 
     // Render target debug rect
     ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "RenderTargetPreview");

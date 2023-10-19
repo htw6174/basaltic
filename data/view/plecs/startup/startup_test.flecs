@@ -1,0 +1,50 @@
+bcview {
+
+    // Component properties
+    InstanceBuffer :- AlwaysOverride
+
+    // Camera
+    Camera :- Camera {
+        origin: {0, 0, 0},
+        distance: 10.0,
+        pitch: 45.0,
+        yaw: 0.0,
+        zNear: 0.1,
+        zFar: 1000.0
+    }
+
+    CameraSpeed :- CameraSpeed {
+        movement: 10.0f,
+        rotation: 90.0f
+    }
+
+    // Sun
+    SunLight :- SunLight {
+        azimuth: 120.0,
+        inclination: 30.0,
+        projectionSize: 50.0,
+        directColor: {0.9, 0.9, 0.7, 1.0},
+        indirectColor: {0.2, 0.2, 0.4, 1.0}
+    }
+
+    // World rendering scale
+    Scale :- Scale {1.0, 1.0, 0.1}
+
+    // Settings defaults and presets
+
+    // Video
+
+    Prefab VideoSettingsDefault {
+        - VideoSettings
+        - RenderScale {1.0}
+        - ShadowMapSize {4096}
+        - RenderDistance {radius: 2}
+    }
+
+    Prefab VideoSettingsLow : VideoSettingsDefault {
+        - RenderScale {0.5}
+        - ShadowMapSize {2048}
+    }
+
+    VideoSettings : VideoSettingsDefault
+}

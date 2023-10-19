@@ -17,6 +17,8 @@
 #include "flecs.h"
 #include "khash.h"
 
+#include "bc_flecs_utils.h"
+
 typedef struct {
     bc_CommandBuffer processingBuffer;
     bool advanceSingleStep;
@@ -44,20 +46,15 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
     ECS_IMPORT(newWorld->ecsWorld, Bc);
     ECS_IMPORT(newWorld->ecsWorld, BcSystems);
 
+    // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
+    ecs_plecs_from_file(newWorld->ecsWorld, "model/plecs/startup/startup_test.flecs");
+
     htw_ChunkMap *cm = bc_createTerrain(chunkCountX, chunkCountY);
     newWorld->centralPlane = ecs_set(newWorld->ecsWorld, 0, Plane, {cm});
     ecs_set_name(newWorld->ecsWorld, newWorld->centralPlane, "Overworld");
 
-    // TEST: create some spawners
-    ecs_entity_t prefab = ecs_lookup_fullpath(newWorld->ecsWorld, "bc.systems.characters.BisonHerdPrefab");
-    ecs_entity_t testSpawner = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab, .count = 200, .oneShot = true});
-    ecs_add_pair(newWorld->ecsWorld, testSpawner, IsOn, newWorld->centralPlane);
-
-    // ecs_entity_t prefab2 = ecs_lookup_fullpath(newWorld->ecsWorld, "bc.systems.elementals.VolcanoSpiritPrefab");
-    // ecs_entity_t testSpawner2 = ecs_set(newWorld->ecsWorld, 0, Spawner, {.prefab = prefab2, .count = 200, .oneShot = true});
-    // ecs_add_pair(newWorld->ecsWorld, testSpawner2, IsOn, newWorld->centralPlane);
-
-    ecs_entity_t plecsTest = ecs_set_pair(newWorld->ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
+    // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
+    ecs_set_pair(newWorld->ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
 
     newWorld->lock = SDL_CreateSemaphore(1);
 
@@ -193,6 +190,9 @@ static void doWorldStep(bc_WorldState *world) {
 
     // Waiting here gives the view thread a chance to safely read & render world data
     SDL_SemWait(world->lock);
+
+    bc_reloadFlecsScript(world->ecsWorld, 0);
+
     ecs_progress(world->ecsWorld, 1.0);
     world->step++;
     ecs_singleton_set(world->ecsWorld, Step, {world->step}); // FIXME kind of awkward to track this in 2 different places, but good reasons to keep both

@@ -9,6 +9,7 @@ void BcElementalsImport(ecs_world_t *world) {
 
     ECS_TAG_DEFINE(world, ElementalSpirit);
 
+    //ecs_set_scope(world, Ego); // Should create these in the right scope; consider setting up tags in plecs format?
     ECS_TAG_DEFINE(world, EgoStormSpirit);
     ECS_TAG_DEFINE(world, EgoEarthSpirit);
     ECS_TAG_DEFINE(world, EgoOceanSpirit);

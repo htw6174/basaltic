@@ -23,11 +23,25 @@ void BcviewImport(ecs_world_t *world) {
         [3] = {.name = "a", .type = ecs_id(ecs_f32_t)},
     };
 
+    ECS_COMPONENT_DEFINE(world, vec2);
+    ecs_struct(world, {.entity = ecs_id(vec2), .members = {
+        [0] = vecMembers[0],
+        [1] = vecMembers[1]
+    }});
+
     ECS_COMPONENT_DEFINE(world, vec3);
     ecs_struct(world, {.entity = ecs_id(vec3), .members = {
         [0] = vecMembers[0],
         [1] = vecMembers[1],
         [2] = vecMembers[2]
+    }});
+
+    ECS_COMPONENT_DEFINE(world, vec4);
+    ecs_struct(world, {.entity = ecs_id(vec4), .members = {
+        [0] = vecMembers[0],
+        [1] = vecMembers[1],
+        [2] = vecMembers[2],
+        [3] = vecMembers[3]
     }});
 
     ECS_COMPONENT_DEFINE(world, Scale);
@@ -45,9 +59,17 @@ void BcviewImport(ecs_world_t *world) {
         [3] = colorMembers[3]
     }});
 
+    ECS_COMPONENT_DEFINE(world, Rect);
+    ecs_struct(world, {.entity = ecs_id(Rect), .members = {
+        [0] = vecMembers[0],
+        [1] = vecMembers[1],
+        [2] = {.name = "width", .type = ecs_id(ecs_f32_t)},
+        [3] = {.name = "height", .type = ecs_id(ecs_f32_t)}
+    }});
+
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
-    ECS_COMPONENT_DEFINE(world, QueryDesc);
+    ECS_META_COMPONENT(world, QueryDesc);
     ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
     // Interface
@@ -126,39 +148,22 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, TerrainBuffer);
 
     /* Setup singleton defaults */
+    // TODO: most of the singleton initialization moved to script. Play around with it, figure out if the rest can be moved / should be returned
 
     //ecs_singleton_add(world, ModelWorld);
     ecs_singleton_set(world, ModelLastRenderedStep, {0});
 
     ecs_singleton_set(world, Pointer, {0});
 
-    ecs_singleton_set(world, Camera, {
-        .origin = {{0, 0, 0}},
-        .distance = 10.0f,
-        .pitch = 45.0f,
-        .yaw = 0.0f,
-        .zNear = 0.1f,
-        .zFar = 1000.0f
-    });
-
-    ecs_singleton_set(world, CameraSpeed, {
-        .movement = 10.0f,
-        .rotation = 90.0f
-    });
-
-    // Global scale for world rendering
-    ecs_singleton_set(world, Scale, {{1.0, 1.0, 0.1}});
-
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);
     ecs_singleton_add(world, WrapInstanceOffsets);
 
-    ecs_singleton_set(world, RenderDistance, {.radius = 2});
     ecs_singleton_set(world, FocusPlane, {0});
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
     ecs_singleton_set(world, TerrainBrush, {.value = 1, .radius = 1});
-    ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count
+    ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count, should have a component ctor/dtor if it need to alloc
 
     // Input
     ecs_singleton_add(world, Pointer);
@@ -168,30 +173,4 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, Clock);
-    ecs_singleton_set(world, SunLight, {
-        .azimuth = 120.0,
-        .inclination = 30.0,
-        .projectionSize = 50.0,
-        .directColor = (vec4){{0.9, 0.9, 0.7, 1.0}},
-        .indirectColor = (vec4){{0.2, 0.2, 0.4, 1.0}}
-    });
-
-    /* Settings defaults and presets */
-
-    // Video
-    ecs_entity_t videoDefault = ecs_set_name(world, 0, "Video Settings Default");
-    ecs_add(world, videoDefault, VideoSettings);
-    ecs_add_id(world, videoDefault, EcsPrefab);
-    ecs_set(world, videoDefault, RenderScale, {1.0});
-    ecs_set(world, videoDefault, ShadowMapSize, {4096});
-    ecs_set(world, videoDefault, RenderDistance, {.radius = 2});
-
-    ecs_entity_t videoLow = ecs_set_name(world, 0, "Video Settings Low");
-    ecs_add(world, videoLow, VideoSettings);
-    ecs_add_pair(world, videoLow, EcsIsA, videoDefault);
-    ecs_add_id(world, videoLow, EcsPrefab);
-    ecs_set(world, videoLow, RenderScale, {0.5});
-    ecs_set(world, videoLow, ShadowMapSize, {2048});
-
-    ecs_add_pair(world, VideoSettings, EcsIsA, videoDefault);
 }

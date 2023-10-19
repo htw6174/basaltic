@@ -44,7 +44,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, EgoBehaviorVolcano, Planning,
         [inout] SpiritPower,
-        [none] bc.actors.Ego.EgoVolcanoSpirit
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)
     );
 
     ECS_SYSTEM(world, ExecuteErupt, Execution,
@@ -57,13 +57,4 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
         [inout] SpiritPower,
         [none] bc.elementals.ElementalSpirit,
     );
-
-    // volcano spirit
-    ecs_entity_t volcanoSpiritPrefab = ecs_set_name(world, 0, "VolcanoSpiritPrefab");
-    ecs_add_id(world, volcanoSpiritPrefab, EcsPrefab);
-    ecs_add_id(world, volcanoSpiritPrefab, ElementalSpirit);
-    ecs_add_id(world, volcanoSpiritPrefab, EgoVolcanoSpirit);
-    ecs_override(world, volcanoSpiritPrefab, Position);
-    ecs_set(world, volcanoSpiritPrefab, SpiritPower, {.value = 0, .maxValue = INT32_MAX});
-    ecs_override(world, volcanoSpiritPrefab, SpiritPower);
 }

@@ -41,6 +41,7 @@ typedef struct {
 typedef struct {
     ecs_entity_t focusEntity;
     // TODO: add focus history, change focus by writing to / cycling through history. Add back/forward buttons or recently viewed list
+    // Cached queries for adding types to entities
     ecs_query_t *components;
     ecs_query_t *tags;
     ecs_query_t *relationships;
@@ -69,6 +70,7 @@ void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic);
 void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected);
 void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected);
 void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
+
 void entityCreator(ecs_world_t *world, ecs_entity_t parent, ecs_entity_t *focusEntity);
 /** Displays an igInputText for [name]]. Returns true when [name] is set to a unique name in parent scope and submitted. When used within a popup, auto-focuses input field and closes popup when confirming. */
 bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t name_buf_size);
@@ -78,6 +80,8 @@ bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *select
 bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *selected);
 /** Displays query results as a scrollable list of igSelectable. If filter is not NULL, filters list by entity name. Sets [selected] to id of selected item. Returns true when an item is clicked */
 bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImVec2 size, s32 pageLength, s32 *pageNumber, ecs_entity_t *selected);
+
+void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity_t *focusEntity);
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity);
 void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity);
 /** If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value */
@@ -472,31 +476,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         igPushID_Int(id);
         // Pairs don't pass ecs_is_valid, so check for pair first
         if (ecs_id_is_pair(id)) {
-            // TODO: dedicated relationship inspector
-            ecs_id_t first = ecs_pair_first(world, id);
-            ecs_id_t second = ecs_pair_second(world, id);
-            igText("Pair: ");
-            igSameLine(0, -1);
-            entityLabel(world, first);
-            igSameLine(0, -1);
-            if (igSmallButton("?##focus_first")) {
-                ic->focusEntity = first;
-            }
-            igSameLine(0, -1);
-            entityLabel(world, second);
-            igSameLine(0, -1);
-            if (igSmallButton("?##focus_second")) {
-                ic->focusEntity = second;
-            }
-            igSameLine(0, -1);
-            if (igSmallButton("x")) {
-                ecs_remove_id(world, e, id);
-                // need to skip component inspector from here, otherwise pairs with data will get immediately re-added
-            } else if (ecs_has(world, first, EcsMetaType)) {
-                void *componentData = ecs_get_mut_id(world, e, id);
-                ecs_meta_cursor_t cur = ecs_meta_cursor(world, first, componentData);
-                ecsMetaInspector(world, &cur, &ic->focusEntity);
-            }
+            ecsPairWidget(world, e, id, &ic->focusEntity);
         } else if (ecs_is_valid(world, id)) {
             if (ecs_has(world, id, EcsComponent)) {
                 componentInspector(world, e, id, &ic->focusEntity);
@@ -514,6 +494,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             }
         } else {
             // Type may contain an invalid ID which is still meaningful (e.g. component override)
+            // TODO: detect and handle specific cases like overrides
             igText("Unknown type: %u %x", id, id >> 32);
         }
         igPopID();
@@ -579,6 +560,45 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
             }
         }
         igEndPopup();
+    }
+}
+
+void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity_t *focusEntity) {
+    ecs_id_t first = ecs_pair_first(world, pair);
+    if(!ecs_is_valid(world, first)) {
+        ecs_err("Entity %s has pair with invalid relationship: %lu", ecs_get_name(world, e), first);
+        return;
+    }
+    ecs_id_t second = ecs_pair_second(world, pair);
+    if(!ecs_is_valid(world, second)) {
+        ecs_err("Entity %s has pair with invalid target: %lu", ecs_get_name(world, e), second);
+        return;
+    }
+    igText("Pair: ");
+    igSameLine(0, -1);
+    entityLabel(world, first);
+    igSameLine(0, -1);
+    if (igSmallButton("?##focus_first")) {
+        *focusEntity = first;
+    }
+    igSameLine(0, -1);
+    entityLabel(world, second);
+    igSameLine(0, -1);
+    if (igSmallButton("?##focus_second")) {
+        *focusEntity = second;
+    }
+    igSameLine(0, -1);
+    if (igSmallButton("x")) {
+        ecs_remove_id(world, e, pair);
+        // need to skip component inspector from here, otherwise pairs with data will get immediately re-added
+    } else if (ecs_has(world, first, EcsMetaType)) {
+        void *componentData = ecs_get_mut_id(world, e, pair);
+        ecs_meta_cursor_t cur = ecs_meta_cursor(world, first, componentData);
+        ecsMetaInspector(world, &cur, focusEntity);
+    } else if (ecs_has(world, second, EcsMetaType)) {
+        void *componentData = ecs_get_mut_id(world, e, pair);
+        ecs_meta_cursor_t cur = ecs_meta_cursor(world, second, componentData);
+        ecsMetaInspector(world, &cur, focusEntity);
     }
 }
 
@@ -899,9 +919,14 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
             QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
             static char queryExpr[MAX_QUERY_EXPR_LENGTH];
             if (igIsWindowAppearing()) {
-                memcpy(queryExpr, qd->expr, MAX_QUERY_EXPR_LENGTH);
+                if (qd->expr == NULL) {
+                    // TODO
+                } else {
+                    memcpy(queryExpr, qd->expr, MAX_QUERY_EXPR_LENGTH);
+                }
             }
             if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+                // TODO: ensure null handled
                 memcpy(qd->expr, queryExpr, MAX_QUERY_EXPR_LENGTH);
                 ecs_modified(world, e, QueryDesc);
                 igCloseCurrentPopup();
@@ -1024,7 +1049,11 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             igInputScalar("##", ImGuiDataType_S64, field, NULL, NULL, "%x", 0);
             break;
         case EcsString:
-            igText(field);
+            (void)0; // So the parser doesn't freak out /shrug
+            char *str = *(char**)field;
+            //igText(str);
+            u64 len = strlen(str);
+            igTextUnformatted(str, str + len);
             //igInputText("##", field, 0, 0, NULL, NULL); // TODO set size
             break;
         case EcsEntity:

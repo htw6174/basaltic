@@ -1,0 +1,30 @@
+
+bcview {
+    Prefab DebugDrawPrefab {
+        - (ShadowPass, DebugShadowPipeline)
+        - (GBufferPass, DebugGBufferPipeline)
+        - Color {1.0, 0.0, 1.0, 1.0}
+        - InstanceBuffer
+        - DebugRender
+    }
+
+    carnivores : DebugDrawPrefab {
+        - Color {0.7, 0.0, 0.0, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
+    }
+
+    berry_pickers : DebugDrawPrefab {
+        - Color {0.7, 0.0, 0.7, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"}
+    }
+
+    arbivores : DebugDrawPrefab {
+        - Color {0.0, 0.7, 0.7, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"}
+    }
+
+    grazers : DebugDrawPrefab {
+        - Color {0.0, 0.7, 0.0, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
+    }
+}

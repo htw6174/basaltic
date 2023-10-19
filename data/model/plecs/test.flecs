@@ -1,9 +1,48 @@
-using bc.systems.elementals
 using bc.planes
 using bc.actors
+using bc.actors.Ego
+using bc.wildlife
+using bc.wildlife.Diet
+using bc.elementals
+
+Prefab ActorPrefab {
+    - Position
+    - Destination
+    - Condition
+}
+
+Prefab WolfPackPrefab : ActorPrefab {
+    - (Ego, EgoPredator)
+    - (Diet, Meat)
+    - Condition {maxHealth: 30, health: 30, maxStamina: 150, stamina: 150}
+    - Group {count: 10}
+    - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
+    - ActorSize {ACTOR_SIZE_AVERAGE}
+}
+
+Prefab BisonHerdPrefab : ActorPrefab {
+    - (Ego, EgoGrazer)
+    - (Diet, Grasses)
+    - Condition {maxHealth: 100, health: 100, maxStamina: 25, stamina: 25}
+    - Group {count: 100}
+    - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
+    - ActorSize {ACTOR_SIZE_LARGE}
+}
+
+Prefab VolcanoSpiritPrefab {
+    - ElementalSpirit
+    - (Ego, EgoVolcanoSpirit)
+    - Position
+    - SpiritPower {maxValue: 65535}
+}
+
+bison_spawner {
+    - Spawner{prefab: BisonHerdPrefab, count: 200, oneShot: true}
+    - (IsOn, Overworld)
+}
 
 volcano_spawner {
-    - Spawner{prefab: VolcanoSpiritPrefab, count: 200, oneShot: true}
+    - Spawner{prefab: VolcanoSpiritPrefab, count: 100, oneShot: true}
     - (IsOn, Overworld)
 }
 

@@ -574,41 +574,4 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_SYSTEM(world, tickStamina, AdvanceHour,
                [inout] Condition
     );
-
-    /* Prefabs */
-
-    // actor
-    ecs_entity_t actorPrefab = ecs_set_name(world, 0, "actorPrefab");
-    ecs_add_id(world, actorPrefab, EcsPrefab);
-    ecs_override(world, actorPrefab, Position);
-    ecs_override(world, actorPrefab, Destination);
-    ecs_override(world, actorPrefab, Condition);
-
-    // wolf pack
-    ecs_entity_t wolfPackPrefab = ecs_set_name(world, 0, "WolfPackPrefab");
-    ecs_add_id(world, wolfPackPrefab, EcsPrefab);
-    ecs_add_pair(world, wolfPackPrefab, EcsIsA, actorPrefab);
-    ecs_add_pair(world, wolfPackPrefab, Ego, EgoPredator);
-    ecs_add_pair(world, wolfPackPrefab, Diet, Meat);
-    ecs_set(world, wolfPackPrefab, Condition, {.maxHealth = 30, .health = 30, .maxStamina = 150, .stamina = 150});
-    ecs_override(world, wolfPackPrefab, Condition);
-    ecs_set(world, wolfPackPrefab, Group, {.count = 10});
-    ecs_override(world, wolfPackPrefab, Group);
-    ecs_set(world, wolfPackPrefab, GrowthRate, {.stepsRequired = 360 * 24, .progress = 0});
-    ecs_override(world, wolfPackPrefab, GrowthRate);
-    ecs_set(world, wolfPackPrefab, ActorSize, {ACTOR_SIZE_AVERAGE});
-
-    // bison herd
-    ecs_entity_t bisonHerdPrefab = ecs_set_name(world, 0, "BisonHerdPrefab");
-    ecs_add_id(world, bisonHerdPrefab, EcsPrefab);
-    ecs_add_pair(world, bisonHerdPrefab, EcsIsA, actorPrefab);
-    ecs_add_pair(world, bisonHerdPrefab, Ego, EgoGrazer);
-    ecs_add_pair(world, bisonHerdPrefab, Diet, Grasses);
-    ecs_set(world, bisonHerdPrefab, Condition, {.maxHealth = 100, .health = 100, .maxStamina = 25, .stamina = 25});
-    ecs_override(world, bisonHerdPrefab, Condition);
-    ecs_set(world, bisonHerdPrefab, Group, {.count = 100});
-    ecs_override(world, bisonHerdPrefab, Group);
-    ecs_set(world, bisonHerdPrefab, GrowthRate, {.stepsRequired = 360 * 24, .progress = 0});
-    ecs_override(world, bisonHerdPrefab, GrowthRate);
-    ecs_set(world, bisonHerdPrefab, ActorSize, {ACTOR_SIZE_LARGE});
 }

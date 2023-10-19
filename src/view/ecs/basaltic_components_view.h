@@ -22,13 +22,18 @@
 #define MAX_QUERY_EXPR_LENGTH 1024
 
 /* Common types */
+BC_DECL ECS_COMPONENT_DECLARE(vec2);
 BC_DECL ECS_COMPONENT_DECLARE(vec3);
+BC_DECL ECS_COMPONENT_DECLARE(vec4);
 
 typedef vec3 Scale;
 BC_DECL ECS_COMPONENT_DECLARE(Scale);
 
 typedef vec4 Color;
 BC_DECL ECS_COMPONENT_DECLARE(Color);
+
+typedef vec4 Rect;
+BC_DECL ECS_COMPONENT_DECLARE(Rect);
 
 
 /* Connection to Model */
@@ -42,8 +47,7 @@ ECS_STRUCT(ModelQuery, {
 });
 
 ECS_STRUCT(QueryDesc, {
-    ecs_query_desc_t desc;
-    char expr[MAX_QUERY_EXPR_LENGTH]; // query description doesn't reserve space for the filter expression, store here TODO: change do a resizable type
+    char *expr;
 });
 
 typedef u64 ModelLastRenderedStep;
