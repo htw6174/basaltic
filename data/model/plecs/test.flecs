@@ -29,6 +29,15 @@ Prefab BisonHerdPrefab : ActorPrefab {
     - ActorSize {ACTOR_SIZE_LARGE}
 }
 
+Prefab TectonicSpiritPrefab {
+    - ElementalSpirit
+    - (Ego, EgoTectonicSpirit)
+    - Position
+    - Destination
+    - SpiritPower {maxValue: 65535}
+    - PlateShiftStrength {left: 5, right: -2}
+}
+
 Prefab VolcanoSpiritPrefab {
     - ElementalSpirit
     - (Ego, EgoVolcanoSpirit)
@@ -41,8 +50,13 @@ bison_spawner {
     - (IsOn, Overworld)
 }
 
+faultlines_spawner {
+    - Spawner{prefab: TectonicSpiritPrefab, count: 40, oneShot: true}
+    - (IsOn, Overworld)
+}
+
 volcano_spawner {
-    - Spawner{prefab: VolcanoSpiritPrefab, count: 100, oneShot: true}
+    - Spawner{prefab: VolcanoSpiritPrefab, count: 20, oneShot: true}
     - (IsOn, Overworld)
 }
 

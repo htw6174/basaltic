@@ -239,6 +239,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     );
 
     // Pipelines, only need to create one per type
+    // TODO: would be nice to setup these, especially the file paths, in script. Would require creating entities with the PipelineDescription in c, then referring to those in script. Prefabs would work well for this and meshes?
     ecs_entity_t debugShadowPipeline = ecs_set_name(world, 0, "DebugShadowPipeline");
     ecs_add_pair(world, debugShadowPipeline, EcsChildOf, ShadowPass);
     ecs_set_pair(world, debugShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_default.vert"});
@@ -258,6 +259,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
 
     // Render target debug rect
+    // TODO: Some way to setup this in script? Could create some simple meshes in c for use in scripts
     ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "RenderTargetPreview");
     ecs_add_id(world, renderTargetVis, DebugRender);
     ecs_add_pair(world, renderTargetVis, LightingPass, debugRTPipeline);

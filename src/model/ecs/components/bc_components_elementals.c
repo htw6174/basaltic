@@ -10,14 +10,20 @@ void BcElementalsImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, ElementalSpirit);
 
     //ecs_set_scope(world, Ego); // Should create these in the right scope; consider setting up tags in plecs format?
-    ECS_TAG_DEFINE(world, EgoStormSpirit);
+    ecs_entity_t oldScope = ecs_get_scope(world);
+    ecs_set_scope(world, Ego);
+    ECS_TAG_DEFINE(world, EgoTectonicSpirit);
+    ECS_TAG_DEFINE(world, EgoVolcanoSpirit);
     ECS_TAG_DEFINE(world, EgoEarthSpirit);
     ECS_TAG_DEFINE(world, EgoOceanSpirit);
-    ECS_TAG_DEFINE(world, EgoVolcanoSpirit);
-    ecs_add_pair(world, EgoVolcanoSpirit, EcsChildOf, Ego);
+    ECS_TAG_DEFINE(world, EgoStormSpirit);
+    ecs_set_scope(world, oldScope);
 
+    ecs_set_scope(world, Action);
+    ECS_TAG_DEFINE(world, ActionShiftPlates);
     ECS_TAG_DEFINE(world, ActionErupt);
-    ecs_add_pair(world, ActionErupt, EcsChildOf, Action);
+    ecs_set_scope(world, oldScope);
 
     ECS_META_COMPONENT(world, SpiritPower);
+    ECS_META_COMPONENT(world, PlateShiftStrength);
 }

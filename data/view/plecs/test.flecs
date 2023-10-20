@@ -1,8 +1,8 @@
 
 bcview {
     Prefab DebugDrawPrefab {
-        - (ShadowPass, DebugShadowPipeline)
-        - (GBufferPass, DebugGBufferPipeline)
+        - OVERRIDE|(ShadowPass, DebugShadowPipeline)
+        - OVERRIDE|(GBufferPass, DebugGBufferPipeline)
         - Color {1.0, 0.0, 1.0, 1.0}
         - InstanceBuffer
         - DebugRender
@@ -26,5 +26,10 @@ bcview {
     grazers : DebugDrawPrefab {
         - Color {0.0, 0.7, 0.0, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
+    }
+
+    elementals : DebugDrawPrefab {
+        - Color {0.7, 0.7, 0.7, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.elementals.ElementalSpirit"}
     }
 }

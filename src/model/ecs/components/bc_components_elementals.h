@@ -14,16 +14,23 @@
 #endif
 
 BC_DECL ECS_TAG_DECLARE(ElementalSpirit);
-BC_DECL ECS_TAG_DECLARE(EgoStormSpirit);
+BC_DECL ECS_TAG_DECLARE(EgoTectonicSpirit);
+BC_DECL ECS_TAG_DECLARE(EgoVolcanoSpirit);
 BC_DECL ECS_TAG_DECLARE(EgoEarthSpirit);
 BC_DECL ECS_TAG_DECLARE(EgoOceanSpirit);
-BC_DECL ECS_TAG_DECLARE(EgoVolcanoSpirit);
+BC_DECL ECS_TAG_DECLARE(EgoStormSpirit);
 
+BC_DECL ECS_TAG_DECLARE(ActionShiftPlates);
 BC_DECL ECS_TAG_DECLARE(ActionErupt);
 
 ECS_STRUCT(SpiritPower, {
     s32 maxValue;
     s32 value;
+});
+
+ECS_STRUCT(PlateShiftStrength, {
+    float left;
+    float right;
 });
 
 void BcElementalsImport(ecs_world_t *world);
