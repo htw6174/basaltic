@@ -7,8 +7,12 @@
 #include "khash.h"
 
 #undef ECS_META_IMPL
-#ifndef BASALTIC_PLANES_IMPL
-#define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
+#undef BC_DECL
+#ifndef BC_COMPONENT_IMPL
+#define ECS_META_IMPL EXTERN
+#define BC_DECL extern
+#else
+#define BC_DECL
 #endif
 
 #define HASH_MAP_DEFAULT_SIZE (1 << 16)
@@ -45,12 +49,22 @@ ECS_STRUCT(Plane, {
     htw_ChunkMap *chunkMap;
 });
 
+ECS_ENUM(HexDirection, {
+    HEX_DIR_NORTH_EAST, // 0, 1
+    HEX_DIR_EAST, // 1, 0
+    HEX_DIR_SOUTH_EAST, // 1, -1
+    HEX_DIR_SOUTH_WEST, // 0, -1
+    HEX_DIR_WEST, // -1, 0
+    HEX_DIR_NORTH_WEST, // -1, 1
+    HEX_DIR_COUNT // Limit for iterating over values in this enum
+});
+
 typedef htw_geo_GridCoord Position, Destination;
 
-extern ECS_COMPONENT_DECLARE(Position);
-extern ECS_COMPONENT_DECLARE(Destination);
-extern ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
-extern ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
+BC_DECL ECS_COMPONENT_DECLARE(Position);
+BC_DECL ECS_COMPONENT_DECLARE(Destination);
+BC_DECL ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
+BC_DECL ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
 
 void BcPlanesImport(ecs_world_t *world);
 

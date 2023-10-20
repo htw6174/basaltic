@@ -35,8 +35,8 @@ void bc_wobbleLine(htw_ChunkMap *chunkMap, htw_geo_GridCoord startPos, u32 lineL
         htw_geo_GridCoord nextDir = htw_geo_hexGridDirections[nextDirIndex];
         cellPos = htw_geo_addGridCoords(cellPos, nextDir);// htw_geo_mulGridCoords(nextDir, 2));
         if (htw_randRange(2)){
-            nextDirIndex = (nextDirIndex + htw_randRange(3) - 1) % HEX_DIRECTION_COUNT; // only pick from adjacent directions (-1, 0, or 1 relative to last direction)
-
+            // add hex dir count to avoid taking mod of negative number
+            nextDirIndex = (nextDirIndex + HEX_DIRECTION_COUNT + htw_randRange(3) - 1) % HEX_DIRECTION_COUNT; // only pick from adjacent directions (-1, 0, or 1 relative to last direction)
         }
     }
 }

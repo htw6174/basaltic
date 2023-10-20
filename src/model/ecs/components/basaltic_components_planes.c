@@ -1,13 +1,6 @@
-#define BASALTIC_PLANES_IMPL
+#define BC_COMPONENT_IMPL
 #include "basaltic_components_planes.h"
 #include <math.h>
-
-ECS_COMPONENT_DECLARE(SpatialStorage);
-ECS_COMPONENT_DECLARE(Plane);
-ECS_COMPONENT_DECLARE(Position);
-ECS_COMPONENT_DECLARE(Destination);
-ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
-ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
 
 void BcPlanesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcPlanes);
@@ -15,6 +8,8 @@ void BcPlanesImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, SpatialStorage);
     ECS_META_COMPONENT(world, CellData);
     ECS_META_COMPONENT(world, Plane);
+    ECS_META_COMPONENT(world, HexDirection);
+
     ECS_COMPONENT_DEFINE(world, Position);
     ECS_COMPONENT_DEFINE(world, Destination);
     ECS_TAG_DEFINE(world, IsOn);
