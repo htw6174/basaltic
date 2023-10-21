@@ -1,3 +1,7 @@
+bc.common {
+    Step :- Step {0}
+}
+
 bc.planes {
     Position :- AlwaysOverride
     Destination :- AlwaysOverride

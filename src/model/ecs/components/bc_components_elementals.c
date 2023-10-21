@@ -25,6 +25,7 @@ void BcElementalsImport(ecs_world_t *world) {
     ecs_set_scope(world, oldScope);
 
     ECS_META_COMPONENT(world, SpiritPower);
+    ECS_META_COMPONENT(world, SpiritLifetime);
     ECS_META_COMPONENT(world, PlateShiftStrength);
 
     ECS_COMPONENT_DEFINE(world, AngleRadians);

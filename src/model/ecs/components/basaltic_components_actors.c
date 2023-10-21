@@ -33,6 +33,9 @@ void BcActorsImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Group);
     ECS_META_COMPONENT(world, GrowthRate);
 
+    ECS_COMPONENT_DEFINE(world, CreationTime);
+    ecs_primitive(world, {.entity = ecs_id(CreationTime), .kind = EcsU64});
+
     ECS_META_COMPONENT(world, Spawner);
 
     ECS_META_COMPONENT(world, ActorSize);

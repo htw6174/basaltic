@@ -91,7 +91,8 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
                 float baseNoise = htw_geo_simplex(cm, cellCoord, seed, 8, 8);
                 float nutrientNoise = htw_geo_simplex(cm, cellCoord, seed + 1, 4, 16);
                 float rainNoise = htw_geo_simplex(cm, cellCoord, seed + 2, 4, 4);
-                cell->height += (baseNoise - 0.5) * 32; // TODO: different height distribution for below sea level
+                //cell->height += (baseNoise - 0.5) * 32; // TODO: different height distribution for below sea level
+                //cell->height = -10;
                 cell->geology = 0;
                 cell->groundwater = rainNoise * 256;
                 cell->surfacewater = rainNoise * 256;

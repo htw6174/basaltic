@@ -20,7 +20,7 @@ void TerrainHourlyStep(ecs_iter_t *it) {
 
 void TerrainSeasonalStep(ecs_iter_t *it) {
     Plane *planes = ecs_field(it, Plane, 1);
-    u64 step = ecs_singleton_get(it->world, Step)->step;
+    u64 step = *ecs_singleton_get(it->world, Step);
 
     for (int i = 0; i < it->count; i++) {
         htw_ChunkMap *cm = planes[i].chunkMap;

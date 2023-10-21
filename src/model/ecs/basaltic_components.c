@@ -8,8 +8,6 @@ ECS_TAG_DECLARE(PlayerVision);
 void BcImport(ecs_world_t *world) {
     ECS_MODULE(world, Bc);
 
-    ECS_META_COMPONENT(world, Step);
-
     ECS_IMPORT(world, BcCommon);
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
@@ -18,8 +16,6 @@ void BcImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcElementals);
 
     ECS_TAG_DEFINE(world, PlayerVision);
-
-    ecs_singleton_set(world, Step, {.step = 0});
 
     // NOTE: the 'EcsWith' relationship makes adding the source component automatically add the target component
     //ecs_add_pair(world, PlayerControlled, EcsWith, PlayerVision);

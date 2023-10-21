@@ -13,11 +13,6 @@
 #define ECS_META_IMPL EXTERN // Ensure meta symbols are only defined once
 #endif
 
-// TODO: change to typedef instead of struct; move to BcCommon?
-ECS_STRUCT(Step, {
-    u64 step;
-});
-
 // TODO: find a home for this
 extern ECS_TAG_DECLARE(PlayerVision);
 

@@ -17,9 +17,9 @@ HexDirection getDirRight(HexDirection dir) {
 
 HexDirection radToHexDir(AngleRadians angle) {
     // FIXME: respect radian conventions by making 0 rad == East and continuing CCW
-    // map to an int in [0:5]
-    int quant = (int)floorf((angle / PI) * 3);
-    // remap [0, 5] to [1, -4]
+    // map [0:TAU] to an int in [0:6]
+    int quant = roundf((angle / PI) * 3);
+    // remap [0, 6] to [1, -5] (reverse turning direction and offset by 1)
     quant = -quant + 1;
     return (HexDirection)MOD(quant, HEX_DIRECTION_COUNT);
 }
@@ -55,12 +55,14 @@ void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridC
     //startCell->height += strength;
 
     //s32 particlesCount = (strength * strength) / 2;
-    s32 particlesCount = abs(strength);
-    for (int i = 0; i < particlesCount; i++) {
+    //for (int i = 0; i < particlesCount; i++) {}
+    s32 range = sqrt(4.0 * abs(strength));
+    for (int i = 0; i < range; i++) {
         // TODO projecting landslides out as particles
         htw_geo_GridCoord lineCoord = hexOnLine(start, towards, i);
         CellData *cell = htw_geo_getCell(cm, lineCoord);
-        float mag = 1.0 - ((float)i / particlesCount);
+        float mag = 1.0 - ((float)i / range);
+        mag *= mag;
         cell->height += strength * mag;
     }
 }
@@ -72,8 +74,8 @@ void EgoBehaviorTectonicMove(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         // move in similar direction
-        if (htw_randRange(4) == 0) {
-            angle[i] += PI/12.0;
+        if (htw_randRange(24) == 0) {
+            angle[i] += PI/24.0;
         }
         dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i]));
         ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
@@ -106,18 +108,40 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
     Plane *plane = ecs_field(it, Plane, 3);
     htw_ChunkMap *cm = plane->chunkMap;
     PlateShiftStrength *shiftStrength = ecs_field(it, PlateShiftStrength, 4);
+    SpiritLifetime *lifetime = ecs_field(it, SpiritLifetime, 5);
+    CreationTime *createTime = ecs_field(it, CreationTime, 6);
+    Step step = *ecs_field(it, Step, 7);
 
     for (int i = 0; i < it->count; i++) {
+        // Determine effective strength by and and lifetime
+        float strengthFactor;
+        u64 age = step - createTime[i];
+        SpiritLifetime lt = lifetime[i];
+        s32 maturityEnd = lt.youngSteps + lt.matureSteps;
+        s32 lifeEnd = maturityEnd + lt.oldSteps;
+        if (age < lt.youngSteps) {
+            strengthFactor = (float)age / lt.youngSteps;
+        } else if (age < maturityEnd) {
+            strengthFactor = 1.0;
+        } else if (age < lifeEnd) {
+            s32 oldProgress = age - maturityEnd;
+            strengthFactor = 1.0 - ((float)oldProgress / lt.oldSteps);
+        } else {
+            // End of life, destroy
+            strengthFactor = 0.0;
+            ecs_delete(it->world, it->entities[i]);
+        }
+
         //Left side
         htw_geo_GridCoord startLeft = positions[i];
         // FIXME: radius of 100 gives much higher hex distance than expected?
         htw_geo_GridCoord endLeft = hexLineEndPoint(startLeft, 100.0, angle[i] + (PI/2.0));
-        shiftTerrainInLine(cm, startLeft, endLeft, shiftStrength[i].left);
+        shiftTerrainInLine(cm, startLeft, endLeft, shiftStrength[i].left * strengthFactor);
 
         // Right side (forward turned 60 deg CW)
-        htw_geo_GridCoord startRight = POSITION_IN_DIRECTION(positions[i], radToHexDir(angle[i] + (PI/3.0)));
+        htw_geo_GridCoord startRight = POSITION_IN_DIRECTION(positions[i], radToHexDir(angle[i] - (PI/3.0)));
         htw_geo_GridCoord endRight = hexLineEndPoint(startRight, 100.0, angle[i] - (PI/2.0));
-        shiftTerrainInLine(cm, startRight, endRight, shiftStrength[i].right);
+        shiftTerrainInLine(cm, startRight, endRight, shiftStrength[i].right * strengthFactor);
     }
 }
 
@@ -173,6 +197,9 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
         [in] AngleRadians,
         [in] Plane(up(bc.planes.IsOn)),
         [in] PlateShiftStrength,
+        [in] SpiritLifetime,
+        [in] CreationTime,
+        [in] Step($),
         [none] (bc.actors.Action, bc.actors.Action.ActionShiftPlates)
     );
 

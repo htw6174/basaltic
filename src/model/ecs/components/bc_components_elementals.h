@@ -28,6 +28,13 @@ ECS_STRUCT(SpiritPower, {
     s32 value;
 });
 
+/// Used to vary spirit behavior by age; requires CreationTime on the same entity. Effective lifetime is sum of all fields
+ECS_STRUCT(SpiritLifetime, {
+    s32 youngSteps;
+    s32 matureSteps;
+    s32 oldSteps;
+});
+
 ECS_STRUCT(PlateShiftStrength, {
     float left;
     float right;

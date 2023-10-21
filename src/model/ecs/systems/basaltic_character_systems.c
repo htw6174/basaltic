@@ -201,6 +201,7 @@ void characterDestroyed(ecs_iter_t *it) {
 void spawnActors(ecs_iter_t *it) {
     Spawner *spawners = ecs_field(it, Spawner, 1);
     ecs_entity_t plane = ecs_field_id(it, 2);
+    Step *step = ecs_field(it, Step, 3);
 
     ecs_world_t *world = it->world;
     htw_ChunkMap *cm = ecs_get(world, ecs_pair_second(world, plane), Plane)->chunkMap;
@@ -224,6 +225,7 @@ void spawnActors(ecs_iter_t *it) {
             plane_PlaceEntity(world, plane, newCharacter, coord);
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
             ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
+            ecs_set(world, newCharacter, CreationTime, {*step});
             ecs_add_pair(world, newCharacter, EcsIsA, sp.prefab);
         }
         if (sp.oneShot) {
@@ -473,6 +475,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_MODULE(world, BcSystemsCharacters);
 
     // ECS_IMPORT(world, Bc); // NOTE: this import does nothing, because `Bc` is a 'parent' path of `BcSystemsCharacters`
+    ECS_IMPORT(world, BcCommon);
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
     ECS_IMPORT(world, BcActors);
@@ -497,7 +500,8 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, spawnActors, EcsPreUpdate,
         [in] Spawner,
-        [in] (bc.planes.IsOn, _)
+        [in] (bc.planes.IsOn, _),
+        [in] Step($)
     );
     // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
     ecs_system(world, {
