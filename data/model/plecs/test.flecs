@@ -33,20 +33,21 @@ Prefab TectonicSpiritPrefab {
     - ElementalSpirit
     - (Ego, EgoTectonicSpirit)
     - OVERRIDE|Position
-    - OVERRIDE|HexDirection
+    - OVERRIDE|AngleRadians
     - OVERRIDE|Destination
     - OVERRIDE|SpiritPower
     - SpiritPower {maxValue: 65535}
-    - PlateShiftStrength {left: 5, right: -2}
+    - PlateShiftStrength {left: 7, right: -7}
 }
 
-Prefab EastWestFaultlinePrefab : TectonicSpiritPrefab {
-    - HexDirection {HEX_DIR_WEST}
+Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
+    - AngleRadians {2.0}
+    - PlateShiftStrength {left: -5, right: -4}
 }
 
-Prefab BackslashFaultlinePrefab : TectonicSpiritPrefab {
-    - HexDirection {HEX_DIR_SOUTH_EAST}
-    - PlateShiftStrength {left: 3, right: 4}
+Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
+    - AngleRadians {4.5}
+    - PlateShiftStrength {left: 5, right: 4}
 }
 
 Prefab VolcanoSpiritPrefab {
@@ -67,12 +68,12 @@ faultlines_spawner {
 }
 
 faultlines_spawner2 {
-    - Spawner{prefab: EastWestFaultlinePrefab, count: 15, oneShot: true}
+    - Spawner{prefab: SplittingPlatesPrefab, count: 15, oneShot: true}
     - (IsOn, Overworld)
 }
 
 faultlines_spawner3 {
-    - Spawner{prefab: BackslashFaultlinePrefab, count: 15, oneShot: true}
+    - Spawner{prefab: CollidingPlatesPrefab, count: 15, oneShot: true}
     - (IsOn, Overworld)
 }
 

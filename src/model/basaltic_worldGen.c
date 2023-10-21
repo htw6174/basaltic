@@ -77,8 +77,8 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
     u32 cellsPerChunk = width * height;
 
     // FIXME: mountain frequency is way higher on release builds???
-    u32 mountainsPerCell = 4;
-    bc_seedMountains(cm, mountainsPerCell * cm->chunkCountX * cm->chunkCountY, 128, 64);
+    //u32 mountainsPerCell = 4;
+    //bc_seedMountains(cm, mountainsPerCell * cm->chunkCountX * cm->chunkCountY, 128, 64);
     //bc_growMountains(cm, 0.5);
 
     for (int c = 0, y = 0; y < cm->chunkCountY; y++) {

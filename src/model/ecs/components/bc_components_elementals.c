@@ -26,4 +26,7 @@ void BcElementalsImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, SpiritPower);
     ECS_META_COMPONENT(world, PlateShiftStrength);
+
+    ECS_COMPONENT_DEFINE(world, AngleRadians);
+    ecs_primitive(world, {.entity = ecs_id(AngleRadians), .kind = EcsF32});
 }

@@ -33,6 +33,9 @@ ECS_STRUCT(PlateShiftStrength, {
     float right;
 });
 
+typedef float AngleRadians;
+BC_DECL ECS_COMPONENT_DECLARE(AngleRadians);
+
 void BcElementalsImport(ecs_world_t *world);
 
 #endif // BC_COMPONENTS_ELEMENTALS_H_INCLUDED

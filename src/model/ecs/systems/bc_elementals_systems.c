@@ -4,27 +4,78 @@
 
 HexDirection getDirLeft(HexDirection dir);
 HexDirection getDirRight(HexDirection dir);
+/// 0 rad == HEX_DIR_NORTH_EAST, continues clockwise
+HexDirection radToHexDir(AngleRadians angle);
 
 HexDirection getDirLeft(HexDirection dir) {
-    return (dir + HEX_DIRECTION_COUNT - 1) % HEX_DIR_COUNT;
+    return MOD(dir - 1, HEX_DIR_COUNT);
 }
 
 HexDirection getDirRight(HexDirection dir) {
     return (dir + 1) % HEX_DIR_COUNT;
 }
 
+HexDirection radToHexDir(AngleRadians angle) {
+    // FIXME: respect radian conventions by making 0 rad == East and continuing CCW
+    // map to an int in [0:5]
+    int quant = (int)floorf((angle / PI) * 3);
+    // remap [0, 5] to [1, -4]
+    quant = -quant + 1;
+    return (HexDirection)MOD(quant, HEX_DIRECTION_COUNT);
+}
+
+htw_geo_GridCoord hexLineEndPoint(htw_geo_GridCoord start, float length, float angleRad) {
+    // get cartesian position for hex
+    float startX, startY;
+    htw_geo_getHexCellPositionSkewed(start, &startX, &startY);
+    // get x and y offset of end
+    float dX = cosf(angleRad) * length;
+    float dY = sinf(angleRad) * length;
+    // cartesian coord of end hex
+    float endX = startX + dX;
+    float endY = startY + dY;
+    // hex coord of end
+    htw_geo_GridCoord end = htw_geo_cartesianToHexCoord(endX, endY);
+    return end;
+}
+
+htw_geo_GridCoord hexOnLine(htw_geo_GridCoord a, htw_geo_GridCoord b, s32 dist) {
+    u32 endPointDist = htw_geo_hexGridDistance(a, b);
+    // lerp factor
+    float t = (1.0 / endPointDist) * dist;
+    // lerp between hex coords
+    float q = lerp(a.x, b.x, t);
+    float r = lerp(a.y, b.y, t);
+    // convert from fractional hex coords to integral
+    return htw_geo_hexFractionalToHexCoord(q, r);
+}
+
+void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridCoord towards, s32 strength) {
+    //CellData *startCell = htw_geo_getCell(cm, start);
+    //startCell->height += strength;
+
+    //s32 particlesCount = (strength * strength) / 2;
+    s32 particlesCount = abs(strength);
+    for (int i = 0; i < particlesCount; i++) {
+        // TODO projecting landslides out as particles
+        htw_geo_GridCoord lineCoord = hexOnLine(start, towards, i);
+        CellData *cell = htw_geo_getCell(cm, lineCoord);
+        float mag = 1.0 - ((float)i / particlesCount);
+        cell->height += strength * mag;
+    }
+}
+
 void EgoBehaviorTectonicMove(ecs_iter_t *it) {
     Position *pos = ecs_field(it, Position, 1);
-    HexDirection *dir = ecs_field(it, HexDirection, 2);
+    AngleRadians *angle = ecs_field(it, AngleRadians, 2);
     Destination *dest = ecs_field(it, Destination, 3);
 
     for (int i = 0; i < it->count; i++) {
         // move in similar direction
-        if (htw_randRange(2)){
-            // add hex dir count to avoid taking mod of negative number
-            dir[i] = (dir[i] + HEX_DIR_COUNT + htw_randRange(3) - 1) % HEX_DIR_COUNT;
+        if (htw_randRange(4) == 0) {
+            angle[i] += PI/12.0;
         }
-        dest[i] = htw_geo_addGridCoords(pos[i], htw_geo_hexGridDirections[dir[i]]);
+        dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i]));
         ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }
 }
@@ -51,18 +102,22 @@ void EgoBehaviorVolcano(ecs_iter_t *it) {
 
 void ExecuteShiftPlates(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    HexDirection *dir = ecs_field(it, HexDirection, 2);
+    AngleRadians *angle = ecs_field(it, AngleRadians, 2);
     Plane *plane = ecs_field(it, Plane, 3);
     htw_ChunkMap *cm = plane->chunkMap;
     PlateShiftStrength *shiftStrength = ecs_field(it, PlateShiftStrength, 4);
 
     for (int i = 0; i < it->count; i++) {
-        htw_geo_GridCoord posLeft = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[getDirLeft(dir[i])]);
-        CellData *left = htw_geo_getCell(cm, posLeft);
-        left->height += shiftStrength[i].left;
-        htw_geo_GridCoord posRight = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[getDirRight(dir[i])]);
-        CellData *right = htw_geo_getCell(cm, posRight);
-        right->height += shiftStrength[i].right;
+        //Left side
+        htw_geo_GridCoord startLeft = positions[i];
+        // FIXME: radius of 100 gives much higher hex distance than expected?
+        htw_geo_GridCoord endLeft = hexLineEndPoint(startLeft, 100.0, angle[i] + (PI/2.0));
+        shiftTerrainInLine(cm, startLeft, endLeft, shiftStrength[i].left);
+
+        // Right side (forward turned 60 deg CW)
+        htw_geo_GridCoord startRight = POSITION_IN_DIRECTION(positions[i], radToHexDir(angle[i] + (PI/3.0)));
+        htw_geo_GridCoord endRight = hexLineEndPoint(startRight, 100.0, angle[i] - (PI/2.0));
+        shiftTerrainInLine(cm, startRight, endRight, shiftStrength[i].right);
     }
 }
 
@@ -96,7 +151,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
     // 2 different ego behaviors to alternate between moving and shifting plates; better way to do this?
     ECS_SYSTEM(world, EgoBehaviorTectonicMove, Planning,
         [in] Position,
-        [in] HexDirection,
+        [inout] AngleRadians,
         [out] Destination,
         //[none] (bc.actors.Action, bc.actors.Action.ActionShiftPlates),
         [none] (bc.actors.Ego, bc.actors.Ego.EgoTectonicSpirit)
@@ -115,7 +170,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, ExecuteShiftPlates, Execution,
         [in] Position,
-        [in] HexDirection,
+        [in] AngleRadians,
         [in] Plane(up(bc.planes.IsOn)),
         [in] PlateShiftStrength,
         [none] (bc.actors.Action, bc.actors.Action.ActionShiftPlates)
