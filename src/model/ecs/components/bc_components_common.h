@@ -25,6 +25,29 @@ typedef u64 Step;
 BC_DECL ECS_COMPONENT_DECLARE(Step);
 BC_DECL ECS_COMPONENT_DECLARE(time_t);
 
+// Instance field randomizers
+ECS_ENUM(RandomizerDistribution, {
+    RAND_DISTRIBUTION_UNIFORM,
+    RAND_DISTRIBUTION_EXPONENTIAL,
+    RAND_DISTRIBUTION_NORMAL
+});
+
+
+/**
+ * @brief RandomizerInt
+ * Relationship where the target is a component field of a matching type
+ * Behavior of each field depends on the random distribution used
+ * @member min: min possible value; normal = 3 stdev below the mean
+ * @member max: max possible value; normal = 3 stdev above the mean
+ * @member mean: uniform = n/a; exponential = mean (can place outside [low, high] to flatten out the distribution) ; normal = peak of bell curve
+ */
+ECS_STRUCT(RandomizeInt, {
+    s64 min;
+    s64 max;
+    s64 mean;
+    RandomizerDistribution distribution;
+});
+
 ECS_STRUCT(ResourceFile, {
     // update whenever file is read; if modify time on disk is > this, should reload file
     time_t accessTime;

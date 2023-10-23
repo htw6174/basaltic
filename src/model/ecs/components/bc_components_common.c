@@ -25,6 +25,10 @@ void BcCommonImport(ecs_world_t *world) {
     ecs_primitive(world, {.entity = ecs_id(Step), .kind = EcsU64});
     ecs_primitive(world, {.entity = ecs_id(time_t), .kind = EcsU64});
 
+
+    ECS_META_COMPONENT(world, RandomizerDistribution);
+    ECS_META_COMPONENT(world, RandomizeInt);
+
     ECS_META_COMPONENT(world, ResourceFile);
 
     ECS_TAG_DEFINE(world, FlecsScriptSource);

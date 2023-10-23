@@ -69,7 +69,7 @@ BC_DECL ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple
 void BcPlanesImport(ecs_world_t *world);
 
 // TODO: these may not belong here, but it works for now (implementation depends on this header for the khash decleration)
-// Allows entities with (GridPosition, (IsOn, _)) to be located via hashmap
+/// Allows entities with (GridPosition, (IsOn, _)) to be located via hashmap
 ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Position pos);
 void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position pos);
 void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position pos);

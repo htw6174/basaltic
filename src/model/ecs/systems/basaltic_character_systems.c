@@ -10,6 +10,7 @@
 #include "htw_random.h"
 #include "htw_geomap.h"
 #include "flecs.h"
+#include "bc_flecs_utils.h"
 
 // TEST: random movement behavior, pick any adjacent tile to move to
 void bc_setWandererDestinations(ecs_iter_t *it);
@@ -216,7 +217,8 @@ void spawnActors(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         Spawner sp = spawners[i];
         for (int e = 0; e < sp.count; e++) {
-            ecs_entity_t newCharacter = ecs_new(it->world, 0);
+            ecs_entity_t newCharacter = bc_instantiateRandomizer(it->world, sp.prefab);
+            // TODO: do position randomization by adding randomizer to prefab?
             htw_geo_GridCoord coord = {
                 .x = htw_randRange(maxX),
                 .y = htw_randRange(maxY)
@@ -226,7 +228,6 @@ void spawnActors(ecs_iter_t *it) {
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
             ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
             ecs_set(world, newCharacter, CreationTime, {*step});
-            ecs_add_pair(world, newCharacter, EcsIsA, sp.prefab);
         }
         if (sp.oneShot) {
             ecs_delete(world, it->entities[i]);

@@ -1,3 +1,4 @@
+using bc.common
 using bc.planes
 using bc.actors
 using bc.actors.Ego
@@ -38,7 +39,9 @@ Prefab TectonicSpiritPrefab {
     - OVERRIDE|SpiritPower
     - SpiritPower {maxValue: 65535}
     - SpiritLifetime {youngSteps: 40, matureSteps: 200, oldSteps: 40}
-    - PlateShiftStrength {left: 30, right: -30}
+    - (RandomizeInt, PlateShiftStrength.left) {min: 10, max: 100}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -10}
+    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
 Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
@@ -65,21 +68,6 @@ bison_spawner {
 
 faultlines_spawner {
     - Spawner{prefab: TectonicSpiritPrefab, count: 8, oneShot: true}
-    - (IsOn, Overworld)
-}
-
-faultlines_spawner2 {
-    - Spawner{prefab: SplittingPlatesPrefab, count: 6, oneShot: true}
-    - (IsOn, Overworld)
-}
-
-faultlines_spawner3 {
-    - Spawner{prefab: CollidingPlatesPrefab, count: 6, oneShot: true}
-    - (IsOn, Overworld)
-}
-
-volcano_spawner {
-    - Spawner{prefab: VolcanoSpiritPrefab, count: 20, oneShot: true}
     - (IsOn, Overworld)
 }
 

@@ -30,6 +30,8 @@
 
  */
 
+ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab);
+
 void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query);
 
 

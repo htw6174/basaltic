@@ -591,6 +591,9 @@ void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity
     if (igSmallButton("x")) {
         ecs_remove_id(world, e, pair);
         // need to skip component inspector from here, otherwise pairs with data will get immediately re-added
+    } else if (ecs_has_id(world, first, EcsTag)) {
+        // A tag relationship by definition contains no component data
+        return;
     } else if (ecs_has(world, first, EcsMetaType)) {
         void *componentData = ecs_get_mut_id(world, e, pair);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, first, componentData);
