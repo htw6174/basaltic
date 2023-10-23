@@ -19,6 +19,8 @@ void bc_glCheck(void) {
     }
 }
 
+#ifndef _WIN32
+// FIXME: compiler error on windows
 void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam) {
     if (severity > GL_DEBUG_SEVERITY_NOTIFICATION) {
         // TODO: pretty print the source, type, and severity. Maybe allow configuring severity threshold?
@@ -28,6 +30,7 @@ void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum se
     }
     //assert(severity != GL_DEBUG_SEVERITY_HIGH);
 }
+#endif
 
 void bc_sg_setup(void) {
     sg_desc sgd = {
