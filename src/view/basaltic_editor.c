@@ -99,6 +99,8 @@ void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
 void renderTargetInspector(ecs_world_t *world);
 
+void toolPaletteInspector(ecs_world_t *world);
+
 /* Misc Functions*/
 void possessEntity(ecs_world_t *world, ecs_entity_t target);
 
@@ -113,7 +115,7 @@ void bc_setupEditor(void) {
     viewInspector = (EcsInspectionContext){
         .worldName = "View",
         .customQueries = {
-            [0] = {.queryExpr = "TerrainBrush"},
+            [0] = {.queryExpr = "Tool"},
             [1] = {.queryExpr = "Pipeline || InstanceBuffer, ?Disabled"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System, ?Disabled"},
@@ -1062,6 +1064,7 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
         case EcsEntity:
         {
             ecs_entity_t e = *(ecs_entity_t*)(field);
+            // FIXME: doesn't account for entities from other ECS worlds. Maybe create a special component type + inspector for displaying world entities?
             entityLabel(world, e);
 
             // drag and drop
@@ -1202,4 +1205,11 @@ void renderTargetInspector(ecs_world_t *world) {
     ImGuiIO *io = igGetIO();
     ImVec4 white = { 1, 1, 1, 1 };
     igImage(io->Fonts->TexID, (ImVec2){512, 512}, (ImVec2){0.0, 0.0}, (ImVec2){1.0, 1.0}, white, white);
+}
+
+void toolPaletteInspector(ecs_world_t *world) {
+    // List tools
+    // Keep track of selected tool
+    // Mini entity inspector for editing tool values?
+    // Assign selected tool to ActiveTool (how?)
 }

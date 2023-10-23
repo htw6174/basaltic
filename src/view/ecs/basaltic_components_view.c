@@ -82,8 +82,13 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, FocusPlane);
     ECS_META_COMPONENT(world, HoveredCell);
     ECS_META_COMPONENT(world, SelectedCell);
-    ECS_META_COMPONENT(world, TerrainBrush);
     ECS_META_COMPONENT(world, DirtyChunkBuffer);
+
+    ECS_TAG_DEFINE(world, Tool);
+    ECS_META_COMPONENT(world, TerrainBrush);
+    ecs_add_id(world, ecs_id(TerrainBrush), Tool);
+    ECS_META_COMPONENT(world, PrefabBrush);
+    ecs_add_id(world, ecs_id(PrefabBrush), Tool);
 
     // Settings
     ECS_TAG_DEFINE(world, VideoSettings);
@@ -163,6 +168,8 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
     ecs_singleton_set(world, TerrainBrush, {.value = 1, .radius = 1});
+    ecs_singleton_set(world, PrefabBrush, {.prefab = 0});
+
     ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count, should have a component ctor/dtor if it need to alloc
 
     // Input

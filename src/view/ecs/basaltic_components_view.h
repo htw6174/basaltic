@@ -107,6 +107,13 @@ ECS_STRUCT(SelectedCell, {
     s32 y;
 });
 
+ECS_STRUCT(DirtyChunkBuffer, {
+    u32 count;
+    u32 *chunks;
+});
+
+BC_DECL ECS_TAG_DECLARE(Tool);
+
 ECS_STRUCT(TerrainBrush, {
     s32 value;
     s32 radius;
@@ -116,9 +123,8 @@ ECS_STRUCT(TerrainBrush, {
     // - TODO: bitmask brush for bitmask layers
 });
 
-ECS_STRUCT(DirtyChunkBuffer, {
-    u32 count;
-    u32 *chunks;
+ECS_STRUCT(PrefabBrush, {
+    ecs_entity_t prefab;
 });
 
 

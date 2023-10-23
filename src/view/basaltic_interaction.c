@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 #include "htw_core.h"
 #include "htw_geomap.h"
+#include "bc_flecs_utils.h"
 #include "basaltic_interaction.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_logic.h"
@@ -17,12 +18,14 @@ static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
 void editTerrain(ecs_world_t *world, float strength);
+void spawnPrefab(ecs_world_t *world);
 
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
-            editTerrain(world, 1.0);
+            //editTerrain(world, 1.0);
+            spawnPrefab(world);
         } else if (e->button.button == SDL_BUTTON_RIGHT) {
             //TODO: moveCharacter();
             //advanceStep(commandBuffer);
@@ -267,5 +270,29 @@ void editTerrain(ecs_world_t *world, float strength) {
         u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
         dirty->chunks[dirty->count++] = chunk;
         ecs_singleton_modified(world, DirtyChunkBuffer);
+    }
+}
+
+void spawnPrefab(ecs_world_t *world) {
+    const PrefabBrush *pb = ecs_singleton_get(world, PrefabBrush);
+    const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
+    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
+
+    const FocusPlane *fp = ecs_singleton_get(world, FocusPlane);
+    const ModelWorld *mw = ecs_singleton_get(world, ModelWorld);
+
+    // TODO: also check to see if world is locked, don't edit if so
+    if (pb && hoveredCoord && fp && mw) {
+        ecs_entity_t focusPlane = fp->entity;
+        ecs_world_t *modelWorld = mw->world;
+        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+        Step step = *ecs_singleton_get(modelWorld, Step);
+
+        if (pb->prefab != 0) {
+        ecs_entity_t e = bc_instantiateRandomizer(modelWorld, pb->prefab);
+            ecs_add_pair(modelWorld, e, IsOn, focusPlane);
+            ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
+            ecs_set(modelWorld, e, CreationTime, {step});
+        }
     }
 }
