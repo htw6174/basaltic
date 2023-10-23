@@ -66,9 +66,6 @@ void BcviewPhasesImport(ecs_world_t *world) {
 
     ECS_TAG_DEFINE(world, OnModelChanged);
 
-    // TEST: default disable shadows
-    ecs_enable(world, OnPassShadow, false);
-
     ecs_entity_t dummyPhase = createPassPhases(world, EcsOnUpdate, BeginPassShadow, OnPassShadow, EndPassShadow);
     dummyPhase = createPassPhases(world, dummyPhase, BeginPassGBuffer, OnPassGBuffer, EndPassGBuffer);
     dummyPhase = createPassPhases(world, dummyPhase, BeginPassLighting, OnPassLighting, EndPassLighting);
