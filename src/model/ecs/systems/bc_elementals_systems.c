@@ -67,25 +67,24 @@ void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridC
     }
 }
 
-void EgoBehaviorTectonicMove(ecs_iter_t *it) {
+void EgoBehaviorTectonic(ecs_iter_t *it) {
     Position *pos = ecs_field(it, Position, 1);
     AngleRadians *angle = ecs_field(it, AngleRadians, 2);
     Destination *dest = ecs_field(it, Destination, 3);
+    Step step = *ecs_singleton_get(it->world, Step);
 
     for (int i = 0; i < it->count; i++) {
-        // move in similar direction
-        if (htw_randRange(24) == 0) {
-            angle[i] += PI/24.0;
+        // alternate between moving and shifting
+        if (step % 2) {
+            // move in similar direction
+            if (htw_randRange(24) == 0) {
+                angle[i] += PI/24.0;
+            }
+            dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i] + htw_randRange(2)));
+            ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
+        } else {
+            ecs_add_pair(it->world, it->entities[i], Action, ActionShiftPlates);
         }
-        dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i]));
-        ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
-    }
-}
-
-void EgoBehaviorTectonicShift(ecs_iter_t *it) {
-
-    for (int i = 0; i < it->count; i++) {
-        ecs_add_pair(it->world, it->entities[i], Action, ActionShiftPlates);
     }
 }
 
@@ -113,7 +112,7 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
     Step step = *ecs_field(it, Step, 7);
 
     for (int i = 0; i < it->count; i++) {
-        // Determine effective strength by and and lifetime
+        // Determine effective strength by age and lifetime
         float strengthFactor;
         u64 age = step - createTime[i];
         SpiritLifetime lt = lifetime[i];
@@ -173,17 +172,10 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcElementals);
 
     // 2 different ego behaviors to alternate between moving and shifting plates; better way to do this?
-    ECS_SYSTEM(world, EgoBehaviorTectonicMove, Planning,
+    ECS_SYSTEM(world, EgoBehaviorTectonic, Planning,
         [in] Position,
         [inout] AngleRadians,
         [out] Destination,
-        //[none] (bc.actors.Action, bc.actors.Action.ActionShiftPlates),
-        [none] (bc.actors.Ego, bc.actors.Ego.EgoTectonicSpirit)
-    );
-
-    ECS_SYSTEM(world, EgoBehaviorTectonicShift, Planning,
-        [in] Position,
-        [none] (bc.actors.Action, bc.actors.Action.ActionMove),
         [none] (bc.actors.Ego, bc.actors.Ego.EgoTectonicSpirit)
     );
 

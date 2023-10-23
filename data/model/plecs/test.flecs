@@ -44,14 +44,22 @@ Prefab TectonicSpiritPrefab {
     - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
-Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
-    - AngleRadians {2.0}
-    - PlateShiftStrength {left: -30, right: -29}
+Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
+    - (RandomizeInt, PlateShiftStrength.left) {min: 50, max: 100}
+    - (RandomizeInt, PlateShiftStrength.right) {min: 50, max: 100}
+    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
-Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
-    - AngleRadians {4.5}
-    - PlateShiftStrength {left: 60, right: 59}
+Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
+    - (RandomizeInt, PlateShiftStrength.left) {min: -100, max: -50}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -50}
+    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+}
+
+Prefab SmallPlatesPrefab : TectonicSpiritPrefab {
+    - (RandomizeInt, PlateShiftStrength.left) {min: -20, max: 20}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -20, max: 20}
+    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
 Prefab VolcanoSpiritPrefab {
@@ -66,8 +74,18 @@ bison_spawner {
     - (IsOn, Overworld)
 }
 
-faultlines_spawner {
-    - Spawner{prefab: TectonicSpiritPrefab, count: 8, oneShot: true}
+faultlines_spawner1 {
+    - Spawner{prefab: CollidingPlatesPrefab, count: 8, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+faultlines_spawner2 {
+    - Spawner{prefab: SplittingPlatesPrefab, count: 8, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+faultlines_spawner3 {
+    - Spawner{prefab: SmallPlatesPrefab, count: 24, oneShot: true}
     - (IsOn, Overworld)
 }
 
