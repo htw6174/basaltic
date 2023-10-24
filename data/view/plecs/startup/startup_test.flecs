@@ -49,5 +49,5 @@ bcview {
     VideoSettings : VideoSettingsDefault
 
     // TEST: disable shadow pass by default
-    //bcview.phases.OnPassShadow :- Disabled
+    Disable bcview.phases.OnPassShadow
 }

@@ -16,6 +16,7 @@
 #include "basaltic_components.h"
 #include "basaltic_sokol_gfx.h"
 #include "flecs.h"
+#include "bc_flecs_utils.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
@@ -83,9 +84,9 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
 
 void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity_t *focusEntity);
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity);
-void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity);
+bool ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity);
 /** If kind is EcsEntity and focus entity is not NULL, will add a button to set focusEntity to component value */
-void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity);
+bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity);
 /** Return entity name if it is named, otherwise return stringified ID (ID string is shared between calls, use immediately or copy to preserve) */
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e);
 /** Display entity name if it is named, otherwise display id */
@@ -115,7 +116,7 @@ void bc_setupEditor(void) {
     viewInspector = (EcsInspectionContext){
         .worldName = "View",
         .customQueries = {
-            [0] = {.queryExpr = "Tool"},
+            [0] = {.queryExpr = "bcview.Tool"},
             [1] = {.queryExpr = "Pipeline || InstanceBuffer, ?Disabled"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System, ?Disabled"},
@@ -859,7 +860,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
                     // TODO: should be its own function
                     if (igBeginPopupContextItem("##context_menu", ImGuiPopupFlags_MouseButtonRight)) {
                         if (igSelectable_Bool("Create Instance", false, 0, (ImVec2){0, 0})) {
-                            ecs_new_w_pair(world, EcsIsA, e);
+                            *selected = bc_instantiateRandomizer(world, e);
                         }
                         // TODO: more context options
                         igEndPopup();
@@ -893,9 +894,9 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
 }
 
 void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component, ecs_entity_t *focusEntity) {
-
     igBeginGroup();
     entityLabel(world, component);
+
     if (igIsItemHovered(0)) {
         igSetTooltip(ecs_get_fullpath(world, component));
     }
@@ -911,6 +912,7 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
         return;
     }
 
+    bool modified = false;
     // TODO: custom inspectors for specific component types, like QueryDesc. Is this the right place to handle this behavior?
     if (component == ecs_id(QueryDesc)) {
         igSameLine(0, -1);
@@ -933,7 +935,7 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
             if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
                 // TODO: ensure null handled
                 memcpy(qd->expr, queryExpr, MAX_QUERY_EXPR_LENGTH);
-                ecs_modified(world, e, QueryDesc);
+                modified = true;
                 igCloseCurrentPopup();
             }
             igEndPopup();
@@ -943,20 +945,26 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
         // Color picker
         static ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_PickerHueWheel;
         Color *col = ecs_get_mut(world, e, Color);
-        igColorEdit4("##color_picker", col->v, flags);
+        modified = igColorEdit4("##color_picker", col->v, flags);
     } else if (ecs_has(world, component, EcsMetaType)) {
         // NOTE: calling ecs_get_mut_id AFTER a call to ecs_remove_id will end up adding the removed component again, with default values
         void *componentData = ecs_get_mut_id(world, e, component);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, component, componentData);
-        ecsMetaInspector(world, &cur, focusEntity);
+        modified = ecsMetaInspector(world, &cur, focusEntity);
     } else {
         // TODO: make it clear that this is a component with no meta info available, still show some basic params like size if possible
+    }
+
+    if (modified) {
+        ecs_modified_id(world, e, component);
     }
 
     igEndGroup();
 }
 
-void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity) {
+bool ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity)
+{
+    bool modified = false;
     ecs_entity_t type = ecs_meta_get_type(cursor);
 
     // NOTE: pushing IDs is only needed because meta inspector can recurse; Because entities can't have 2 of the same component, and components can't have 2 members with the same name, label conflicts only come up when an entity has 2 components with members of the same name e.g. Position {int x, y}, Velocity {int x, y} -> must push id of component before making label for members
@@ -975,16 +983,16 @@ void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
                 case EcsPrimitiveType:
                     igSameLine(0, -1);
                     ecs_primitive_kind_t primKind = ecs_get(world, type, EcsPrimitive)->kind;
-                    primitiveInspector(world, primKind, ecs_meta_get_ptr(cursor), focusEntity);
+                    modified |= primitiveInspector(world, primKind, ecs_meta_get_ptr(cursor), focusEntity);
                     break;
                 case EcsStructType:
                     // recurse componentInspector
                     // TODO: component members with special componentInspector handling should also get their custom inspectors here
-                    ecsMetaInspector(world, cursor, focusEntity);
+                    modified |= ecsMetaInspector(world, cursor, focusEntity);
                     break;
                 case EcsEnumType:
                     igSameLine(0, -1);
-                    // TODO: proper enum inspector, use map to create selectable dropdown
+                    // TODO: proper enum inspector, use map to create selectable dropdown, set modified
                     ecs_map_t enumMap = ecs_get(world, type, EcsEnum)->constants;
                     s32 key = ecs_meta_get_int(cursor);
                     ecs_enum_constant_t *enumDesc = *ecs_map_get_ref(&enumMap, ecs_enum_constant_t, key);
@@ -1004,54 +1012,57 @@ void ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
     ecs_meta_pop(cursor);
     igUnindent(0);
     igPopID();
+
+    return modified;
 }
 
-void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity) {
+bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *field, ecs_entity_t *focusEntity) {
+    bool modified = false;
     switch (kind) {
         case EcsBool:
-            igCheckbox("##", field);
+            modified = igCheckbox("##", field);
             break;
         case EcsChar:
-            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%c", 0);
+            modified = igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%c", 0);
             break;
         case EcsByte:
-            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%x", 0);
+            modified = igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%x", 0);
             break;
         case EcsU8:
-            igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, NULL, 0);
             break;
         case EcsU16:
-            igInputScalar("##", ImGuiDataType_U16, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_U16, field, NULL, NULL, NULL, 0);
             break;
         case EcsU32:
-            igInputScalar("##", ImGuiDataType_U32, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_U32, field, NULL, NULL, NULL, 0);
             break;
         case EcsU64:
-            igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, NULL, 0);
             break;
         case EcsI8:
-            igInputScalar("##", ImGuiDataType_S8, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_S8, field, NULL, NULL, NULL, 0);
             break;
         case EcsI16:
-            igInputScalar("##", ImGuiDataType_S16, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_S16, field, NULL, NULL, NULL, 0);
             break;
         case EcsI32:
-            igInputInt("##", field, 1, 10, 0);
+            modified = igInputInt("##", field, 1, 10, 0);
             break;
         case EcsI64:
-            igInputScalar("##", ImGuiDataType_S32, field, NULL, NULL, NULL, 0);
+            modified = igInputScalar("##", ImGuiDataType_S32, field, NULL, NULL, NULL, 0);
             break;
         case EcsF32:
-            igDragFloat("##", field, 0.02f, -FLT_MAX, FLT_MAX, "%.3f", 0);
+            modified = igDragFloat("##", field, 0.02f, -FLT_MAX, FLT_MAX, "%.3f", 0);
             break;
         case EcsF64:
-            igDragScalar("##", ImGuiDataType_Double, field, 0.02f, NULL, NULL, "%.6g", 0);
+            modified = igDragScalar("##", ImGuiDataType_Double, field, 0.02f, NULL, NULL, "%.6g", 0);
             break;
         case EcsUPtr:
-            igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, "%x", 0);
+            modified = igInputScalar("##", ImGuiDataType_U64, field, NULL, NULL, "%x", 0);
             break;
         case EcsIPtr:
-            igInputScalar("##", ImGuiDataType_S64, field, NULL, NULL, "%x", 0);
+            modified = igInputScalar("##", ImGuiDataType_S64, field, NULL, NULL, "%x", 0);
             break;
         case EcsString:
             (void)0; // So the parser doesn't freak out /shrug
@@ -1059,7 +1070,7 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             //igText(str);
             u64 len = strlen(str);
             igTextUnformatted(str, str + len);
-            //igInputText("##", field, 0, 0, NULL, NULL); // TODO set size
+            //modified = igInputText("##", field, 0, 0, NULL, NULL); // TODO set size
             break;
         case EcsEntity:
         {
@@ -1080,6 +1091,7 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
                 // no reason to drag an invalid entity
                 if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
                     igSetDragDropPayload("BC_PAYLOAD_ENTITY", field, sizeof(ecs_entity_t), ImGuiCond_None);
+                    modified = true;
                     igEndDragDropSource();
                 }
 
@@ -1095,6 +1107,7 @@ void primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             igText("Error: unhandled primitive type");
             break;
     }
+    return modified;
 }
 
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e) {

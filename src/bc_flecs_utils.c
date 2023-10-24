@@ -41,15 +41,11 @@ ecs_primitive_kind_t bc_meta_cursorToPrim(ecs_meta_cursor_t *cursor, ecs_entity_
 }
 
 ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
-    // Must not defer operations to ensure that the same component pointer is accessed across multiple randomizers
-    // Otherwise, the temporary storage returned from ecs_get_mut_id will overwrite earlier calls for the same component
-    ecs_defer_suspend(world);
 
     ecs_entity_t e = ecs_new_w_pair(world, EcsIsA, prefab);
 
     // Find all (RandomizeInt, *) relationships in prefab's type
     ecs_table_t *prefab_table = ecs_get_table(world, prefab);
-    const ecs_type_t *prefab_type = ecs_get_type(world, prefab);
     ecs_id_t wildcard = ecs_pair(ecs_id(RandomizeInt), EcsWildcard);
     s32 cur = -1;
     ecs_entity_t pair;
@@ -89,8 +85,6 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
                 break;
         }
     }
-
-    ecs_defer_resume(world);
 
     return e;
 }

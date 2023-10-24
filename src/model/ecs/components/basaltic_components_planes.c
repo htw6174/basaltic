@@ -43,6 +43,29 @@ void BcPlanesImport(ecs_world_t *world) {
     // ecs_add_pair(world, ecs_id(Plane), EcsChildOf, IsOn);
 }
 
+// FIXME: this shouldn't return false for new entities created this step
+bool plane_IsValidRootEntity(ecs_world_t *world, ecs_entity_t root, ecs_entity_t plane, Position pos) {
+    // Ensure root is still valid and has correct world position. If not, should clear hashmap entry
+    if (ecs_is_valid(world, root)) {
+        if (ecs_has(world, root, CellRoot)) return true;
+        const Position *rootPos = ecs_get(world, root, Position);
+        ecs_entity_t rootPlane = ecs_get_target(world, root, IsOn, 0);
+        if (rootPos && rootPlane == plane) {
+            if (htw_geo_isEqualGridCoords(*rootPos, pos)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void plane_SetupCellRoot(ecs_world_t *world, ecs_entity_t newRoot, ecs_entity_t plane, Position pos) {
+    ecs_add(world, newRoot, CellRoot);
+    ecs_add_id(world, newRoot, ecs_childof(plane));
+    //ecs_add_pair(world, newRoot, IsOn, plane);
+    //ecs_set(world, newRoot, Position, {pos.x, pos.y});
+}
+
 ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Position pos) {
     khash_t(WorldMap) *wm = ecs_singleton_get(world, SpatialStorage)->hashMap;
     bc_WorldPosition wp = {.plane = ecs_entity_t_lo(plane), .gridPos = pos};
@@ -50,41 +73,54 @@ ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Positio
     if (i == kh_end(wm)) {
         return 0;
     } else {
-        return kh_val(wm, i);
+        ecs_entity_t root = kh_val(wm, i);
+        if (plane_IsValidRootEntity(world, root, plane, pos)) {
+            return root;
+        } else {
+            kh_del(WorldMap, wm, i);
+            return 0;
+        }
     }
 }
 
 void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position pos) {
+    ecs_assert(ecs_is_valid(world, plane), 0, "Plane not valid!");
+    //plane = ecs_entity_t_lo(plane);
     khash_t(WorldMap) *wm = ecs_singleton_get(world, SpatialStorage)->hashMap;
-    bc_WorldPosition wp = {.plane = ecs_entity_t_lo(plane), .gridPos = pos};
+    bc_WorldPosition wp = {.plane = plane, .gridPos = pos};
     khint_t i = kh_get(WorldMap, wm, wp);
     if (i == kh_end(wm)) {
-        // No entry here yet, place directly
+        // No entry here yet, add key and set value to place here
         int absent;
         i = kh_put(WorldMap, wm, wp, &absent);
         kh_val(wm, i) = e;
     } else {
         // Need to create a new root entity if valid entity is here already
-        ecs_entity_t existing = kh_val(wm, i);
-        if (ecs_is_valid(world, existing)) {
-            if (ecs_has(world, existing, CellRoot)) {
-                // Add as new child
-                ecs_add_pair(world, e, EcsChildOf, existing);
+        ecs_entity_t root = kh_val(wm, i);
+        if (plane_IsValidRootEntity(world, root, plane, pos)) {
+            if (ecs_has(world, root, CellRoot)) {
+                // Already a root entity here, add as new child
+                ecs_add_pair(world, e, EcsChildOf, root);
             } else {
                 // Make new cell root, add both as child
-                // FIXME: if 2 entities move onto the same cell in one update, 2 cellroots get created
-                ecs_defer_suspend(world);
-                ecs_entity_t newRoot = ecs_new(world, CellRoot);
-                ecs_add_id(world, newRoot, ecs_childof(plane));
-                ecs_defer_resume(world);
-                ecs_add_pair(world, existing, EcsChildOf, newRoot);
+                ecs_entity_t newRoot = ecs_new_id(world);
+                // Must set hashmap value to new entity before doing setup, so that OnSet observers don't loop here forever
+                //int absent;
+                //khint_t k = kh_put(WorldMap, wm, wp, &absent);
+                kh_val(wm, i) = newRoot;
+                if (ecs_is_deferred(world)) {
+                    ecs_defer_suspend(world);
+                    plane_SetupCellRoot(world, newRoot, plane, pos);
+                    ecs_defer_resume(world);
+                } else {
+                    plane_SetupCellRoot(world, newRoot, plane, pos);
+                }
+                ecs_add_pair(world, root, EcsChildOf, newRoot);
                 ecs_add_pair(world, e, EcsChildOf, newRoot);
-                int absent;
-                khint_t k = kh_put(WorldMap, wm, wp, &absent);
-                kh_val(wm, k) = newRoot;
             }
         } else {
-            // Invalid entity here, place directly
+            // Invalid entity here, make child of plane and set value to place here / make make this cell's root
+            ecs_add_pair(world, e, EcsChildOf, plane);
             kh_val(wm, i) = e;
         }
     }
@@ -95,7 +131,7 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
     bc_WorldPosition wp = {.plane = ecs_entity_t_lo(plane), .gridPos = pos};
     khint_t i = kh_get(WorldMap, wm, wp);
     if (i == kh_end(wm)) {
-        // entity hasn't been placed on the map yet
+        // entity hasn't been placed on the map yet, nothing to remove
     } else {
         ecs_entity_t root = kh_val(wm, i);
         if (e == root) { // TODO: is this the best way to compare IDs?
@@ -103,13 +139,13 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
             kh_del(WorldMap, wm, i);
         } else {
             // Restore plane as parent
-            ecs_add_pair(world, e, EcsChildOf, plane);
+            //ecs_add_pair(world, e, EcsChildOf, plane);
         }
     }
 }
 
-void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position oldPos, Position newPos) {
-    plane_RemoveEntity(world, plane, e, oldPos);
+void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position newPos)
+{
     plane_PlaceEntity(world, plane, e, newPos);
 }
 

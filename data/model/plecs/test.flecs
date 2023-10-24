@@ -69,6 +69,7 @@ Prefab VolcanoSpiritPrefab {
     - SpiritPower {maxValue: 65535}
 }
 
+
 bison_spawner {
     - Spawner{prefab: BisonHerdPrefab, count: 200, oneShot: true}
     - (IsOn, Overworld)

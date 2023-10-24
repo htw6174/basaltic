@@ -38,56 +38,6 @@ void mergeGroups(ecs_iter_t *it);
 void tickGrowth(ecs_iter_t *it);
 void tickStamina(ecs_iter_t *it);
 
-// TODO: should consider this to be a test function. Can repurpose some of the logic, but populating the world should be a more specialized task. Maybe build off of entities/systems so that the editor has access to spawning variables and functions
-void bc_createCharacters(ecs_world_t *world, ecs_entity_t plane, size_t count) {
-    ecs_defer_begin(world);
-    ecs_set_scope(world, plane);
-    const Plane *tm = ecs_get(world, plane, Plane);
-    u32 maxX = tm->chunkMap->mapWidth;
-    u32 maxY = tm->chunkMap->mapHeight;
-    for (size_t i = 0; i < count; i++) {
-        ecs_entity_t newCharacter = ecs_new(world, Position);
-        htw_geo_GridCoord coord = {
-            .x = htw_randRange(maxX),
-            .y = htw_randRange(maxY)
-        };
-        ecs_add_pair(world, newCharacter, IsOn, plane);
-        plane_PlaceEntity(world, plane, newCharacter, coord);
-        // TODO: figure out if it is necessary to assign each struct field individually when using ecs_set. The 2 lines below should be equivalent, but compiler doesn't like me using coord directly with ecs_set
-        //ecs_set_id(world, newCharacter, ecs_id(Position), sizeof(Position), &coord);
-        //ecs_set(world, newCharacter, Position, coord);
-        ecs_set(world, newCharacter, Position, {coord.x, coord.y});
-        ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
-        // TEST
-        if (i % 32 == 0) {
-            ecs_add_pair(world, newCharacter, Ego, EgoPredator);
-            ecs_add_pair(world, newCharacter, Diet, Meat);
-            ecs_add(world, newCharacter, PlayerVision);
-        } else if (i % 8 == 0) {
-            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
-            ecs_add_pair(world, newCharacter, Diet, Fruit);
-        } else if (i % 4 == 0) {
-            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
-            ecs_add_pair(world, newCharacter, Diet, Foliage);
-        } else {
-            ecs_add_pair(world, newCharacter, Ego, EgoGrazer);
-            ecs_add_pair(world, newCharacter, Diet, Grasses);
-        }
-    }
-    ecs_set_scope(world, 0);
-    ecs_defer_end(world);
-}
-
-void bc_setCharacterDestination(ecs_world_t *world, ecs_entity_t e, htw_geo_GridCoord dest) {
-    // TODO: movement range checking
-    // TODO: stamina use vs current stamina checking
-    // TODO: return should indicate if destination is valid/can be set
-    // NOTE: instead of having a simple function for something that can be easily handled with the reflection framework, make the TODO checks above into their own functions that the View can use, as well as systems that control character movement
-    if (ecs_has(world, e, Destination)) {
-        ecs_set(world, e, Destination, {dest.x, dest.y});
-    }
-}
-
 void egoBehaviorWander(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
@@ -177,35 +127,36 @@ void bc_revealMap(ecs_iter_t *it) {
 
 void characterCreated(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_get_target(it->world, it->entities[0], IsOn, 0);
+
     for (int i = 0; i < it->count; i++) {
-        plane_PlaceEntity(it->world, tmEnt, it->entities[i], positions[i]);
+        plane_PlaceEntity(it->world, plane, it->entities[i], positions[i]);
     }
 }
 
 void characterMoved(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_field_id(it, 2);
     for (int i = 0; i < it->count; i++) {
-        plane_MoveEntity(it->world, tmEnt, it->entities[i], (Position){0, 0}, positions[i]);
+        plane_MoveEntity(it->world, plane, it->entities[i], positions[i]);
     }
 }
 
 void characterDestroyed(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_field_id(it, 2);
     for (int i = 0; i < it->count; i++) {
-        plane_RemoveEntity(it->world, tmEnt, it->entities[i], positions[i]);
+        plane_RemoveEntity(it->world, plane, it->entities[i], positions[i]);
     }
 }
 
 void spawnActors(ecs_iter_t *it) {
     Spawner *spawners = ecs_field(it, Spawner, 1);
-    ecs_entity_t plane = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_pair_second(it->world, ecs_field_id(it, 2));
     Step *step = ecs_field(it, Step, 3);
 
     ecs_world_t *world = it->world;
-    htw_ChunkMap *cm = ecs_get(world, ecs_pair_second(world, plane), Plane)->chunkMap;
+    htw_ChunkMap *cm = ecs_get(world, plane, Plane)->chunkMap;
 
     ecs_entity_t oldScope = ecs_get_scope(world);
     ecs_set_scope(world, plane);
@@ -213,27 +164,33 @@ void spawnActors(ecs_iter_t *it) {
     u32 maxX = cm->mapWidth;
     u32 maxY = cm->mapHeight;
 
-    ecs_defer_begin(world);
+    ecs_defer_suspend(world);
     for (int i = 0; i < it->count; i++) {
         Spawner sp = spawners[i];
         for (int e = 0; e < sp.count; e++) {
-            ecs_entity_t newCharacter = bc_instantiateRandomizer(it->world, sp.prefab);
+            // Must not defer operations to ensure that the same component pointer is accessed across multiple randomizers
+            // Otherwise, the temporary storage returned from ecs_get_mut_id will overwrite earlier calls for the same component
+            ecs_entity_t newCharacter = bc_instantiateRandomizer(world, sp.prefab);
             // TODO: do position randomization by adding randomizer to prefab?
             htw_geo_GridCoord coord = {
                 .x = htw_randRange(maxX),
                 .y = htw_randRange(maxY)
             };
+            // THEORY: the observer doesn't trigger here, because the entity doesn't yet have both of these components before the function ends, and the merge doesn't trigger OnSet observers as expected
             ecs_add_pair(world, newCharacter, IsOn, plane);
-            plane_PlaceEntity(world, plane, newCharacter, coord);
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
             ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
             ecs_set(world, newCharacter, CreationTime, {*step});
+            plane_PlaceEntity(world, plane, newCharacter, coord);
         }
         if (sp.oneShot) {
+            // Don't delete while iterating the same table
+            ecs_defer_resume(world);
             ecs_delete(world, it->entities[i]);
+            ecs_defer_suspend(world);
         }
     }
-    ecs_defer_end(world);
+    ecs_defer_resume(world);
 
     ecs_set_scope(world, oldScope);
 }
@@ -342,13 +299,14 @@ void egoBehaviorPredator(ecs_iter_t *it) {
 void executeMove(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+    ecs_entity_t planePair = ecs_field_id(it, 3);
+    ecs_entity_t planeEnt = ecs_pair_second(it->world, planePair);
+    const Plane *p = ecs_get(it->world, planeEnt, Plane);
 
     for (int i = 0; i < it->count; i++) {
         u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
         // TODO: move towards destination by maximum single turn move distance
-        plane_MoveEntity(it->world, tmEnt, it->entities[i], positions[i], destinations[i]);
+        plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
         // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
         positions[i] = destinations[i];
     }
@@ -413,15 +371,16 @@ void resolveHealth(ecs_iter_t *it) {
 
 void mergeGroups(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+    ecs_entity_t planePair = ecs_field_id(it, 2);
+    ecs_entity_t planeEnt = ecs_pair_second(it->world, planePair);
+    const Plane *tm = ecs_get(it->world, planeEnt, Plane);
     htw_ChunkMap *cm = tm->chunkMap;
     Group *groups = ecs_field(it, Group, 3);
     ecs_entity_t prefab = ecs_pair_second(it->world, ecs_field_id(it, 4));
 
     for (int i = 0; i < it->count; i++) {
 
-        ecs_entity_t root = plane_GetRootEntity(it->world, tmEnt, positions[i]);
+        ecs_entity_t root = plane_GetRootEntity(it->world, planeEnt, positions[i]);
         // filter for: entities in root's hierarchy tree & instances of the same prefab & is a group
         ecs_filter_t *filter = ecs_filter(it->world, {
             .terms = {
@@ -496,8 +455,21 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [in] (bc.planes.IsOn, _),
                [none] bc.PlayerVision
     );
-    //ECS_OBSERVER(world, characterMoved, EcsOnSet, Position, (IsOn, _));
-    ECS_OBSERVER(world, characterDestroyed, EcsOnDelete, Position, (bc.planes.IsOn, _));
+
+    // TODO: try out observers only for position changes
+    // NOTE: observers can propogate events along traversable relationships, meaning that when Plane is set, this event triggers for all entities on that plane
+    // ECS_OBSERVER(world, characterCreated, EcsOnAdd,
+    //     [in] Position,
+    //     [none] Plane(up(bc.planes.IsOn))
+    // );
+    // ECS_OBSERVER(world, characterMoved, EcsOnSet,
+    //     [in] Position,
+    //     (bc.planes.IsOn, _)
+    // );
+    // ECS_OBSERVER(world, characterDestroyed, EcsOnDelete,
+    //     Position,
+    //     (bc.planes.IsOn, _)
+    // );
 
     ECS_SYSTEM(world, spawnActors, EcsPreUpdate,
         [in] Spawner,
@@ -564,7 +536,8 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [in] Position,
                [in] (bc.planes.IsOn, _),
                [inout] Group,
-               [in] (IsA, _) // TODO: consider a better way to determine merge compatability. Can't use query variables for cached queries
+               [in] (IsA, _), // TODO: consider a better way to determine merge compatability. Can't use query variables for cached queries
+               [none] bc.planes.CellRoot(parent)
     );
     ecs_system(world, {
         .entity = mergeGroups,

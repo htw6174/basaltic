@@ -288,11 +288,15 @@ void spawnPrefab(ecs_world_t *world) {
         htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
         Step step = *ecs_singleton_get(modelWorld, Step);
 
+        ecs_entity_t e;
         if (pb->prefab != 0) {
-        ecs_entity_t e = bc_instantiateRandomizer(modelWorld, pb->prefab);
-            ecs_add_pair(modelWorld, e, IsOn, focusPlane);
-            ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
-            ecs_set(modelWorld, e, CreationTime, {step});
+            e = bc_instantiateRandomizer(modelWorld, pb->prefab);
+        } else {
+            e = ecs_new_w_pair(modelWorld, EcsChildOf, focusPlane);
         }
+        ecs_add_pair(modelWorld, e, IsOn, focusPlane);
+        ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
+        ecs_set(modelWorld, e, CreationTime, {step});
+        plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);
     }
 }
