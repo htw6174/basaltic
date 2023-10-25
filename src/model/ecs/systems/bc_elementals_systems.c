@@ -50,20 +50,34 @@ htw_geo_GridCoord hexOnLine(htw_geo_GridCoord a, htw_geo_GridCoord b, s32 dist) 
     return htw_geo_hexFractionalToHexCoord(q, r);
 }
 
-void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridCoord towards, s32 strength) {
-    //CellData *startCell = htw_geo_getCell(cm, start);
-    //startCell->height += strength;
+void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridCoord towards, s32 baseline, s32 strength, float falloff) {
+    falloff = fmaxf(falloff, 1.0);
+    s32 strengthPool = (strength * strength) / falloff;
 
-    //s32 particlesCount = (strength * strength) / 2;
-    //for (int i = 0; i < particlesCount; i++) {}
-    s32 range = sqrt(4.0 * abs(strength));
-    for (int i = 0; i < range; i++) {
-        // TODO projecting landslides out as particles
+    const int RANGE_MAX = 100; // ensure crazy strength values don't cause issues
+    int i = 0;
+    while(strengthPool > 0 && i < RANGE_MAX) {
         htw_geo_GridCoord lineCoord = hexOnLine(start, towards, i);
         CellData *cell = htw_geo_getCell(cm, lineCoord);
-        float mag = 1.0 - ((float)i / range);
-        mag *= mag;
-        cell->height += strength * mag;
+        // amount of strength that can be used is limited by how far the next cell is above the faultline's current position
+        s32 heightDifference = cell->height - baseline;
+        // first step always = strength
+        s32 usableStrength = roundf((float)strengthPool * (falloff / strength));
+        float heightStrengthRatio = (float)heightDifference / usableStrength;
+        const float heightFalloffFactor = 4.0; //32.0;
+        float limiter = fmaxf(0, heightStrengthRatio * heightFalloffFactor);
+        // limiter = 0 -> limitFactor = 1
+        // limiter = 4 -> limitFactor = 0.2
+        // limiter = MAX -> limitFactor => 0
+        float limitFactor = 1.0 / (limiter + 1.0);
+        // Always round away from 0 so that the strengthPool always decreases
+        s32 expendedStrength = strength > 0 ?
+            max_int(1, usableStrength * limitFactor) :
+            min_int(-1, usableStrength * limitFactor);
+        cell->height += expendedStrength;
+        // only subtract as much strength as was used
+        strengthPool -= abs(expendedStrength);
+        i++;
     }
 }
 
@@ -77,8 +91,8 @@ void EgoBehaviorTectonic(ecs_iter_t *it) {
         // alternate between moving and shifting
         if (step % 2) {
             // move in similar direction
-            if (htw_randRange(24) == 0) {
-                angle[i] += PI/24.0;
+            if (htw_randRange(2) == 0) {
+                angle[i] += PI/180.0;
             }
             dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i] + htw_randRange(2)));
             ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
@@ -102,14 +116,16 @@ void EgoBehaviorVolcano(ecs_iter_t *it) {
 }
 
 void ExecuteShiftPlates(ecs_iter_t *it) {
-    Position *positions = ecs_field(it, Position, 1);
-    AngleRadians *angle = ecs_field(it, AngleRadians, 2);
-    Plane *plane = ecs_field(it, Plane, 3);
+    int f = 0;
+    Position *positions = ecs_field(it, Position, ++f);
+    Elevation *elevation = ecs_field(it, Elevation, ++f);
+    AngleRadians *angle = ecs_field(it, AngleRadians, ++f);
+    Plane *plane = ecs_field(it, Plane, ++f);
     htw_ChunkMap *cm = plane->chunkMap;
-    PlateShiftStrength *shiftStrength = ecs_field(it, PlateShiftStrength, 4);
-    SpiritLifetime *lifetime = ecs_field(it, SpiritLifetime, 5);
-    CreationTime *createTime = ecs_field(it, CreationTime, 6);
-    Step step = *ecs_field(it, Step, 7);
+    PlateShiftStrength *shiftStrength = ecs_field(it, PlateShiftStrength, ++f);
+    SpiritLifetime *lifetime = ecs_field(it, SpiritLifetime, ++f);
+    CreationTime *createTime = ecs_field(it, CreationTime, ++f);
+    Step step = *ecs_field(it, Step, ++f);
 
     for (int i = 0; i < it->count; i++) {
         // Determine effective strength by age and lifetime
@@ -131,16 +147,23 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
             ecs_delete(it->world, it->entities[i]);
         }
 
-        //Left side
+        // Move elevation towards current cell height
+        CellData *c = htw_geo_getCell(cm, positions[i]);
+        s32 cellHeight = c->height;
+        s32 diff = cellHeight - elevation[i];
+        diff = min_int(max_int(-1, diff), 1);
+        elevation[i] += diff;
+
+        // Left side
         htw_geo_GridCoord startLeft = positions[i];
         // FIXME: radius of 100 gives much higher hex distance than expected?
-        htw_geo_GridCoord endLeft = hexLineEndPoint(startLeft, 100.0, angle[i] + (PI/2.0));
-        shiftTerrainInLine(cm, startLeft, endLeft, shiftStrength[i].left * strengthFactor);
+        htw_geo_GridCoord endLeft = hexLineEndPoint(startLeft, 20.0, angle[i] + (PI/2.0));
+        shiftTerrainInLine(cm, startLeft, endLeft, elevation[i], shiftStrength[i].left * strengthFactor, shiftStrength[i].falloff);
 
         // Right side (forward turned 60 deg CW)
         htw_geo_GridCoord startRight = POSITION_IN_DIRECTION(positions[i], radToHexDir(angle[i] - (PI/3.0)));
-        htw_geo_GridCoord endRight = hexLineEndPoint(startRight, 100.0, angle[i] - (PI/2.0));
-        shiftTerrainInLine(cm, startRight, endRight, shiftStrength[i].right * strengthFactor);
+        htw_geo_GridCoord endRight = hexLineEndPoint(startRight, 20.0, angle[i] - (PI/2.0));
+        shiftTerrainInLine(cm, startRight, endRight, elevation[i], shiftStrength[i].right * strengthFactor, shiftStrength[i].falloff);
     }
 }
 
@@ -186,6 +209,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, ExecuteShiftPlates, Execution,
         [in] Position,
+        [inout] Elevation,
         [in] AngleRadians,
         [in] Plane(up(bc.planes.IsOn)),
         [in] PlateShiftStrength,

@@ -30,4 +30,7 @@ void BcElementalsImport(ecs_world_t *world) {
 
     ECS_COMPONENT_DEFINE(world, AngleRadians);
     ecs_primitive(world, {.entity = ecs_id(AngleRadians), .kind = EcsF32});
+
+    ECS_COMPONENT_DEFINE(world, Elevation);
+    ecs_primitive(world, {.entity = ecs_id(Elevation), .kind = EcsI32});
 }

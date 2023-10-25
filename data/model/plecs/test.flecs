@@ -34,59 +34,67 @@ Prefab TectonicSpiritPrefab {
     - ElementalSpirit
     - (Ego, EgoTectonicSpirit)
     - OVERRIDE|Position
-    - OVERRIDE|AngleRadians
     - OVERRIDE|Destination
+    - OVERRIDE|AngleRadians
+    - OVERRIDE|Elevation
     - OVERRIDE|SpiritPower
     - SpiritPower {maxValue: 65535}
     - SpiritLifetime {youngSteps: 40, matureSteps: 200, oldSteps: 40}
-    - (RandomizeInt, PlateShiftStrength.left) {min: 10, max: 100}
-    - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -10}
-    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+    - PlateShiftStrength {left: 50, right: -50}
+    - AngleRadians {0}
 }
 
 Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: 50, max: 100}
     - (RandomizeInt, PlateShiftStrength.right) {min: 50, max: 100}
+    - (RandomizeInt, PlateShiftStrength.falloff) {min: 8, max: 16}
     - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
 Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: -100, max: -50}
     - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -50}
+    - (RandomizeInt, PlateShiftStrength.falloff) {min: 8, max: 16}
     - (RandomizeInt, AngleRadians) {min: 0, max: 6}
 }
 
 Prefab SmallPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: -20, max: 20}
     - (RandomizeInt, PlateShiftStrength.right) {min: -20, max: 20}
+    - (RandomizeInt, PlateShiftStrength.falloff) {min: 6, max: 8}
     - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+}
+
+Prefab TestPlatesPrefab : TectonicSpiritPrefab {
+    - SpiritLifetime {youngSteps: 40, matureSteps: 100, oldSteps: 40}
+    - PlateShiftStrength {left: -25, right: 30, falloff: 8}
 }
 
 Prefab VolcanoSpiritPrefab {
     - ElementalSpirit
     - (Ego, EgoVolcanoSpirit)
-    - Position
+    - OVERRIDE|Position
+    - OVERRIDE|Elevation
     - SpiritPower {maxValue: 65535}
 }
 
-
-bison_spawner {
-    - Spawner{prefab: BisonHerdPrefab, count: 200, oneShot: true}
-    - (IsOn, Overworld)
-}
-
 faultlines_spawner1 {
-    - Spawner{prefab: CollidingPlatesPrefab, count: 8, oneShot: true}
+    - Spawner{prefab: CollidingPlatesPrefab, count: 0, oneShot: true}
     - (IsOn, Overworld)
 }
 
 faultlines_spawner2 {
-    - Spawner{prefab: SplittingPlatesPrefab, count: 8, oneShot: true}
+    - Spawner{prefab: SplittingPlatesPrefab, count: 0, oneShot: true}
     - (IsOn, Overworld)
 }
 
 faultlines_spawner3 {
     - Spawner{prefab: SmallPlatesPrefab, count: 24, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+faultlines_spawner_test {
+    - Spawner{prefab: TestPlatesPrefab, count: 0, oneShot: true}
     - (IsOn, Overworld)
 }
 

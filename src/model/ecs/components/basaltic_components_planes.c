@@ -35,6 +35,7 @@ void BcPlanesImport(ecs_world_t *world) {
 
     khash_t(WorldMap) *gm = kh_init(WorldMap);
     kh_resize(WorldMap, gm, HASH_MAP_DEFAULT_SIZE);
+    // TODO: the spatial storage should only be accessed from the corresponding get/set methods, and only one is needed per model. Should be a private static var instead of an ECS singleton?
     ecs_singleton_set(world, SpatialStorage, {gm});
 
     // TEST
@@ -74,6 +75,7 @@ ecs_entity_t plane_GetRootEntity(ecs_world_t *world, ecs_entity_t plane, Positio
         return 0;
     } else {
         ecs_entity_t root = kh_val(wm, i);
+        // current value here may be an entity that previously moved. If so, clear the key for this world position
         if (plane_IsValidRootEntity(world, root, plane, pos)) {
             return root;
         } else {
@@ -119,7 +121,7 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
                 ecs_add_pair(world, e, EcsChildOf, newRoot);
             }
         } else {
-            // Invalid entity here, make child of plane and set value to place here / make make this cell's root
+            // Invalid entity here, make child of plane and set value to place here / make this cell's root
             ecs_add_pair(world, e, EcsChildOf, plane);
             kh_val(wm, i) = e;
         }
@@ -139,11 +141,12 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
             kh_del(WorldMap, wm, i);
         } else {
             // Restore plane as parent
-            //ecs_add_pair(world, e, EcsChildOf, plane);
+            ecs_add_pair(world, e, EcsChildOf, plane);
         }
     }
 }
 
+// Doesn't need to know where the entity moved *from*, because at lookup time we can check if the current entry should be there or not
 void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Position newPos)
 {
     plane_PlaceEntity(world, plane, e, newPos);

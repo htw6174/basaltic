@@ -38,10 +38,14 @@ ECS_STRUCT(SpiritLifetime, {
 ECS_STRUCT(PlateShiftStrength, {
     float left;
     float right;
+    float falloff;
 });
 
 typedef float AngleRadians;
 BC_DECL ECS_COMPONENT_DECLARE(AngleRadians);
+
+typedef s32 Elevation;
+BC_DECL ECS_COMPONENT_DECLARE(Elevation);
 
 void BcElementalsImport(ecs_world_t *world);
 

@@ -178,8 +178,8 @@ void spawnActors(ecs_iter_t *it) {
             };
             // THEORY: the observer doesn't trigger here, because the entity doesn't yet have both of these components before the function ends, and the merge doesn't trigger OnSet observers as expected
             ecs_add_pair(world, newCharacter, IsOn, plane);
+            // TODO: only set position to random map coord if the prefab has a tag like `RandomizePosition`
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
-            ecs_set(world, newCharacter, Destination, {coord.x, coord.y});
             ecs_set(world, newCharacter, CreationTime, {*step});
             plane_PlaceEntity(world, plane, newCharacter, coord);
         }
