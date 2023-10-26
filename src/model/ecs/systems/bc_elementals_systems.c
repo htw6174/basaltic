@@ -64,7 +64,7 @@ void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridC
         // first step always = strength
         s32 usableStrength = roundf((float)strengthPool * (falloff / strength));
         float heightStrengthRatio = (float)heightDifference / usableStrength;
-        const float heightFalloffFactor = 4.0; //32.0;
+        const float heightFalloffFactor = 4.0;
         float limiter = fmaxf(0, heightStrengthRatio * heightFalloffFactor);
         // limiter = 0 -> limitFactor = 1
         // limiter = 4 -> limitFactor = 0.2
@@ -156,7 +156,6 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
 
         // Left side
         htw_geo_GridCoord startLeft = positions[i];
-        // FIXME: radius of 100 gives much higher hex distance than expected?
         htw_geo_GridCoord endLeft = hexLineEndPoint(startLeft, 20.0, angle[i] + (PI/2.0));
         shiftTerrainInLine(cm, startLeft, endLeft, elevation[i], shiftStrength[i].left * strengthFactor, shiftStrength[i].falloff);
 
@@ -169,12 +168,18 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
 
 void ExecuteErupt(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    Plane *plane = ecs_field(it, Plane, 2);
+    Elevation *elevation = ecs_field(it, Elevation, 2);
+    Plane *plane = ecs_field(it, Plane, 3);
     htw_ChunkMap *cm = plane->chunkMap;
 
     for (int i = 0; i < it->count; i++) {
         CellData *cell = htw_geo_getCell(cm, positions[i]);
         cell->height += 1;
+
+        float angle = rand();
+        htw_geo_GridCoord start = positions[i];
+        htw_geo_GridCoord end = hexLineEndPoint(start, 20.0, angle);
+        shiftTerrainInLine(cm, start, end, elevation[i], 4, 1.0);
     }
 }
 
@@ -221,11 +226,12 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, ExecuteErupt, Execution,
         [in] Position,
+        [in] Elevation,
         [in] Plane(up(bc.planes.IsOn)),
         [none] (bc.actors.Action, bc.actors.Action.ActionErupt)
     );
 
-    ECS_SYSTEM(world, TickSpiritPower, AdvanceHour,
+    ECS_SYSTEM(world, TickSpiritPower, AdvanceStep,
         [inout] SpiritPower,
         [none] bc.elementals.ElementalSpirit,
     );

@@ -1,17 +1,5 @@
+#define BC_COMPONENT_IMPL
 #include "basaltic_phases.h"
-
-ECS_TAG_DECLARE(Prep);
-ECS_TAG_DECLARE(Execution);
-ECS_TAG_DECLARE(Resolution);
-ECS_TAG_DECLARE(Cleanup);
-ECS_TAG_DECLARE(AdvanceHour);
-
-ECS_TAG_DECLARE(AdvanceDay);
-ECS_TAG_DECLARE(AdvanceWeek);
-ECS_TAG_DECLARE(AdvanceMonth);
-ECS_TAG_DECLARE(AdvanceYear);
-
-ECS_TAG_DECLARE(Planning);
 
 void BcPhasesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcPhases);
@@ -20,12 +8,13 @@ void BcPhasesImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, Execution);
     ECS_TAG_DEFINE(world, Resolution);
     ECS_TAG_DEFINE(world, Cleanup);
-    ECS_TAG_DEFINE(world, AdvanceHour);
+    ECS_TAG_DEFINE(world, AdvanceStep);
 
-    ECS_TAG_DEFINE(world, AdvanceDay);
-    ECS_TAG_DEFINE(world, AdvanceWeek);
-    ECS_TAG_DEFINE(world, AdvanceMonth);
-    ECS_TAG_DEFINE(world, AdvanceYear);
+    ECS_ENTITY_DEFINE(world, TickHour);
+    ECS_ENTITY_DEFINE(world, TickDay);
+    ECS_ENTITY_DEFINE(world, TickWeek);
+    ECS_ENTITY_DEFINE(world, TickMonth);
+    ECS_ENTITY_DEFINE(world, TickYear);
 
     ECS_TAG_DEFINE(world, Planning);
 
@@ -37,14 +26,15 @@ void BcPhasesImport(ecs_world_t *world) {
     ecs_add_pair(world, Resolution, EcsDependsOn, Execution);
     ecs_add_id(world, Cleanup, EcsPhase);
     ecs_add_pair(world, Cleanup, EcsDependsOn, Resolution);
-    ecs_add_id(world, AdvanceHour, EcsPhase);
-    ecs_add_pair(world, AdvanceHour, EcsDependsOn, Cleanup);
-
-    ecs_add_id(world, AdvanceDay, EcsPhase);
-    ecs_add_id(world, AdvanceWeek, EcsPhase);
-    ecs_add_id(world, AdvanceMonth, EcsPhase);
-    ecs_add_id(world, AdvanceYear, EcsPhase);
-
+    ecs_add_id(world, AdvanceStep, EcsPhase);
+    ecs_add_pair(world, AdvanceStep, EcsDependsOn, Cleanup);
     ecs_add_id(world, Planning, EcsPhase);
-    ecs_add_pair(world, Planning, EcsDependsOn, AdvanceHour);
+    ecs_add_pair(world, Planning, EcsDependsOn, AdvanceStep);
+
+    // Setup tick sources
+    ecs_set_rate(world, TickHour, 1, 0);
+    ecs_set_rate(world, TickDay, 24, TickHour);
+    ecs_set_rate(world, TickWeek, 7, TickDay);
+    ecs_set_rate(world, TickMonth, 4, TickWeek);
+    ecs_set_rate(world, TickYear, 12, TickMonth);
 }

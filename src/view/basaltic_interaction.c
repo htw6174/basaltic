@@ -265,11 +265,13 @@ void editTerrain(ecs_world_t *world, float strength) {
             offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
         }
 
+        bc_redraw_model(world);
+
         // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
-        DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
-        u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
-        dirty->chunks[dirty->count++] = chunk;
-        ecs_singleton_modified(world, DirtyChunkBuffer);
+        // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
+        // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
+        // dirty->chunks[dirty->count++] = chunk;
+        // ecs_singleton_modified(world, DirtyChunkBuffer);
     }
 }
 
@@ -298,5 +300,7 @@ void spawnPrefab(ecs_world_t *world) {
         ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
         ecs_set(modelWorld, e, CreationTime, {step});
         plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);
+
+        bc_redraw_model(world);
     }
 }

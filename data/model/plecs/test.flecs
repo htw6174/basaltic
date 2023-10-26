@@ -6,6 +6,10 @@ using bc.wildlife
 using bc.wildlife.Diet
 using bc.elementals
 
+// use with `$[name]`
+const PI = 3.141592
+const TAU = 6.283185
+
 Prefab ActorPrefab {
     - Position
     - Destination
@@ -47,22 +51,22 @@ Prefab TectonicSpiritPrefab {
 Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: 50, max: 100}
     - (RandomizeInt, PlateShiftStrength.right) {min: 50, max: 100}
-    - (RandomizeInt, PlateShiftStrength.falloff) {min: 8, max: 16}
-    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 8, max: 16}
+    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
 }
 
 Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: -100, max: -50}
     - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -50}
-    - (RandomizeInt, PlateShiftStrength.falloff) {min: 8, max: 16}
-    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 10}
+    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
 }
 
 Prefab SmallPlatesPrefab : TectonicSpiritPrefab {
     - (RandomizeInt, PlateShiftStrength.left) {min: -20, max: 20}
     - (RandomizeInt, PlateShiftStrength.right) {min: -20, max: 20}
-    - (RandomizeInt, PlateShiftStrength.falloff) {min: 6, max: 8}
-    - (RandomizeInt, AngleRadians) {min: 0, max: 6}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 6, max: 8}
+    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
 }
 
 Prefab TestPlatesPrefab : TectonicSpiritPrefab {
@@ -79,12 +83,12 @@ Prefab VolcanoSpiritPrefab {
 }
 
 faultlines_spawner1 {
-    - Spawner{prefab: CollidingPlatesPrefab, count: 0, oneShot: true}
+    - Spawner{prefab: CollidingPlatesPrefab, count: 4, oneShot: true}
     - (IsOn, Overworld)
 }
 
 faultlines_spawner2 {
-    - Spawner{prefab: SplittingPlatesPrefab, count: 0, oneShot: true}
+    - Spawner{prefab: SplittingPlatesPrefab, count: 4, oneShot: true}
     - (IsOn, Overworld)
 }
 
@@ -95,6 +99,11 @@ faultlines_spawner3 {
 
 faultlines_spawner_test {
     - Spawner{prefab: TestPlatesPrefab, count: 0, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+volcano_spawner {
+    - Spawner{prefab: VolcanoSpiritPrefab, count: 0, oneShot: true}
     - (IsOn, Overworld)
 }
 

@@ -28,6 +28,7 @@ void BcCommonImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, RandomizerDistribution);
     ECS_META_COMPONENT(world, RandomizeInt);
+    ECS_META_COMPONENT(world, RandomizeFloat);
 
     ECS_META_COMPONENT(world, ResourceFile);
 

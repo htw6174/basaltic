@@ -3,20 +3,28 @@
 
 #include "flecs.h"
 
-extern ECS_TAG_DECLARE(Prep);
-extern ECS_TAG_DECLARE(Execution);
-extern ECS_TAG_DECLARE(Resolution);
-extern ECS_TAG_DECLARE(Cleanup);
-extern ECS_TAG_DECLARE(AdvanceHour);
+#undef ECS_META_IMPL
+#undef BC_DECL
+#ifndef BC_COMPONENT_IMPL
+#define ECS_META_IMPL EXTERN
+#define BC_DECL extern
+#else
+#define BC_DECL
+#endif
 
-// Not part of the normal pipeline, these phases are run standalone when needed, in order after AdvanceHour
-extern ECS_TAG_DECLARE(AdvanceDay);
-extern ECS_TAG_DECLARE(AdvanceWeek);
-extern ECS_TAG_DECLARE(AdvanceMonth);
-extern ECS_TAG_DECLARE(AdvanceYear);
+BC_DECL ECS_TAG_DECLARE(Prep);
+BC_DECL ECS_TAG_DECLARE(Execution);
+BC_DECL ECS_TAG_DECLARE(Resolution);
+BC_DECL ECS_TAG_DECLARE(Cleanup);
+BC_DECL ECS_TAG_DECLARE(AdvanceStep);
+// AI actors plan their next move before step ends
+BC_DECL ECS_TAG_DECLARE(Planning);
 
-extern ECS_TAG_DECLARE(Planning);
-// New step begins after AI actors plan their next move
+BC_DECL ECS_ENTITY_DECLARE(TickHour);
+BC_DECL ECS_ENTITY_DECLARE(TickDay);
+BC_DECL ECS_ENTITY_DECLARE(TickWeek);
+BC_DECL ECS_ENTITY_DECLARE(TickMonth);
+BC_DECL ECS_ENTITY_DECLARE(TickYear);
 
 void BcPhasesImport(ecs_world_t *world);
 

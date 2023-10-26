@@ -1202,6 +1202,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
+    // NOTE: if this is allowed to run while the model is locked, it will crash!
+    // FIXME: need to rethink how to give instant terrain edit feedback while ensuring thread safety
     ECS_SYSTEM(world, UpdateTerrainDataTextureDirtyChunks, EcsOnUpdate,
                [in] ModelQuery,
                [inout] DataTexture,

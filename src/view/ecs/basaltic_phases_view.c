@@ -81,7 +81,7 @@ void BcviewPhasesImport(ecs_world_t *world) {
     ModelChangedPipeline = ecs_pipeline(world, {
         .query.filter.terms = {
             { .id = EcsSystem }, // Mandatory, must always match systems
-            { .id = OnModelChanged } // OR in all the phase tags you want this pipeline to run
+            { .id = OnModelChanged } // EcsOr in all the phase tags you want this pipeline to run
         }
     });
 }

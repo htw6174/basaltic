@@ -40,7 +40,15 @@ BC_DECL ECS_COMPONENT_DECLARE(Rect);
 
 ECS_STRUCT(ModelWorld, {
     ecs_world_t *world;
+    u64 lastRenderedStep;
+    bool renderOutdated;
 });
+
+#define bc_redraw_model(view_world) { \
+    ecs_singleton_get_mut(view_world, ModelWorld)->renderOutdated = true; \
+    ecs_singleton_modified(view_world, ModelWorld); \
+} \
+
 
 ECS_STRUCT(ModelQuery, {
     ecs_query_t *query;
@@ -50,8 +58,8 @@ ECS_STRUCT(QueryDesc, {
     char *expr;
 });
 
-typedef u64 ModelLastRenderedStep;
-BC_DECL ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
+//typedef u64 ModelLastRenderedStep;
+//BC_DECL ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
 
 
 

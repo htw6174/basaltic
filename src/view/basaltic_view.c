@@ -82,7 +82,9 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     ecs_progress(vc.ecsWorld, dT);
 
     if (world != NULL) {
-        if (*ecs_singleton_get(vc.ecsWorld, ModelLastRenderedStep) < world->step) {
+        ModelWorld *mw = ecs_singleton_get_mut(vc.ecsWorld, ModelWorld);
+        bool stepChanged = mw->lastRenderedStep < world->step;
+        if (stepChanged || mw->renderOutdated) {
             if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
                 // set model ecs world scope, to keep view's external tags/queries separate
                 ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
@@ -95,7 +97,9 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
                 SDL_SemPost(world->lock);
             }
         }
-        ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {world->step});
+        mw->lastRenderedStep = world->step;
+        mw->renderOutdated = false;
+        ecs_singleton_modified(vc.ecsWorld, ModelWorld);
     }
 
     // TODO: return elapsed time in ms
@@ -103,7 +107,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
 }
 
 void bc_view_onModelStart(bc_ModelData *model) {
-    ecs_singleton_set(vc.ecsWorld, ModelWorld, {model->world->ecsWorld});
+    ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world->ecsWorld, .lastRenderedStep = 0, .renderOutdated = false});
     ecs_singleton_set(vc.ecsWorld, FocusPlane, {model->world->centralPlane});
 
     // TEST: ensure that import order hasn't caused mismatched component IDs
@@ -114,8 +118,6 @@ void bc_view_onModelStart(bc_ModelData *model) {
     bc_setCameraWrapLimits(vc.ecsWorld);
 
     ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
-    // NOTE: model advances to step 1 before it becomes 'ready' (i.e. before onModelStart is called). Setting the last rendered step to 0 tells the view that model data is out of date on the next frame after model start
-    ecs_singleton_set(vc.ecsWorld, ModelLastRenderedStep, {0});
 
     bc_editorOnModelStart();
 }

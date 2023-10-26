@@ -544,12 +544,13 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
         .no_readonly = true
     });
 
-    ECS_SYSTEM(world, tickGrowth, AdvanceHour,
-               [inout] GrowthRate,
-               [inout] Group
+    ECS_SYSTEM(world, tickGrowth, AdvanceStep,
+        [inout] GrowthRate,
+        [inout] Group
     );
+    ecs_set_tick_source(world, tickGrowth, TickDay);
 
-    ECS_SYSTEM(world, tickStamina, AdvanceHour,
-               [inout] Condition
+    ECS_SYSTEM(world, tickStamina, AdvanceStep,
+        [inout] Condition
     );
 }

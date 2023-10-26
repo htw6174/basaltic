@@ -70,7 +70,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_META_COMPONENT(world, QueryDesc);
-    ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
+    //ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);
 
     // Interface
     ECS_TAG_DEFINE(world, Previous);
@@ -155,8 +155,7 @@ void BcviewImport(ecs_world_t *world) {
     /* Setup singleton defaults */
     // TODO: most of the singleton initialization moved to script. Play around with it, figure out if the rest can be moved / should be returned
 
-    //ecs_singleton_add(world, ModelWorld);
-    ecs_singleton_set(world, ModelLastRenderedStep, {0});
+    //ecs_singleton_set(world, ModelLastRenderedStep, {0});
 
     ecs_singleton_set(world, Pointer, {0});
 

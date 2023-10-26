@@ -48,6 +48,13 @@ ECS_STRUCT(RandomizeInt, {
     RandomizerDistribution distribution;
 });
 
+ECS_STRUCT(RandomizeFloat, {
+    double min;
+    double max;
+    double mean;
+    RandomizerDistribution distribution;
+});
+
 ECS_STRUCT(ResourceFile, {
     // update whenever file is read; if modify time on disk is > this, should reload file
     time_t accessTime;

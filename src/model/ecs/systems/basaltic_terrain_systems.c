@@ -45,10 +45,10 @@ void chunkUpdate(Plane *plane, u64 step, size_t chunkIndex) {
         bool isGrowingSeason = realTemp > 0.0 && realTemp < 3000.0;
 
         // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
-        if (htw_randRange(256 * 128) < cell->surfacewater) {
-            // "rainstorm"; if less than 0 (tracking number of dry hours), then start from 0
-            cell->groundwater = min_int(max_int(cell->surfacewater, cell->groundwater + cell->surfacewater), 512);
-        }
+        // if (htw_randRange(256 * 128) < cell->surfacewater) {
+        //     // "rainstorm"; if less than 0 (tracking number of dry hours), then start from 0
+        //     cell->groundwater = min_int(max_int(cell->surfacewater, cell->groundwater + cell->surfacewater), 512);
+        // }
 
         bool isWaterAvailable = cell->groundwater > 0;
 
@@ -99,6 +99,7 @@ void BcSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
 
-    ECS_SYSTEM(world, TerrainSeasonalStep, AdvanceHour, Plane);
+    ECS_SYSTEM(world, TerrainSeasonalStep, AdvanceStep, Plane);
+    ecs_set_tick_source(world, TerrainSeasonalStep, TickDay);
     ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, bc.planes.CellRoot);
 }

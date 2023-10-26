@@ -32,4 +32,7 @@ bcview {
         - Color {0.7, 0.7, 0.7, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.elementals.ElementalSpirit"}
     }
+
+    // TEST: disable shadow pass by default
+    phases.OnPassShadow :- Disabled
 }
