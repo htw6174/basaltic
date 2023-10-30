@@ -51,7 +51,7 @@ add_subdirectory(view)
 #endif()
 
 # SDL2_INCLUDE_DIRS and SDL2_LIBRARIES are defined in /usr/lib/cmake/SDL2/SDL2Config.cmake (included with most SDL installations)
-target_include_directories(basaltic_engine PRIVATE ${LIBS} include ${LIBS}/htw-libs ${LIBS}/cimgui model view ${SDL2_INCLUDE_DIRS})
+target_include_directories(basaltic_engine PRIVATE ${LIBS} include ${LIBS}/htw-libs/include ${LIBS}/cimgui model view ${SDL2_INCLUDE_DIRS})
 
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
 target_link_libraries(basaltic_engine PRIVATE -lm htw basaltic_model basaltic_view SDL2::SDL2 SDL2::SDL2main ${IMGUI_LIB})
