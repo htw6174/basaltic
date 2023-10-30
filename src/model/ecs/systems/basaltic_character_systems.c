@@ -45,7 +45,7 @@ void egoBehaviorWander(ecs_iter_t *it) {
     const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
 
     for (int i = 0; i < it->count; i++) {
-        destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[htw_randRange(HEX_DIRECTION_COUNT)]);
+        destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
     }
 }
 
@@ -63,7 +63,7 @@ void bc_setDescenderDestinations(ecs_iter_t *it) {
             htw_geo_GridCoord evalCoord = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[d]);
             CellData *cell = (CellData*)htw_geo_getCell(tm->chunkMap, evalCoord);
             if (cell->height < lowestElevation) lowestDirection = d;
-            lowestElevation = min_int(lowestElevation, cell->height);
+            lowestElevation = MIN(lowestElevation, cell->height);
         }
         if (lowestDirection == -1) {
             continue;
@@ -173,14 +173,15 @@ void spawnActors(ecs_iter_t *it) {
             ecs_entity_t newCharacter = bc_instantiateRandomizer(world, sp.prefab);
             // TODO: do position randomization by adding randomizer to prefab?
             htw_geo_GridCoord coord = {
-                .x = htw_randRange(maxX),
-                .y = htw_randRange(maxY)
+                .x = htw_randIndex(maxX),
+                .y = htw_randIndex(maxY)
             };
             // THEORY: the observer doesn't trigger here, because the entity doesn't yet have both of these components before the function ends, and the merge doesn't trigger OnSet observers as expected
             ecs_add_pair(world, newCharacter, IsOn, plane);
             // TODO: only set position to random map coord if the prefab has a tag like `RandomizePosition`
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
             ecs_set(world, newCharacter, CreationTime, {*step});
+            // TODO: if instance has Elevation, set to current cell's height
             plane_PlaceEntity(world, plane, newCharacter, coord);
         }
         if (sp.oneShot) {
@@ -241,7 +242,7 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
             }
             // if no cell with more than scraps, move randomly
             if (bestAvailable < tolerance) {
-                s32 dir = htw_randRange(HEX_DIRECTION_COUNT);
+                s32 dir = htw_randIndex(HEX_DIRECTION_COUNT);
                 bestDirection = htw_geo_cubeDirections[dir];
             }
 
@@ -290,7 +291,7 @@ void egoBehaviorPredator(ecs_iter_t *it) {
         }
         if (!inPersuit) {
             // move randomly
-            destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_hexGridDirections[htw_randRange(HEX_DIRECTION_COUNT)]);
+            destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
         }
         ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }
@@ -325,19 +326,19 @@ void executeFeed(ecs_iter_t *it) {
         for (int i = 0; i < it->count; i++) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
             s32 required = groups[i].count; // TODO: multiply by size?
-            s32 consumed = min_int(cell->understory, required);
+            s32 consumed = MIN(cell->understory, required);
             cell->understory -= consumed;
             // Restore up to half of max each meal TODO best rounding method?
             s32 restored = roundf( ((float)conditions[i].maxStamina / 2) * ((float)consumed / required) );
-            conditions[i].stamina = min_int(conditions[i].stamina + restored, conditions[i].maxStamina);
+            conditions[i].stamina = MIN(conditions[i].stamina + restored, conditions[i].maxStamina);
         }
     } else {
         for (int i = 0; i < it->count; i++) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
-            s32 consumed = min_int(cell->understory, 1);
+            s32 consumed = MIN(cell->understory, 1);
             cell->understory -= consumed;
             s32 restored = conditions[i].maxStamina / 2; // Restore half of max each meal
-            conditions[i].stamina = min_int(conditions[i].stamina + restored, conditions[i].maxStamina);
+            conditions[i].stamina = MIN(conditions[i].stamina + restored, conditions[i].maxStamina);
         }
     }
 }
@@ -352,7 +353,7 @@ void resolveHealth(ecs_iter_t *it) {
             conditions[i].health -= groups[i].count;
         } else if (conditions[i].stamina > 0) {
             // heal if not malnourished
-            conditions[i].health = min_int(conditions[i].health + 1, conditions[i].maxHealth);
+            conditions[i].health = MIN(conditions[i].health + 1, conditions[i].maxHealth);
         }
 
         // handle group member death
@@ -427,7 +428,7 @@ void tickStamina(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         s32 maxStam = conditions[i].maxStamina;
         s32 newStam = conditions[i].stamina - 1;
-        conditions[i].stamina = max_int(-maxStam, newStam);
+        conditions[i].stamina = MAX(-maxStam, newStam);
     }
 }
 

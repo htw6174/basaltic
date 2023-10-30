@@ -45,28 +45,43 @@ Prefab TectonicSpiritPrefab {
     - SpiritPower {maxValue: 65535}
     - SpiritLifetime {youngSteps: 40, matureSteps: 200, oldSteps: 40}
     - PlateShiftStrength {left: 50, right: -50}
-    - AngleRadians {0}
+    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
 }
 
-Prefab CollidingPlatesPrefab : TectonicSpiritPrefab {
-    - (RandomizeInt, PlateShiftStrength.left) {min: 50, max: 100}
-    - (RandomizeInt, PlateShiftStrength.right) {min: 50, max: 100}
+// Everest is 8800 meters high = 88 height units
+Prefab EverestPrefab : TectonicSpiritPrefab {
+    - SpiritLifetime {youngSteps: 100, matureSteps: 10, oldSteps: 100}
+    - (RandomizeInt, PlateShiftStrength.left) {min: 70, max: 110}
+    - (RandomizeInt, PlateShiftStrength.right) {min: 70, max: 110}
     - (RandomizeFloat, PlateShiftStrength.falloff) {min: 8, max: 16}
-    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
 }
 
-Prefab SplittingPlatesPrefab : TectonicSpiritPrefab {
-    - (RandomizeInt, PlateShiftStrength.left) {min: -100, max: -50}
-    - (RandomizeInt, PlateShiftStrength.right) {min: -100, max: -50}
-    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 10}
-    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
+// Marinas trench is 11000 meters deep = 110 height units
+Prefab OceansPrefab : TectonicSpiritPrefab {
+    - (RandomizeInt, PlateShiftStrength.left) {min: -128, max: -90}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -128, max: -90}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min:12, max: 16}
 }
 
-Prefab SmallPlatesPrefab : TectonicSpiritPrefab {
-    - (RandomizeInt, PlateShiftStrength.left) {min: -20, max: 20}
-    - (RandomizeInt, PlateShiftStrength.right) {min: -20, max: 20}
-    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 6, max: 8}
-    - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
+Prefab MountainsPrefab : TectonicSpiritPrefab {
+    - SpiritLifetime {youngSteps: 40, matureSteps: 100, oldSteps: 40}
+    - (RandomizeInt, PlateShiftStrength.left) {min: 20, max: 40}
+    - (RandomizeInt, PlateShiftStrength.right) {min: 20, max: 40}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 16}
+}
+
+Prefab SeasPrefab : TectonicSpiritPrefab {
+    - SpiritLifetime {youngSteps: 20, matureSteps: 50, oldSteps: 20}
+    - (RandomizeInt, PlateShiftStrength.left) {min: -30, max: -10}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -30, max: -10}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 8}
+}
+
+Prefab CliffsPrefab : TectonicSpiritPrefab {
+    - SpiritLifetime {youngSteps: 20, matureSteps: 20, oldSteps: 20}
+    - (RandomizeInt, PlateShiftStrength.left) {min: -10, max: 20}
+    - (RandomizeInt, PlateShiftStrength.right) {min: -10, max: 20}
+    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 8}
 }
 
 Prefab TestPlatesPrefab : TectonicSpiritPrefab {
@@ -80,25 +95,32 @@ Prefab VolcanoSpiritPrefab {
     - OVERRIDE|Position
     - OVERRIDE|Elevation
     - SpiritPower {maxValue: 65535}
-}
-
-faultlines_spawner1 {
-    - Spawner{prefab: CollidingPlatesPrefab, count: 4, oneShot: true}
     - (IsOn, Overworld)
 }
 
-faultlines_spawner2 {
-    - Spawner{prefab: SplittingPlatesPrefab, count: 4, oneShot: true}
+
+everest_spawner {
+    - Spawner{prefab: EverestPrefab, count: 2, oneShot: true}
     - (IsOn, Overworld)
 }
 
-faultlines_spawner3 {
-    - Spawner{prefab: SmallPlatesPrefab, count: 24, oneShot: true}
+oceans_spawner {
+    - Spawner{prefab: OceansPrefab, count: 2, oneShot: true}
     - (IsOn, Overworld)
 }
 
-faultlines_spawner_test {
-    - Spawner{prefab: TestPlatesPrefab, count: 0, oneShot: true}
+mountains_spawner {
+    - Spawner{prefab: MountainsPrefab, count: 16, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+seas_spawner {
+    - Spawner{prefab: SeasPrefab, count: 24, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+cliffs_spawner {
+    - Spawner{prefab: CliffsPrefab, count: 24, oneShot: true}
     - (IsOn, Overworld)
 }
 

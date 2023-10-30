@@ -285,7 +285,7 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
             // create 3 new verts per cell for the 'home tri'
             for (int v = 0; v < 3; v++) {
                 vec2 pos = hexagonPositions[v];
-                int neighborhood = max_int(0, v - 1);
+                int neighborhood = MAX(0, v - 1);
                 hexmapVertexData newVertex = {
                     .position = vec2Add(pos, cellPos),
                     .neighborWeight = neighborhood,
@@ -476,7 +476,7 @@ Mesh createHexmapMesh(void) {
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 vec2 pos = hexagonPositions[v];
-                int neighborhood = max_int(0, v - 1);
+                int neighborhood = MAX(0, v - 1);
                 hexmapVertexData newVertex = {
                     .position = vec2Add(pos, (vec2){{posX, posY}}),
                     .neighborWeight = neighborhood,
@@ -1195,6 +1195,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
+    // Only need to run when model step advances
     ECS_SYSTEM(world, UpdateTerrainDataTexture, OnModelChanged,
                [in] ModelQuery,
                [inout] DataTexture,
@@ -1202,9 +1203,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
-    // NOTE: if this is allowed to run while the model is locked, it will crash!
-    // FIXME: need to rethink how to give instant terrain edit feedback while ensuring thread safety
-    ECS_SYSTEM(world, UpdateTerrainDataTextureDirtyChunks, EcsOnUpdate,
+    // TODO: unused for now. Ideally can use UpdateTerrainDataTexture on step change, and this on single edits
+    ECS_SYSTEM(world, UpdateTerrainDataTextureDirtyChunks, OnModelChanged,
                [in] ModelQuery,
                [inout] DataTexture,
                [inout] DirtyChunkBuffer($),

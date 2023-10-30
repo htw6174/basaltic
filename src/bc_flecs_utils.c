@@ -33,9 +33,9 @@ ecs_primitive_kind_t bc_meta_cursorToPrim(ecs_meta_cursor_t *cursor, ecs_entity_
         // Move cursor to field
         char *fieldPath = ecs_get_path(cursor->world, component, field);
         ecs_meta_dotmember(cursor, fieldPath);
-        free(fieldPath);
+        ecs_os_free(fieldPath);
     }
-    // Ensure meta type matches field type
+    // Can be uesd to ensure meta type matches field type
     ecs_entity_t type = ecs_meta_get_type(cursor);
     return ecs_get(cursor->world, type, EcsPrimitive)->kind;
 }
@@ -51,10 +51,10 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
     s32 cur = -1;
     ecs_entity_t pair;
 
-    while (-1 != (cur = ecs_search_offset(world, prefab_table, cur + 1, wildcard, &pair))){
+    while (-1 != (cur = ecs_search_relation(world, prefab_table, cur + 1, wildcard, EcsIsA, 0, 0, &pair, 0))){
         // Get value based on randomizer params
         const RandomizeInt *r = ECS_CAST(RandomizeInt*, ecs_get_id(world, prefab, pair));
-        s32 value = htw_randRange(r->max - r->min) + r->min;
+        s32 value = htw_randIntRange(r->max, r->min);
 
         ecs_entity_t field = ecs_pair_second(world, pair);
         ecs_entity_t component;
@@ -66,7 +66,7 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
             ecs_err(
                 "Error instantiating prefab %s: RandomizeInt cannot target field of type %s\n",
                 ecs_get_name(world, prefab),
-                    ecs_get_name(world, primKind)
+                ecs_get_name(world, primKind)
             );
         }
     }
@@ -75,11 +75,10 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
     wildcard = ecs_pair(ecs_id(RandomizeFloat), EcsWildcard);
     cur = -1;
 
-    while (-1 != (cur = ecs_search_offset(world, prefab_table, cur + 1, wildcard, &pair))){
+    while (-1 != (cur = ecs_search_relation(world, prefab_table, cur + 1, wildcard, EcsIsA, 0, 0, &pair, 0))){
         // Get value based on randomizer params
         const RandomizeFloat *r = ECS_CAST(RandomizeFloat*, ecs_get_id(world, prefab, pair));
-        float range = r->max - r->min;
-        float value = (htw_randNormal() * range) + r->min;
+        float value = htw_randRange(r->max, r->min);
 
         ecs_entity_t field = ecs_pair_second(world, pair);
         ecs_entity_t component;
@@ -91,7 +90,7 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
             ecs_err(
                 "Error instantiating prefab %s: RandomizeFloat cannot target field of type %s\n",
                 ecs_get_name(world, prefab),
-                    ecs_get_name(world, primKind)
+                ecs_get_name(world, primKind)
             );
         }
     }

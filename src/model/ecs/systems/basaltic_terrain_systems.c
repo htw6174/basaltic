@@ -69,7 +69,7 @@ void chunkUpdate(Plane *plane, u64 step, size_t chunkIndex) {
             // grow new vegetation
             cell->understory += 1;
             float canopyGrowthProb = plane_CanopyGrowthRate(plane, cellCoord);
-            cell->canopy += htw_randRange(256) < (canopyGrowthProb * 256.0) ? 1 : 0;
+            cell->canopy += htw_randIndex(256) < (canopyGrowthProb * 256.0) ? 1 : 0;
         } else {
             // Remove groundwater according to evaporation
             cell->groundwater--;

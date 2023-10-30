@@ -1,6 +1,7 @@
 #include "bc_elementals_systems.h"
 #include "basaltic_phases.h"
 #include "basaltic_components.h"
+#include <math.h>
 
 HexDirection getDirLeft(HexDirection dir);
 HexDirection getDirRight(HexDirection dir);
@@ -71,14 +72,44 @@ void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridC
         // limiter = MAX -> limitFactor => 0
         float limitFactor = 1.0 / (limiter + 1.0);
         // Always round away from 0 so that the strengthPool always decreases
-        s32 expendedStrength = strength > 0 ?
-            max_int(1, usableStrength * limitFactor) :
-            min_int(-1, usableStrength * limitFactor);
+        s32 expendedStrength = strength > 0 ? ceil(usableStrength * limitFactor) : floor(usableStrength * limitFactor);
         cell->height += expendedStrength;
         // only subtract as much strength as was used
         strengthPool -= abs(expendedStrength);
         i++;
     }
+}
+
+void landslideParticle(htw_ChunkMap *cm, htw_geo_GridCoord start) {
+    htw_geo_GridCoord pos = start;
+
+    // Get all cells around current position
+    // If one of them is at least 5 down from current, move there and repeat
+    // Otherwise, increase height here by 1 and end
+    //const int MAX_SLOPE = 3;
+    int maxSlope = htw_randIntRange(2, 6);
+    bool sliding = true;
+    while(sliding) {
+        CellData *cell = htw_geo_getCell(cm, pos);
+        int greatestDrop = maxSlope;
+        htw_geo_GridCoord candidate = pos;
+        for (int i = 0; i < HEX_DIR_COUNT; i++) {
+            htw_geo_GridCoord sample = POSITION_IN_DIRECTION(pos, i);
+            CellData *sampleCell = htw_geo_getCell(cm, sample);
+            int drop = cell->height - sampleCell->height;
+            if (drop > greatestDrop) {
+                candidate = sample;
+                greatestDrop = drop;
+            }
+        }
+        sliding = greatestDrop > maxSlope;
+        pos = candidate;
+    }
+
+    CellData *cell = htw_geo_getCell(cm, pos);
+    cell->height += 1;
+
+    //htw_geo_GridCoord forward = POSITION_IN_DIRECTION(pos, radToHexDir(angle));
 }
 
 void EgoBehaviorTectonic(ecs_iter_t *it) {
@@ -91,10 +122,10 @@ void EgoBehaviorTectonic(ecs_iter_t *it) {
         // alternate between moving and shifting
         if (step % 2) {
             // move in similar direction
-            if (htw_randRange(2) == 0) {
+            if (htw_coinFlip()) {
                 angle[i] += PI/180.0;
             }
-            dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i] + htw_randRange(2)));
+            dest[i] = POSITION_IN_DIRECTION(pos[i], radToHexDir(angle[i] + htw_coinFlip()));
             ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
         } else {
             ecs_add_pair(it->world, it->entities[i], Action, ActionShiftPlates);
@@ -106,8 +137,8 @@ void EgoBehaviorVolcano(ecs_iter_t *it) {
     SpiritPower *sp = ecs_field(it, SpiritPower, 1);
 
     for (int i = 0; i < it->count; i++) {
-        if (sp[i].value >= 100) {
-            sp[i].value -= 100;
+        if (sp[i].value >= 1) {
+            sp[i].value -= 1;
             ecs_add_pair(it->world, it->entities[i], Action, ActionErupt);
         } else {
             ecs_add_pair(it->world, it->entities[i], Action, ActionIdle);
@@ -151,7 +182,7 @@ void ExecuteShiftPlates(ecs_iter_t *it) {
         CellData *c = htw_geo_getCell(cm, positions[i]);
         s32 cellHeight = c->height;
         s32 diff = cellHeight - elevation[i];
-        diff = min_int(max_int(-1, diff), 1);
+        diff = CLAMP(diff, -1, 1);
         elevation[i] += diff;
 
         // Left side
@@ -174,12 +205,11 @@ void ExecuteErupt(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         CellData *cell = htw_geo_getCell(cm, positions[i]);
-        cell->height += 1;
 
-        float angle = rand();
         htw_geo_GridCoord start = positions[i];
-        htw_geo_GridCoord end = hexLineEndPoint(start, 20.0, angle);
-        shiftTerrainInLine(cm, start, end, elevation[i], 4, 1.0);
+        //htw_geo_GridCoord end = hexLineEndPoint(start, 20.0, angle);
+        //shiftTerrainInLine(cm, start, end, elevation[i], 4, 1.0);
+        landslideParticle(cm, start);
     }
 }
 
@@ -187,7 +217,8 @@ void TickSpiritPower(ecs_iter_t *it) {
     SpiritPower *sp = ecs_field(it, SpiritPower, 1);
 
     for (int i = 0; i < it->count; i++) {
-        sp[i].value = min_int(sp[i].value + (1 * it->delta_time), sp[i].maxValue);
+        int gain = sp[i].value + it->delta_time;
+        sp[i].value = MIN(gain, sp[i].maxValue);
     }
 }
 

@@ -401,7 +401,7 @@ void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selec
     ImGuiTextFilter_Draw(&qc->filter, "Filter", 0);
 
     igInputInt("Results per page", &qc->queryPageLength, 1, 1, 0);
-    qc->queryPageLength = max_int(qc->queryPageLength, 10);
+    qc->queryPageLength = MAX(qc->queryPageLength, 10);
 
     if (qc->query != NULL) {
         ecs_iter_t it = ecs_query_iter(world, qc->query);
@@ -835,7 +835,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     float height = igGetTextLineHeightWithSpacing() * (pageLength + 1);
     igBeginChild_Str("Entity List", (ImVec2){size.x, height}, true, ImGuiWindowFlags_HorizontalScrollbar);
     u32 resultsCount = 0;
-    *pageNumber = max_int(1, *pageNumber);
+    *pageNumber = MAX(1, *pageNumber);
     u32 firstResult = pageLength * (*pageNumber - 1);
     u32 lastResult = firstResult + pageLength;
 
@@ -882,7 +882,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
         igSameLine(0, -1);
         igSliderInt("Page", pageNumber, 1, pageCount, NULL, ImGuiSliderFlags_AlwaysClamp);
     }
-    *pageNumber = max_int(1, min_int(*pageNumber, pageCount));
+    *pageNumber = CLAMP(*pageNumber, 1, pageCount);
     //igEndChild(); // List Window
     
     return anyClicked;

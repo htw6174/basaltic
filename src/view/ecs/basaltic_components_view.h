@@ -58,9 +58,6 @@ ECS_STRUCT(QueryDesc, {
     char *expr;
 });
 
-//typedef u64 ModelLastRenderedStep;
-//BC_DECL ECS_COMPONENT_DECLARE(ModelLastRenderedStep);
-
 
 
 /* User Interface */
