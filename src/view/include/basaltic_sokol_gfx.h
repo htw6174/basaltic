@@ -5,11 +5,11 @@
 #include "sokol_gfx.h"
 #include "ccVector.h"
 
-void bc_glCheck(void);
+void bc_gfxCheck(void);
 
 void bc_sg_setup(void);
 
-uint32_t bc_sg_getImageGluint(sg_image image);
+uint32_t bc_sg_getImageGfxApiId(sg_image image);
 
 /**
  * @brief ...

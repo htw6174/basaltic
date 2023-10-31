@@ -4,3 +4,6 @@
 [submodule "sokol"]
 	path = libs/sokol
 	url = https://github.com/floooh/sokol.git
+[submodule "libs/cimgui"]
+	path = libs/cimgui
+	url = https://github.com/cimgui/cimgui.git

@@ -201,8 +201,8 @@ bc_EngineSettings *loadEngineConfig(char *path) {
     // TODO: use path to load settings from file
     bc_EngineSettings *engineConfig = calloc(1, sizeof(bc_EngineSettings));
      *engineConfig = (bc_EngineSettings){
-        .frameRateLimit = 120, // TODO: figure out why changing this doesn't increase framerate above 60
-        .tickRateLimit = 60,
+        .frameRateLimit = 120,
+        .tickRateLimit = 100,
     };
     return engineConfig;
 }

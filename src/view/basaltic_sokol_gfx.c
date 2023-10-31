@@ -4,7 +4,11 @@
 #include "stb_image.h"
 
 #define SOKOL_IMPL
+#ifdef EMSCRIPTEN
+#define SOKOL_GLES3
+#else
 #define SOKOL_GLCORE33
+#endif
 #define SOKOL_NO_DEPRECATED
 #ifdef DEBUG
 #define SOKOL_DEBUG
@@ -12,12 +16,7 @@
 #include "sokol_gfx.h"
 #include "sokol_log.h"
 
-void bc_glCheck(void) {
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR) {
-        printf("GL ERROR: %x\n", err);
-    }
-}
+#ifdef SOKOL_GLCORE33
 
 #ifndef _WIN32
 // FIXME: compiler error on windows
@@ -25,11 +24,46 @@ void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum se
     if (severity > GL_DEBUG_SEVERITY_NOTIFICATION) {
         // TODO: pretty print the source, type, and severity. Maybe allow configuring severity threshold?
         fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-                ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-                type, severity, message );
+                 ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+                 type, severity, message );
     }
     //assert(severity != GL_DEBUG_SEVERITY_HIGH);
 }
+#endif
+
+void bc_gfxCheck(void) {
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        printf("GL ERROR: %x\n", err);
+    }
+}
+
+uint32_t bc_sg_getImageGfxApiId(sg_image image) {
+    _sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
+    return img->gl.tex[0];
+}
+
+#elif defined SOKOL_GLES3
+void bc_gfxCheck(void) {
+    // TODO: check for WebGPU errors
+}
+
+uint32_t bc_sg_getImageGfxApiId(sg_image image) {
+    // FIXME: wgpu textures are opaque pointers, instead of uints like OpenGL, making this method incompatible across APIs
+    _sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
+    //return img->wgpu.tex;
+    return 0;
+}
+
+#else
+void bc_gfxCheck(void) {
+    // TODO: message for unknown backend
+}
+
+uint32_t bc_sg_getImageGfxApiId(sg_image image) {
+    return 0
+}
+
 #endif
 
 void bc_sg_setup(void) {
@@ -41,11 +75,6 @@ void bc_sg_setup(void) {
 
     //glEnable(GL_DEBUG_OUTPUT);
     //glDebugMessageCallback(MessageCallback, 0);
-}
-
-uint32_t bc_sg_getImageGluint(sg_image image) {
-    _sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
-    return img->gl.tex[0];
 }
 
 vec3 bc_sphereToCartesian(float azimuth, float inclination, float radius) {

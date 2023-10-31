@@ -62,7 +62,7 @@ static sg_shader_desc terrainShadowShaderDescription = {
     },
     .vs.samplers[0] = {
         .used = true,
-        .sampler_type = SG_SAMPLERTYPE_SAMPLE,
+        .sampler_type = SG_SAMPLERTYPE_FILTERING,
     },
     .vs.image_sampler_pairs[0] = {
         .used = true,
@@ -124,7 +124,7 @@ static sg_shader_desc terrainShaderDescription = {
     },
     .vs.samplers[0] = {
         .used = true,
-        .sampler_type = SG_SAMPLERTYPE_SAMPLE,
+        .sampler_type = SG_SAMPLERTYPE_FILTERING,
     },
     .vs.image_sampler_pairs[0] = {
         .used = true,

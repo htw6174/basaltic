@@ -159,8 +159,8 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     if (model == NULL) {
         igText("Generation Settings");
 
-        igSliderInt("(in chunks)##chunkWidth", &ec.worldChunkWidth, 1, 16, "Width: %u", 0);
-        igSliderInt("(in chunks)##chunkHeight", &ec.worldChunkHeight, 1, 16, "Height: %u", 0);
+        igSliderInt("(in chunks)##chunkWidth", (int*)&ec.worldChunkWidth, 1, 16, "Width: %u", 0);
+        igSliderInt("(in chunks)##chunkHeight", (int*)&ec.worldChunkHeight, 1, 16, "Height: %u", 0);
         igText("World generation seed:");
         igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
 
@@ -187,7 +187,11 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         igValue_Uint("Logic step", world->step);
         // TODO: convert step to date and time (1 step/hour)
         dateTimeInspector(world->step);
-        igSliderInt("Min Tick Duration", &model->tickInterval, 0, 100, "%d", 0);
+        igPushItemWidth(200);
+
+        // Tick rate slider
+        igSliderInt("Min Tick Duration", (int*)&model->tickInterval, 0, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+        igPopItemWidth();
 
         bc_WorldCommand reusedCommand = {0};
 

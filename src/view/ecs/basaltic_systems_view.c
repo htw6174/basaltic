@@ -118,11 +118,11 @@ static sg_shader_desc lightingShaderDescription = {
     .fs.samplers = {
         [0] = {
             .used = true,
-            .sampler_type = SG_SAMPLERTYPE_SAMPLE
+            .sampler_type = SG_SAMPLERTYPE_FILTERING
         },
         [1] = {
             .used = true,
-            .sampler_type = SG_SAMPLERTYPE_COMPARE
+            .sampler_type = SG_SAMPLERTYPE_COMPARISON
         }
     },
     .fs.image_sampler_pairs = {
@@ -174,7 +174,7 @@ static sg_shader_desc finalShaderDescription = {
     .fs.samplers = {
         [0] = {
             .used = true,
-            .sampler_type = SG_SAMPLERTYPE_SAMPLE
+            .sampler_type = SG_SAMPLERTYPE_FILTERING
         }
     },
     .fs.image_sampler_pairs = {
