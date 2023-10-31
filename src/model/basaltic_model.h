@@ -11,6 +11,7 @@
 typedef struct {
     bc_WorldState *world;
     bc_CommandBuffer processingBuffer;
+    u32 tickInterval;
     bool advanceSingleStep;
     bool autoStep;
 } bc_ModelData;

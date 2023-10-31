@@ -54,7 +54,19 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
     while (-1 != (cur = ecs_search_relation(world, prefab_table, cur + 1, wildcard, EcsIsA, 0, 0, &pair, 0))){
         // Get value based on randomizer params
         const RandomizeInt *r = ECS_CAST(RandomizeInt*, ecs_get_id(world, prefab, pair));
-        s32 value = htw_randIntRange(r->max, r->min);
+        s32 value;
+        switch (r->distribution) {
+            case RAND_DISTRIBUTION_UNIFORM:
+                value = htw_randIntRange(r->min, r->max);
+                break;
+            case RAND_DISTRIBUTION_NORMAL:
+                value = htw_randPERT(r->min, r->max, r->mean);
+                break;
+            case RAND_DISTRIBUTION_EXPONENTIAL:
+                // TODO
+                value = 0;
+                break;
+        }
 
         ecs_entity_t field = ecs_pair_second(world, pair);
         ecs_entity_t component;
@@ -78,7 +90,19 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
     while (-1 != (cur = ecs_search_relation(world, prefab_table, cur + 1, wildcard, EcsIsA, 0, 0, &pair, 0))){
         // Get value based on randomizer params
         const RandomizeFloat *r = ECS_CAST(RandomizeFloat*, ecs_get_id(world, prefab, pair));
-        float value = htw_randRange(r->max, r->min);
+        float value;
+        switch (r->distribution) {
+            case RAND_DISTRIBUTION_UNIFORM:
+                value = htw_randRange(r->min, r->max);
+                break;
+            case RAND_DISTRIBUTION_NORMAL:
+                value = htw_randPERT(r->min, r->max, r->mean);
+                break;
+            case RAND_DISTRIBUTION_EXPONENTIAL:
+                // TODO
+                value = 0;
+                break;
+        }
 
         ecs_entity_t field = ecs_pair_second(world, pair);
         ecs_entity_t component;

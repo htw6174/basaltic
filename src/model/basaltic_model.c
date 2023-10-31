@@ -34,7 +34,6 @@ int bc_model_start(void* in) {
     bc_ModelThreadInput *threadInput = (bc_ModelThreadInput*)in;
 
     volatile bc_ProcessState *threadState = threadInput->threadState;
-    Uint32 interval = threadInput->interval;
     bc_CommandBuffer inputBuffer = threadInput->inputBuffer;
     bc_ModelSetupSettings *modelSettings = threadInput->modelSettings;
     bc_ModelData **modelDataRef = threadInput->modelDataRef;
@@ -43,6 +42,7 @@ int bc_model_start(void* in) {
     *modelData = (bc_ModelData){
         .world = bc_createWorldState(modelSettings->width, modelSettings->height, modelSettings->seed),
         .processingBuffer = bc_createCommandBuffer(bc_commandBufferMaxCommandCount, bc_commandBufferMaxArenaSize),
+        .tickInterval = threadInput->interval,
         .advanceSingleStep = false,
         .autoStep = false,
     };
@@ -52,15 +52,15 @@ int bc_model_start(void* in) {
     *threadInput->isModelDataReady = true;
 
     while (*threadState == BC_PROCESS_STATE_RUNNING) {
-        Uint64 startTime = SDL_GetTicks64(); // TODO: use something other than SDL for timing, so the dependency can be removed
+        Uint64 startTime = SDL_GetTicks64(); // TODO: use something other than SDL for timing, so the dependency can be removed?
 
         bc_doLogicTick(modelData, inputBuffer);
 
         // delay until end of frame
         Uint64 endTime = SDL_GetTicks64();
         Uint64 duration = endTime - startTime;
-        if (duration < interval) {
-            SDL_Delay(interval - duration);
+        if (duration < modelData->tickInterval) {
+            SDL_Delay(modelData->tickInterval - duration);
         }
     }
 

@@ -27,8 +27,6 @@ typedef struct {
 
 static void doWorldStep(bc_WorldState *world);
 
-static void revealMap(ecs_world_t *world, htw_ChunkMap *cm, ecs_entity_t character);
-
 bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedString) {
     bc_WorldState *newWorld = malloc(sizeof(bc_WorldState));
     newWorld->seedString = calloc(BC_MAX_SEED_LENGTH, sizeof(char));
@@ -209,43 +207,3 @@ static void doWorldStep(bc_WorldState *world) {
     // ecs_readonly_end(world->ecsWorld);
     // ecs_readonly_begin(world->ecsWorld);
 }
-
-/*
-static void editMap(ecs_world_t *world, bc_TerrainEditCommand *terrainEdit) {
-    // TODO: handle brush modes, sizes
-    htw_ChunkMap *cm = ecs_get(world, terrainEdit->terrain, Plane)->chunkMap;
-    bc_CellData *cell = cm->chunks[terrainEdit->chunkIndex].cellData;
-    cell = &cell[terrainEdit->cellIndex];
-    switch (terrainEdit->editType) {
-        case BC_MAP_EDIT_MOUNTAIN:
-            htw_geo_GridCoord coord = htw_geo_chunkAndCellToGridCoordinates(cm, terrainEdit->chunkIndex, terrainEdit->cellIndex);
-            bc_wobbleLine(cm, coord, 128, 64);
-            break;
-        case BC_MAP_EDIT_ADD:
-            cell->height += terrainEdit->value;
-            break;
-    }
-}
-
-static void moveCharacter(ecs_world_t *world, bc_CharacterMoveCommand *characterMove) {
-    htw_ChunkMap *cm = ecs_get(world, characterMove->terrain, Plane)->chunkMap;
-    htw_geo_GridCoord destCoord = htw_geo_chunkAndCellToGridCoordinates(cm, characterMove->chunkIndex, characterMove->cellIndex);
-
-    // TEST: handle this with filters instead of specific entity
-    ecs_filter_t *pcFilter = ecs_filter(world, {
-        .terms = {
-            {ecs_id(bc_GridDestination)},
-            {ecs_pair(IsOn, EcsAny)},
-            {PlayerControlled}
-        }
-    });
-    ecs_iter_t it = ecs_filter_iter(world, pcFilter);
-    while (ecs_filter_next(&it)) {
-        bc_GridDestination *destinations = ecs_field(&it, bc_GridDestination, 1);
-        for (int i = 0; i < it.count; i++) {
-            destinations[i] = destCoord;
-        }
-    }
-
-    //bc_setCharacterDestination(world, characterMove->subject, destCoord);
-}*/

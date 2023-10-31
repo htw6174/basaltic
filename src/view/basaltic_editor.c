@@ -187,6 +187,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         igValue_Uint("Logic step", world->step);
         // TODO: convert step to date and time (1 step/hour)
         dateTimeInspector(world->step);
+        igSliderInt("Min Tick Duration", &model->tickInterval, 0, 100, "%d", 0);
 
         bc_WorldCommand reusedCommand = {0};
 
