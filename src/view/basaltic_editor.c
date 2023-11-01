@@ -20,7 +20,6 @@
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
-#include "cimgui_impl.h"
 
 // #define SOKOL_GLCORE33
 // #include "sokol_gfx.h"

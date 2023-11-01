@@ -8,11 +8,10 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_USE_OPENGL3
 #define CIMGUI_USE_SDL2
-#include "cimgui/cimgui.h"
-#include "cimgui/cimgui_impl.h"
+#include "cimgui.h"
+#include "cimgui/generator/output/cimgui_impl.h"
 
 bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc) {
-    // TODO: the organization here is awkward; this module doesn't need to know about vulkan specifics or content of the vkContext struct, except to do the cimgui setup here. Putting this in htw_vulkan would require that library to also be aware of cimgui. Not sure of the best way to resolve this
     // TODO: imgui saves imgui.ini in the cwd by default, which will usually be the data folder for this project. Consider changing it to a more useful default by setting io.IniFileName
     igCreateContext(NULL);
     ImGui_ImplSDL2_InitForOpenGL(wc->window, wc->glContext);
@@ -79,8 +78,8 @@ void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_Sup
     if (igBegin("Engine Options", NULL, 0)) {
         igText("Press backquote (`/~) to toggle editor");
 
-        igInputInt("Framerate Limit", &engineSettings->frameRateLimit, 1, 10, 0);
-        igInputInt("Tickrate Limit", &engineSettings->tickRateLimit, 1, 10, 0);
+        igInputInt("Framerate Limit", (int*)&engineSettings->frameRateLimit, 1, 10, 0);
+        igInputInt("Tickrate Limit", (int*)&engineSettings->tickRateLimit, 1, 10, 0);
         // TODO: option to save engine settings
 
         igCheckbox("Demo Window", &eec->showDemoWindow);

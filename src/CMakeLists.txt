@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(basaltic LANGUAGES C)
+project(basaltic LANGUAGES C CXX)
 
 add_executable(basaltic_engine WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c bc_flecs_utils.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
 
@@ -18,25 +18,33 @@ if(NOT DEFINED SDL2_DIR OR SDL2_DIR STREQUAL "SDL2_DIR-NOTFOUND")
 endif()
 find_package(SDL2 REQUIRED)
 
-# TODO: build cimgui with sdl+opengl backend, optionally static link. For now will use prebuilt libs
-#set(IMGUI_STATIC "yes")
-#add_subdirectory(cimgui)
-#set(BACKENDS_FOLDER "cimgui/imgui/backends/")
+# build cimgui with sdl+opengl backend, optionally static link TODO: only need to static link on wasm
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_COMPILER "/usr/bin/c++")
+set(IMGUI_STATIC YES)
+add_subdirectory(${LIBS}/cimgui ${CMAKE_BINARY_DIR}/cimgui)
+set(IMGUI_BACKENDS "${LIBS}/cimgui/imgui/backends")
 #list(APPEND IMGUI_LIBRARIES Vulkan::Vulkan)
 #list(APPEND IMGUI_SOURCES ${BACKENDS_FOLDER}imgui_impl_vulkan.cpp)
-#list(APPEND IMGUI_SOURCES ${BACKENDS_FOLDER}imgui_impl_sdl2.cpp)
-#set(IMGUI_SDL_LIBRARY SDL2::SDL2)
-#add_library(cimgui_sdl STATIC ${IMGUI_SOURCES})
+list(APPEND IMGUI_SOURCES ${IMGUI_BACKENDS}/imgui_impl_sdl2.cpp)
+set(IMGUI_SDL_LIBRARY SDL2::SDL2)
+add_library(cimgui_sdl STATIC ${IMGUI_SOURCES})
+target_include_directories(cimgui_sdl PRIVATE ${LIBS}/cimgui ${LIBS}/cimgui/imgui ${SDL2_INCLUDE_DIRS})
+target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 #target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 #target_compile_definitions(basaltic PUBLIC -DCIMGUI_USE_VULKAN -DCIMGUI_USE_SDL2)
 
-set(IMGUI_DIR ${LIBS}/cimgui)
-if(WIN32)
-    set(IMGUI_LIB ${IMGUI_DIR}/cimgui.dll ${IMGUI_DIR}/cimgui_sdl.dll)
-else()
-    set(IMGUI_LIB ${IMGUI_DIR}/cimgui.so ${IMGUI_DIR}/libcimgui_sdl.so)
-endif()
+# Unused: use prebuilt cimgui libs
+# set(IMGUI_DIR ${LIBS}/cimgui)
+# if(WIN32)
+#     set(IMGUI_LIB ${IMGUI_DIR}/cimgui.dll ${IMGUI_DIR}/cimgui_sdl.dll)
+# else()
+#     set(IMGUI_LIB ${IMGUI_DIR}/cimgui.so ${IMGUI_DIR}/libcimgui_sdl.so)
+# endif()
 
+if (EMSCRIPTEN)
+    set(HTW_STATIC YES)
+endif (EMSCRIPTEN)
 add_subdirectory(${LIBS}/htw-libs ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(model)
 add_subdirectory(view)
@@ -54,7 +62,7 @@ add_subdirectory(view)
 target_include_directories(basaltic_engine PRIVATE ${LIBS} include ${LIBS}/htw-libs/include ${LIBS}/cimgui model view ${SDL2_INCLUDE_DIRS})
 
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(basaltic_engine PRIVATE -lm htw basaltic_model basaltic_view SDL2::SDL2 SDL2::SDL2main ${IMGUI_LIB})
+target_link_libraries(basaltic_engine PRIVATE -lm htw basaltic_model basaltic_view cimgui_sdl SDL2::SDL2 SDL2::SDL2main)
 
 # Set output directories
 set_target_properties(basaltic_engine htw basaltic_model basaltic_view
