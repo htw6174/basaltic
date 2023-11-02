@@ -141,7 +141,7 @@ static sg_shader_desc lightingShaderDescription = {
         [2] = {
             .used = true,
             .image_slot = 2,
-            .sampler_slot = 0,
+            .sampler_slot = 1,
             .glsl_name = "depth"
         },
         [3] = {

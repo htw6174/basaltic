@@ -108,7 +108,7 @@ static sg_shader_desc debugRTShaderDescription = {
     },
     .fs.samplers[0] = {
         .used = true,
-        .sampler_type = SG_SAMPLERTYPE_FILTERING
+        .sampler_type = SG_SAMPLERTYPE_COMPARISON
     },
     .fs.image_sampler_pairs[0] = {
         .used = true,

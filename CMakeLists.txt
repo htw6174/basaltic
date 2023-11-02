@@ -9,5 +9,6 @@ add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 #add_compile_definitions("CIMGUI_USE_OPENGL3")
 
 set(LIBS ${PROJECT_SOURCE_DIR}/libs)
+set(DATA_DIR ${PROJECT_SOURCE_DIR}/data)
 
 add_subdirectory(src)

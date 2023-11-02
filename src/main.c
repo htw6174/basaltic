@@ -19,7 +19,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
     size_t maxStartModelArgCount = 256;
     // default settings
     bc_StartupSettings settings = {
-        .startupMode = BC_STARTUP_MODE_START_MODEL,
+        .startupMode = BC_STARTUP_MODE_NO_MODEL,
         .enableEditor = false,
         .dataDirectory = calloc(maxPathLength, sizeof(char)),
         .loadModelPath = calloc(maxPathLength, sizeof(char)),
@@ -28,7 +28,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
     };
 
     // default settings
-    strcpy(settings.dataDirectory, "..");
+    strcpy(settings.dataDirectory, "data/");
     strcpy(settings.loadModelPath, "");
     //strcpy(settings.startModelArgs, "seed=6174 width=3 height=3");
 

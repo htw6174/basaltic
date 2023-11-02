@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.13)
 
 project(basaltic LANGUAGES C CXX)
 
-add_executable(basaltic_engine WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c bc_flecs_utils.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
+if(WIN32)
+    add_executable(basaltic_engine WIN32 main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c bc_flecs_utils.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
+else(WIN32)#Unix
+    add_executable(basaltic_engine main.c basaltic_super.c basaltic_commandBuffer.c basaltic_window.c basaltic_editor_base.c bc_flecs_utils.c ${LIBS}/flecs.h ${LIBS}/flecs.c)
+endif(WIN32)
 
 #if(WIN32)
 #    add_library(GLEW SHARED IMPORTED)
@@ -20,17 +24,30 @@ find_package(SDL2 REQUIRED)
 
 # build cimgui with sdl+opengl backend, optionally static link TODO: only need to static link on wasm
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_COMPILER "/usr/bin/c++")
 set(IMGUI_STATIC YES)
+add_compile_definitions("IMGUI_IMPL_OPENGL_LOADER_ES3")
 add_subdirectory(${LIBS}/cimgui ${CMAKE_BINARY_DIR}/cimgui)
 set(IMGUI_BACKENDS "${LIBS}/cimgui/imgui/backends")
-#list(APPEND IMGUI_LIBRARIES Vulkan::Vulkan)
-#list(APPEND IMGUI_SOURCES ${BACKENDS_FOLDER}imgui_impl_vulkan.cpp)
+
+if(WIN32)
+       list(APPEND IMGUI_LIBRARIES opengl32)
+else(WIN32)#Unix
+       list(APPEND IMGUI_LIBRARIES GL)
+endif(WIN32)
+
+list(APPEND IMGUI_SOURCES ${IMGUI_BACKENDS}/imgui_impl_opengl3.cpp)
 list(APPEND IMGUI_SOURCES ${IMGUI_BACKENDS}/imgui_impl_sdl2.cpp)
 set(IMGUI_SDL_LIBRARY SDL2::SDL2)
-add_library(cimgui_sdl STATIC ${IMGUI_SOURCES})
-target_include_directories(cimgui_sdl PRIVATE ${LIBS}/cimgui ${LIBS}/cimgui/imgui ${SDL2_INCLUDE_DIRS})
-target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
+
+# Modify existing cimgui target to add SDL2 and OpenGL backend support
+target_sources(cimgui PRIVATE ${IMGUI_SOURCES})
+target_include_directories(cimgui PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_libraries(cimgui ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
+
+#message("IMGUI_SOURCES is ${IMGUI_SOURCES}")
+#add_library(cimgui_sdl STATIC ${IMGUI_SOURCES})
+#target_include_directories(cimgui_sdl PRIVATE ${LIBS}/cimgui ${LIBS}/cimgui/imgui ${SDL2_INCLUDE_DIRS})
+#target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 #target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 #target_compile_definitions(basaltic PUBLIC -DCIMGUI_USE_VULKAN -DCIMGUI_USE_SDL2)
 
@@ -43,7 +60,11 @@ target_link_libraries(cimgui_sdl ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 # endif()
 
 if (EMSCRIPTEN)
+    # generate an html file that can be started with emrun (default for emscripten toolchain is .js)
+    #set(CMAKE_EXECUTABLE_SUFFIX ".html")
     set(HTW_STATIC YES)
+    target_compile_options(basaltic_engine PUBLIC "-pthread")
+    set_target_properties(basaltic_engine PROPERTIES LINK_FLAGS "-sUSE_SDL=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=1gb -sEXPORTED_RUNTIME_METHODS=cwrap -sMODULARIZE=1 -sEXPORT_NAME=\"createMyBasalticModule\" -pthread -sPTHREAD_POOL_SIZE=2 --preload-file ${DATA_DIR}@data --emrun -sASSERTIONS=2")
 endif (EMSCRIPTEN)
 add_subdirectory(${LIBS}/htw-libs ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(model)
@@ -62,7 +83,7 @@ add_subdirectory(view)
 target_include_directories(basaltic_engine PRIVATE ${LIBS} include ${LIBS}/htw-libs/include ${LIBS}/cimgui model view ${SDL2_INCLUDE_DIRS})
 
 # -lm flag is required for linking math libraries, including math.h (only on unix?)
-target_link_libraries(basaltic_engine PRIVATE -lm htw basaltic_model basaltic_view cimgui_sdl SDL2::SDL2 SDL2::SDL2main)
+target_link_libraries(basaltic_engine PRIVATE -lm htw basaltic_model basaltic_view cimgui SDL2::SDL2 SDL2::SDL2main)
 
 # Set output directories
 set_target_properties(basaltic_engine htw basaltic_model basaltic_view
@@ -83,8 +104,8 @@ if(WIN32)
     target_link_libraries(basaltic_engine PRIVATE ws2_32)
     # on Windows, need to include some other binaries with .exe
     add_custom_command(TARGET basaltic_engine POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> ${IMGUI_LIB} ${CMAKE_BINARY_DIR}/bin)
-endif()
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> ${IMGUI_LIB} "${CMAKE_BINARY_DIR}/bin")
+endif(WIN32)
 
 # install
 install(TARGETS basaltic_engine RUNTIME DESTINATION bin LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)

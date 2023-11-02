@@ -1,14 +1,16 @@
 #include "basaltic_sokol_gfx.h"
 #include "htw_core.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #define SOKOL_IMPL
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #define SOKOL_GLES3
 #else
 #define SOKOL_GLCORE33
 #endif
+
 #define SOKOL_NO_DEPRECATED
 #ifdef DEBUG
 #define SOKOL_DEBUG
@@ -50,7 +52,7 @@ void bc_gfxCheck(void) {
 
 uint32_t bc_sg_getImageGfxApiId(sg_image image) {
     // FIXME: wgpu textures are opaque pointers, instead of uints like OpenGL, making this method incompatible across APIs
-    _sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
+    //_sg_image_t *img = _sg_image_at(&_sg.pools, image.id);
     //return img->wgpu.tex;
     return 0;
 }
