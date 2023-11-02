@@ -69,8 +69,12 @@ static void mainLoop(void) {
     bool passthroughKeyboard = !bc_editorWantCaptureKeyboard(&editorEngineContext);
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
-        if (e.type == SDL_QUIT) {
+        if (e.type == SDL_QUIT) { // Normal quit
             requestProcessStop(&superContext.appState, &superContext.modelThreadState);
+        } else if (e.type == SDL_KEYDOWN) { // Quit hotkey
+            if (e.key.keysym.sym == SDLK_ESCAPE) {
+                requestProcessStop(&superContext.appState, &superContext.modelThreadState);
+            }
         } else if (e.type == SDL_WINDOWEVENT) {
             if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 bc_changeScreenSize(wc, e.window.data1, e.window.data2);
@@ -181,7 +185,6 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     bc_view_setup(&windowContext);
     bc_view_setupEditor(); // TODO: roll this into general view setup, or have an option to build without the editor
 
-    bool isModelPassedToView = false;
     // TODO: consider rearchitecting this to support multiple model instances running simultainously, allow view to see any/all of them
     superContext.modelData = NULL;
 

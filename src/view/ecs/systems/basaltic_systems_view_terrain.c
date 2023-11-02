@@ -1145,7 +1145,9 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(clock[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
 
+#ifndef __EMSCRIPTEN__
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
+#endif
 
         if (wraps != NULL) {
             bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
@@ -1156,8 +1158,10 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
+#ifndef __EMSCRIPTEN__
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
+#endif
     }
 }
 
@@ -1239,11 +1243,12 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     );
 
     GLuint feedbackBuffer;
+#ifndef __EMSCRIPTEN__
     glGenBuffers(1, &feedbackBuffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(HoveredCell), NULL, GL_DYNAMIC_READ);
-
     sg_reset_state_cache();
+#endif
 
     ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 

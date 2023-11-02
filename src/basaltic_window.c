@@ -18,7 +18,7 @@ bc_WindowContext bc_createWindow(u32 width, u32 height) {
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 #ifdef __EMSCRIPTEN__
-    printf("Creating SDL GLES3 context...?\n");
+    printf("Creating SDL GLES3 context...\n");
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 #else

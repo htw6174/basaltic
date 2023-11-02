@@ -19,8 +19,8 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
     size_t maxStartModelArgCount = 256;
     // default settings
     bc_StartupSettings settings = {
-        .startupMode = BC_STARTUP_MODE_NO_MODEL,
-        .enableEditor = false,
+        .startupMode = BC_STARTUP_MODE_START_MODEL,
+        .enableEditor = true,
         .dataDirectory = calloc(maxPathLength, sizeof(char)),
         .loadModelPath = calloc(maxPathLength, sizeof(char)),
         .startModelArgCount = 0,

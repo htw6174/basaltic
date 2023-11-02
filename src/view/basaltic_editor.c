@@ -247,23 +247,25 @@ void bc_editorOnModelStop(void) {
 // TODO: consider seperating the parts that require viewEcsWorld to another inspector section
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
     ecs_entity_t focusedPlane = ecs_singleton_get(viewEcsWorld, FocusPlane)->entity;
-    htw_ChunkMap *cm = ecs_get(world->ecsWorld, focusedPlane, Plane)->chunkMap;
+    if (focusedPlane != 0) {
+        htw_ChunkMap *cm = ecs_get(world->ecsWorld, focusedPlane, Plane)->chunkMap;
 
-    const HoveredCell *hovered = ecs_singleton_get(viewEcsWorld, HoveredCell);
-    const SelectedCell *selected = ecs_singleton_get(viewEcsWorld, SelectedCell);
+        const HoveredCell *hovered = ecs_singleton_get(viewEcsWorld, HoveredCell);
+        const SelectedCell *selected = ecs_singleton_get(viewEcsWorld, SelectedCell);
 
-    // TODO: have a window attached to the mouse for hovered info, pin selected info here
-    static bool inspectSelected = true;
-    igCheckbox("Show Selected Cell Info", &inspectSelected);
+        // TODO: have a window attached to the mouse for hovered info, pin selected info here
+        static bool inspectSelected = true;
+        igCheckbox("Show Selected Cell Info", &inspectSelected);
 
-    htw_geo_GridCoord focusCoord;
-    if (inspectSelected) {
-        focusCoord = *(htw_geo_GridCoord*)selected;
-    } else {
-        focusCoord = *(htw_geo_GridCoord*)hovered;
+        htw_geo_GridCoord focusCoord;
+        if (inspectSelected) {
+            focusCoord = *(htw_geo_GridCoord*)selected;
+        } else {
+            focusCoord = *(htw_geo_GridCoord*)hovered;
+        }
+
+        cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity);
     }
-
-    cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity);
 
     // Misc options
     if (igButton("Take control of random character", (ImVec2){0, 0})) {

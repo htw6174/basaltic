@@ -17,6 +17,7 @@ target_include_directories(basaltic_view PRIVATE ${LIBS} ${LIBS}/htw-libs/includ
 target_link_libraries(basaltic_view PRIVATE htw htw_geomap SDL2::SDL2)
 
 if (EMSCRIPTEN)
+    # TODO: figure out why this is required here
     target_compile_options(basaltic_view PUBLIC "-pthread")
     #set_target_properties(basaltic_view PROPERTIES LINK_FLAGS "-sMAX_WEBGL_VERSION=2 -sFULL_ES2")
     #target_include_directories(basaltic_view PRIVATE ${OPENGL_gles3_LIBRARY})

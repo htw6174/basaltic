@@ -27,12 +27,13 @@ void bc_view_setup(bc_WindowContext* wc) {
     //ecs_singleton_set(vc.ecsWorld, EcsRest, {0});
 
     ECS_IMPORT(vc.ecsWorld, Bcview);
+    ECS_IMPORT(vc.ecsWorld, BcviewPhases);
     // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
     ecs_plecs_from_file(vc.ecsWorld, "view/plecs/startup/startup_test.flecs");
     ecs_set_pair(vc.ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "view/plecs/test.flecs"});
 
-    ECS_IMPORT(vc.ecsWorld, BcviewPhases);
-    ECS_IMPORT(vc.ecsWorld, BcviewSystems);
+    // TEST: disable until I get WebGL shaders working
+    //ECS_IMPORT(vc.ecsWorld, BcviewSystems);
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
