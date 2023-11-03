@@ -17,6 +17,7 @@ typedef struct {
 } bc_ViewContext;
 
 static bc_ViewContext vc;
+static bc_ModelData *model;
 
 void bc_view_setup(bc_WindowContext* wc) {
     bc_sg_setup();
@@ -32,8 +33,7 @@ void bc_view_setup(bc_WindowContext* wc) {
     ecs_plecs_from_file(vc.ecsWorld, "view/plecs/startup/startup_test.flecs");
     ecs_set_pair(vc.ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "view/plecs/test.flecs"});
 
-    // TEST: disable until I get WebGL shaders working
-    //ECS_IMPORT(vc.ecsWorld, BcviewSystems);
+    ECS_IMPORT(vc.ecsWorld, BcviewSystems);
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
@@ -63,7 +63,8 @@ void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool
     bc_processInputState(vc.ecsWorld, inputBuffer, useMouse, useKeyboard);
 }
 
-u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer) {
+u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_CommandBuffer inputBuffer)
+{
     // TODO: should happen in response to SDL resize events instead of every frame
     const WindowSize *currentWindow = ecs_singleton_get(vc.ecsWorld, WindowSize);
     // Only set if changed so that OnSet observers for WindowSize only run when needed
@@ -107,7 +108,8 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_Window
     return 0;
 }
 
-void bc_view_onModelStart(bc_ModelData *model) {
+void bc_view_onModelStart(bc_ModelData *md) {
+    model = md;
     ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world->ecsWorld, .lastRenderedStep = 0, .renderOutdated = false});
     ecs_singleton_set(vc.ecsWorld, FocusPlane, {model->world->centralPlane});
 
@@ -123,10 +125,11 @@ void bc_view_onModelStart(bc_ModelData *model) {
     bc_editorOnModelStart();
 }
 
-void bc_view_onModelStop() {
+void bc_view_onModelStop(bc_ModelData *md)
+{
     ecs_singleton_remove(vc.ecsWorld, ModelWorld);
-
     bc_editorOnModelStop();
+    model = NULL;
 }
 
 void bc_view_setupEditor() {
@@ -138,6 +141,7 @@ void bc_view_teardownEditor() {
     bc_teardownEditor();
 }
 
-void bc_view_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, bc_CommandBuffer inputBuffer) {
+void bc_view_drawEditor(bc_SupervisorInterface *si, bc_CommandBuffer inputBuffer)
+{
     bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, vc.ui);
 }

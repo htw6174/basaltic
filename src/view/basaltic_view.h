@@ -23,13 +23,13 @@ void bc_view_endFrame(bc_WindowContext* wc);
 void bc_view_onInputEvent(bc_CommandBuffer inputBuffer, SDL_Event *e, bool useMouse, bool useKeyboard);
 void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool useKeyboard);
 
-u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_ModelData* model, bc_WindowContext* wc, bc_CommandBuffer inputBuffer);
+u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_WindowContext* wc, bc_CommandBuffer inputBuffer);
 
 void bc_view_setupEditor();
 void bc_view_teardownEditor();
-void bc_view_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, bc_CommandBuffer inputBuffer);
+void bc_view_drawEditor(bc_SupervisorInterface* si, bc_CommandBuffer inputBuffer);
 
-void bc_view_onModelStart(bc_ModelData *model);
-void bc_view_onModelStop();
+void bc_view_onModelStart(bc_ModelData *md);
+void bc_view_onModelStop(bc_ModelData *md);
 
 #endif // BASALTIC_VIEW_H_INCLUDED

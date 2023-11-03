@@ -87,12 +87,12 @@ static void mainLoop(void) {
     bc_view_processInputState(superContext.inputBuffer, passthroughMouse, passthroughKeyboard);
 
     bc_view_beginFrame(wc);
-    bc_view_drawFrame(superContext.superInterface, md, wc, superContext.inputBuffer);
+    bc_view_drawFrame(superContext.superInterface, wc, superContext.inputBuffer);
 
     if (editorEngineContext.isActive) {
         bc_beginEditor();
         bc_drawBaseEditor(&editorEngineContext, wc, superInfo, superContext.engineConfig);
-        bc_view_drawEditor(superContext.superInterface, md, superContext.inputBuffer);
+        bc_view_drawEditor(superContext.superInterface, superContext.inputBuffer);
         bc_endEditor();
     }
 
@@ -122,9 +122,9 @@ static void mainLoop(void) {
 
     // if model loop has ended, wait for thread to stop and free resources
     if (superContext.modelThread != NULL && superContext.modelThreadState == BC_PROCESS_STATE_STOPPED) {
-        viewHasReceivedModel = false;
+        bc_view_onModelStop(md);
         md = NULL;
-        bc_view_onModelStop();
+        viewHasReceivedModel = false;
         // TODO: any reason not to reset isModelDataReady here, instead of in the model thread?
         stopModel(&superContext.modelThread, &superContext.modelData);
     }

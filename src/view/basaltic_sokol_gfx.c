@@ -185,6 +185,7 @@ int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const 
         if (shaderState == SG_RESOURCESTATE_FAILED) {
             sg_destroy_shader(shd);
         }
+        *out_shader = shd;
         return -1; // TODO: optionally get more detailed error info from sokol
     }
 }

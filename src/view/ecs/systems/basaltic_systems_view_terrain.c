@@ -1020,12 +1020,23 @@ void InitTerrainDataTexture(ecs_iter_t *it) {
 
                 size_t formatSize = sizeof(s32[4]);
                 size_t texSize = texWidth * texHeight * formatSize;
-                // TODO: destructor
                 void *texHostData = malloc(texSize);
 
                 ecs_set(it->world, it->entities[i], DataTexture, {sg_make_image(&id), sg_make_sampler(&sd), texWidth, texHeight, texHostData, texSize, formatSize});
             }
         }
+    }
+}
+
+void DestroyDataTextures(ecs_iter_t *it) {
+    DataTexture *dataTextures = ecs_field(it, DataTexture, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        DataTexture dt = dataTextures[i];
+        sg_destroy_image(dt.image);
+        sg_destroy_sampler(dt.sampler);
+        free(dt.data);
+        ecs_remove(it->world, it->entities[i], DataTexture);
     }
 }
 
@@ -1197,6 +1208,16 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [out] !DataTexture,
                [in] ModelWorld($),
                [none] bcview.TerrainRender,
+    );
+
+    // ECS_OBSERVER(world, DestroyDataTexture, EcsOnDelete,
+    //              DataTexture,
+    //              ModelWorld($)
+    // );
+
+    ECS_SYSTEM(world, DestroyDataTextures, EcsOnLoad,
+               [out] DataTexture,
+               [none] !ModelWorld($)
     );
 
     // Only need to run when model step advances

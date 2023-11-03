@@ -104,6 +104,31 @@ Prefab VolcanoSpiritPrefab {
 }
 
 
+everest_spawner {
+    - Spawner{prefab: EverestPrefab, count: 2, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+oceans_spawner {
+    - Spawner{prefab: OceansPrefab, count: 2, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+mountains_spawner {
+    - Spawner{prefab: MountainsPrefab, count: 16, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+seas_spawner {
+    - Spawner{prefab: SeasPrefab, count: 24, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+cliffs_spawner {
+    - Spawner{prefab: CliffsPrefab, count: 24, oneShot: true}
+    - (IsOn, Overworld)
+}
+
 test_spawner {
     - Spawner{prefab: TestPlatesPrefab, count: 0, oneShot: true}
     - (IsOn, Overworld)
