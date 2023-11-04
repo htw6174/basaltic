@@ -207,6 +207,12 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
     for (int i = 0; i < SG_MAX_COLOR_ATTACHMENTS; i++) {
         sg_pixel_format format = rtd->colorFormats[i];
         if (format != 0) {
+            // Ensure format will work as requested
+            sg_pixelformat_info formatInfo = sg_query_pixelformat(format);
+            assert(formatInfo.sample);
+            assert(formatInfo.render);
+            if (rtd->filter == SG_FILTER_LINEAR) assert(formatInfo.filter);
+
             rt->images[i] = sg_make_image(&(sg_image_desc){
                 .render_target = true,
                 .pixel_format = format,

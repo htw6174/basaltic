@@ -172,20 +172,19 @@ int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const 
     sd.vs.source = vert;
     sd.fs.source = frag;
 
-    sg_shader shd = sg_make_shader(&sd);
+    *out_shader = sg_make_shader(&sd);
 
     free(vert);
     free(frag);
 
-    sg_resource_state shaderState = sg_query_shader_state(shd);
+    sg_resource_state shaderState = sg_query_shader_state(*out_shader);
     if (shaderState == SG_RESOURCESTATE_VALID) {
-        *out_shader = shd;
         return 0;
     } else {
         if (shaderState == SG_RESOURCESTATE_FAILED) {
-            sg_destroy_shader(shd);
+            sg_destroy_shader(*out_shader);
         }
-        *out_shader = shd;
+        fprintf(stderr, "Failed making shader from source files %s, %s\n", vertSourcePath, fragSourcePath);
         return -1; // TODO: optionally get more detailed error info from sokol
     }
 }

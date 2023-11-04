@@ -1284,7 +1284,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");
     ecs_add_pair(world, terrainShadowPipeline, EcsChildOf, ShadowPass);
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_terrain.vert"});
-    ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
+    ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_terrain.frag"});
     ecs_set(world, terrainShadowPipeline, PipelineDescription, {.shader_desc = &terrainShadowShaderDescription, .pipeline_desc = &terrainShadowPipelineDescription});
 
     // Init mesh TODO: give this a better home?
