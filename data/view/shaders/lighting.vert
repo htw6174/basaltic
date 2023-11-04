@@ -1,4 +1,5 @@
-#version 330
+#version 300 es
+precision mediump float;
 
 uniform mat4 inverse_view;
 uniform mat4 inverse_projection;

@@ -1,9 +1,11 @@
-#version 430
+#version 300 es
+precision mediump float;
 
 // toggle for a more mobile-friendly version of this shader
 #define LIGHTWEIGHT
 
-//precision mediump float;
+// enable to make WebGL2 / GLES3 friendly
+#define WEBGL
 
 #define PI 3.14159
 
@@ -11,17 +13,23 @@
 
 //const vec3 cliffColor = vec3(0.3, 0.2, 0.1);
 
+#ifndef WEBGL
 // NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
 layout(early_fragment_tests) in;
+#endif
 
 uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
 
+#ifdef WEBGL
+
+#else
 layout(std430, binding = 0) buffer feedbackBuffer {
 	int hoveredX;
 	int hoveredY;
 } FeedbackBuffer;
+#endif
 
 in vec4 inout_color;
 in vec3 inout_pos;
@@ -29,8 +37,9 @@ in vec3 inout_normal;
 in float inout_radius; // approximate distance from center of cell, based on vert barycentric. == 1 at cell corners, == 0.75 at center of edge
 flat in ivec2 inout_cellCoord;
 
-out vec4 out_color;
-out vec3 out_normal;
+layout(location = 0) out vec4 out_color;
+layout(location = 1) out vec3 out_normal;
+layout(location = 2) out float out_extra;
 
 // BookOfShaders rand and 2d rand
 float rand(float x) {
@@ -79,14 +88,14 @@ float stableHash(in vec3 pos) {
 	// Factor to interpolate lerp with
 	float lerpFactor = fract( log2(pixScale) );
 	// Interpolate alpha threshold from noise at two scales
-	float x = (1-lerpFactor)*alpha.x + lerpFactor*alpha.y;
+	float x = (1.0-lerpFactor)*alpha.x + lerpFactor*alpha.y;
 	// Pass into CDF to compute uniformly distrib threshold
-	float a = min( lerpFactor, 1-lerpFactor );
-	vec3 cases = vec3( x*x/(2*a*(1-a)),
-					   (x-0.5*a)/(1-a),
-					   1.0-((1-x)*(1-x)/(2*a*(1-a))) );
+	float a = min( lerpFactor, 1.0-lerpFactor );
+	vec3 cases = vec3( x*x/(2.0*a*(1.0-a)),
+					   (x-0.5*a)/(1.0-a),
+					   1.0-((1.0-x)*(1.0-x)/(2.0*a*(1.0-a))) );
 	// Find our final, uniformly distributed alpha threshold
-	float at = (x < (1-a)) ?
+	float at = (x < (1.0-a)) ?
 	((x < a) ? cases.x : cases.y) :
 	cases.z;
 	// Avoids ατ == 0. Could also do ατ =1-ατ
@@ -130,6 +139,7 @@ float fbm(vec2 x, float H) {
 
 void main()
 {
+#ifndef WEBGL
 	// Determine if mouse is over this cell, write to host-readable buffer if so
 	// NOTE: gl pixel centers lie on half integers. mousePosition should have 0.5 added to match OpenGL's pixel space.
 	vec2 windowPos = gl_FragCoord.xy;
@@ -138,6 +148,7 @@ void main()
 		FeedbackBuffer.hoveredX = inout_cellCoord.x;
 		FeedbackBuffer.hoveredY = inout_cellCoord.y;
 	}
+#endif
 
 	// compute normal from position deriviatives
 	// NOTE: frag shader derivative normals always give 'flat' shading
@@ -242,6 +253,7 @@ void main()
 
 	vec3 litColor = albedo;
 
+#ifndef WEBGL
 	// display white outline on hovered cell
  	if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
 // 		float edgeDist = max(inout_uv.x, inout_uv.y) - (1.0 - (inout_uv.x + inout_uv.y));
@@ -249,6 +261,7 @@ void main()
 		// For lack of UV coords, can add a slight highlight instead
 		litColor *= 1.3;
 	}
+#endif
 
 	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
 
@@ -258,4 +271,6 @@ void main()
 	//out_color = vec4(inout_uv, 0.0, 1.0);
 
 	out_normal = vN;
+
+	out_extra = 0.0;
 }

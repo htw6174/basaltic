@@ -1,6 +1,6 @@
-#version 430
-
-//precision mediump float;
+#version 300 es
+precision mediump float;
+precision highp isampler2D;
 
 //#include "uniforms.h"
 
@@ -63,6 +63,20 @@ ivec4 terrainFetch(ivec2 coord) {
     return texelFetch(terrain, (coord + wrap) % wrap, 0);
 }
 
+// clumsy replacement for glsl 4.0's bitfieldExtract
+int bitfieldExtract(int value, int offset, int bits) {
+    int top = (1 << (offset + bits)) - 1;
+    int bottom = (1 << offset) - 1;
+    int mask = (top ^ bottom) & top;
+    int extract = (value & mask) >> offset;
+    int sign_bit = (value >> (offset + bits - 1)) & 1;
+    int low = (1 << bits) - 1;
+    int high = -1^low;
+    int sign_high = high * sign_bit;
+    extract = extract | sign_high;
+    return extract;
+}
+
 float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cd = terrainFetch(cellCoord);
     ivec4 offsets = sampleOffsets[neighborhood];
@@ -86,7 +100,7 @@ float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
 
     // Use barycentric coord to interpolate samples
-    float elev1 = (h1 * barycentric.x) + (h2 * barycentric.y) + (h3 * barycentric.z);
+    float elev1 = (float(h1) * barycentric.x) + (float(h2) * barycentric.y) + (float(h3) * barycentric.z);
 
     return elev1;
 }

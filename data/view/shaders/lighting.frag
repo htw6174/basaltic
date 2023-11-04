@@ -1,4 +1,6 @@
-#version 330
+#version 300 es
+precision mediump float;
+precision highp sampler2DShadow;
 
 #define SPECULAR 0.5
 #define DIFFUSE 1.25
@@ -11,7 +13,7 @@
 
 uniform sampler2D diffuse;
 uniform sampler2D normal;
-uniform sampler2D depth;
+uniform sampler2DShadow depth;
 uniform sampler2DShadow shadowMap;
 
 uniform mat4 pv;
@@ -71,7 +73,7 @@ vec3 linearFog(in vec3 color, in vec3 fogColor, in float dist, in vec3 origin, i
 void main() {
     vec4 diff = texture(diffuse, uv);
     vec3 norm = texture(normal, uv).xyz;
-    float dep = texture(depth, uv).x;
+    float dep = texture(depth, vec3(uv, 1.0));
 
     float viewZ = reconstructDepth(dep);
     vec4 viewPos = view_dir * viewZ;
@@ -122,7 +124,7 @@ void main() {
     sky = mix(midnightBlue, sky, horizon);
 
     // fade into skybox at horizontal view limit
-    float viewDist = 128;
+    float viewDist = 128.0;
     float horizontalDist = distance(camera_position.xy, worldPos.xy);
     //(camera_position.x * camera_position.x) + (camera_position.y * camera_position.y);
     //float skybox = smoothstep(viewDist * 0.9, viewDist, horizontalDist);

@@ -1,6 +1,6 @@
-#version 430
-
-//precision mediump float;
+#version 300 es
+precision mediump float;
+precision highp isampler2D;
 
 //#include "uniforms.h"
 
@@ -74,6 +74,20 @@ ivec4 terrainFetch(ivec2 coord) {
     return texelFetch(terrain, (coord + wrap) % wrap, 0);
 }
 
+// clumsy replacement for glsl 4.0's bitfieldExtract
+int bitfieldExtract(int value, int offset, int bits) {
+    int top = (1 << (offset + bits)) - 1;
+    int bottom = (1 << offset) - 1;
+    int mask = (top ^ bottom) & top;
+    int extract = (value & mask) >> offset;
+    int sign_bit = (value >> (offset + bits - 1)) & 1;
+    int low = (1 << bits) - 1;
+    int high = -1^low;
+    int sign_high = high * sign_bit;
+    extract = extract | sign_high;
+    return extract;
+}
+
 float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cd = terrainFetch(cellCoord);
     ivec4 offsets = sampleOffsets[neighborhood];
@@ -107,16 +121,20 @@ float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
 
     // Use barycentric coord to interpolate samples
-    float elev1 = (h1 * barycentric.x) + (h2 * barycentric.y) + (h3 * barycentric.z);
-    float elev2 = (h1 * bary1.x) + (h2 * bary1.y) + (h3 * bary1.z);
-    float elev3 = (h1 * bary2.x) + (h2 * bary2.y) + (h3 * bary2.z);
+    // explicit conversion for GLES
+    float fh1 = float(h1);
+    float fh2 = float(h2);
+    float fh3 = float(h3);
+    float elev1 = (fh1 * barycentric.x) + (fh2 * barycentric.y) + (fh3 * barycentric.z);
+    float elev2 = (fh1 * bary1.x) + (fh2 * bary1.y) + (fh3 * bary1.z);
+    float elev3 = (fh1 * bary2.x) + (fh2 * bary2.y) + (fh3 * bary2.z);
 
     // get sample positions as cartesian coordinates
     // in the special case of an equilateral triangle, this is easy to find. cartesian distance == (barycentric distance * grid scale)
     // still need to rotate vectors according to sample cell's direction; == -(neighborhood - 2) * [60 deg, 30 deg]
     // More general formula : https://www.iue.tuwien.ac.at/phd/nentchev/node26.html#eq:lambda_representation_2D_xy
-    float rot1 = (3.14159 / 3.0) * -(neighborhood - 1);
-    float rot2 = (3.14159 / 3.0) * -(neighborhood - 2);
+    float rot1 = (3.14159 / 3.0) * -float(neighborhood - 1);
+    float rot2 = (3.14159 / 3.0) * -float(neighborhood - 2);
     // Get distance from vertex
     vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (elev2 - elev1) * 0.1); // TODO: provide terrain scale as uniform, multiply in
     vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (elev3 - elev1) * 0.1);
@@ -139,10 +157,10 @@ void main()
     float elevation = interpolate_height(in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
 
-    float biotemp = bitfieldExtract(cd.g, 0, 16) / 255.0;
-    float humidityPref = bitfieldExtract(cd.g, 16, 16) / 255.0;
-    float understory = bitfieldExtract(cd.b, 0, 16) / 255.0;
-    float canopy = bitfieldExtract(cd.b, 16, 16) / 255.0;
+    float biotemp = float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
+    float humidityPref = float(bitfieldExtract(cd.g, 16, 16)) / 255.0;
+    float understory = float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
+    float canopy = float(bitfieldExtract(cd.b, 16, 16)) / 255.0;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;

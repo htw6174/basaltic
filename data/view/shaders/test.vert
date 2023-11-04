@@ -1,4 +1,4 @@
-#version 330
+#version 300 es
 uniform mat4 pv;
 uniform mat4 m;
 layout(location=0) in vec4 position;
