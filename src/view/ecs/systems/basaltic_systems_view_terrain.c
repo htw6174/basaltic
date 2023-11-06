@@ -1134,7 +1134,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
-    Clock *clock = ecs_field(it, Clock, ++f);
+    Clock *programClock = ecs_field(it, Clock, ++f);
     FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
     HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
 
@@ -1153,12 +1153,8 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         sg_apply_bindings(&bind);
 
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(clock[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(programClock[i]));
         sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
-
-#ifndef __EMSCRIPTEN__
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, feedback[i].gluint);
-#endif
 
         if (wraps != NULL) {
             bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
@@ -1169,18 +1165,33 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
-#ifndef __EMSCRIPTEN__
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
-        glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
-#endif
-
-        s32 pixels[4] = {0};
         glReadBuffer(GL_COLOR_ATTACHMENT2);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, feedback[i].gluint);
         // NOTE: readpixels is picky about format and type combos. Even though the framebuffer format is RG16I, need to read it using this combo which returns 4 ints
-        glReadPixels(mouse[i].x, mouse[i].y, 1, 1, GL_RGBA_INTEGER, GL_INT, &pixels);
-        hovered[i].x = pixels[0];
-        hovered[i].y = pixels[1];
+        glReadPixels(mouse[i].x, mouse[i].y, 1, 1, GL_RGBA_INTEGER, GL_INT, 0);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
+}
+
+void ReadFeedbackBuffer(ecs_iter_t *it) {
+    int f = 0;
+    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
+    HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
+
+    s32 pixels[4] = {0};
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, feedback->gluint);
+    glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, sizeof(pixels), &pixels);
+    // NOTE: on some platforms may need to use glMapBufferRange instead. glGetBufferSubData is known to work on destop OpenGL and emscripten builds
+    //void *buf = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, sizeof(pixels), GL_MAP_READ_BIT);
+    // bc_gfxCheck();
+    // if (buf != NULL) {
+    //     memcpy(pixels, buf, sizeof(pixels));
+    //     glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+    // }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+    hovered->x = pixels[0];
+    hovered->y = pixels[1];
 }
 
 void BcviewSystemsTerrainImport(ecs_world_t *world) {
@@ -1270,13 +1281,19 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
+    ECS_SYSTEM(world, ReadFeedbackBuffer, EcsOnStore,
+               [in] FeedbackBuffer($),
+               [out] HoveredCell($),
+    );
+
     GLuint feedbackBuffer;
-#ifndef __EMSCRIPTEN__
     glGenBuffers(1, &feedbackBuffer);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedbackBuffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(HoveredCell), NULL, GL_DYNAMIC_READ);
+
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, feedbackBuffer);
+    glBufferData(GL_PIXEL_PACK_BUFFER, sizeof(int) * 4, NULL, GL_STREAM_READ);
+    bc_gfxCheck();
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     sg_reset_state_cache();
-#endif
 
     ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 
