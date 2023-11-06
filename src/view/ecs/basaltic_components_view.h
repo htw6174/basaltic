@@ -202,8 +202,8 @@ ECS_STRUCT(RenderPassDescription, {
     s32 height;
     sg_pixel_format colorFormats[SG_MAX_COLOR_ATTACHMENTS];
     sg_pixel_format depthFormat;
-    sg_filter filter;
-    sg_compare_func compare;
+    sg_filter filter; /**< Highest filter level to use, will be downgraded from linear to nearest for any formats that don't support linear*/
+    sg_compare_func compare; /**< Compare to use for depth attachment */
 });
 
 ECS_STRUCT(RenderPass, {
@@ -214,9 +214,10 @@ ECS_STRUCT(RenderPass, {
 
 // NOTE: for creating individual render target images, all that's needed is the sg_pixel_format. Everything else is either not needed, or constant for the entire render target (width, height, sample count), which helps because the entire sg_image_desc struct is over 1.5kB
 ECS_STRUCT(RenderTarget, {
-    sg_sampler sampler;
-    sg_image depth_stencil;
     sg_image images[SG_MAX_COLOR_ATTACHMENTS];
+    sg_image depth_stencil;
+    sg_sampler samplers[SG_MAX_COLOR_ATTACHMENTS];
+    sg_sampler depthSampler;
 });
 
 // Target of a ResourceFile relationship

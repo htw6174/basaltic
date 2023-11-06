@@ -39,7 +39,7 @@ flat in ivec2 inout_cellCoord;
 
 layout(location = 0) out vec4 out_color;
 layout(location = 1) out vec3 out_normal;
-layout(location = 2) out float out_extra;
+layout(location = 2) out ivec2 out_id;
 
 // BookOfShaders rand and 2d rand
 float rand(float x) {
@@ -150,6 +150,8 @@ void main()
 	}
 #endif
 
+	out_id = inout_cellCoord;
+
 	// compute normal from position deriviatives
 	// NOTE: frag shader derivative normals always give 'flat' shading
 	vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
@@ -248,29 +250,12 @@ void main()
 	}
 
 	// TEST: color per tile with obvious faces
-	//albedo = randColor(rand2(inout_cellCoord));
+	//albedo = randColor(hash21(vec2(inout_cellCoord)));
 	//vN = flatNormal;
 
-	vec3 litColor = albedo;
-
-#ifndef WEBGL
-	// display white outline on hovered cell
- 	if (FeedbackBuffer.hoveredX == inout_cellCoord.x && FeedbackBuffer.hoveredY == inout_cellCoord.y) {
-// 		float edgeDist = max(inout_uv.x, inout_uv.y) - (1.0 - (inout_uv.x + inout_uv.y));
-// 		litColor = abs(edgeDist) < 0.1 ? vec3(1.0, 1.0, 1.0) : litColor;
-		// For lack of UV coords, can add a slight highlight instead
-		litColor *= 1.3;
-	}
-#endif
-
-	//litColor = mix(litColor, vec3(1.0, 0.0, 0.0), 1.0 - (mouseDist));
-
-	//out_color = vec4(litColor, 1.0);
+	out_color = vec4(albedo, 1.0);
 	//out_color = inout_color;
-	out_color = vec4(litColor, 1.0);
 	//out_color = vec4(inout_uv, 0.0, 1.0);
 
 	out_normal = vN;
-
-	out_extra = 0.0;
 }

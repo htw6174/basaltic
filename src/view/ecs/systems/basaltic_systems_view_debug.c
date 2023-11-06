@@ -96,7 +96,7 @@ static sg_pipeline_desc debugPipelineDescription = {
     .colors = {
         [0].pixel_format = SG_PIXELFORMAT_RGBA8,
         [1].pixel_format = SG_PIXELFORMAT_RGBA16F,
-        [2].pixel_format = SG_PIXELFORMAT_R32F,
+        [2].pixel_format = SG_PIXELFORMAT_RG16SI,
     }
 };
 
@@ -197,7 +197,7 @@ void DrawRenderTargetPreviews(ecs_iter_t *it) {
         sg_bindings bind = {
             .vertex_buffers[0] = meshes[0].vertexBuffers[0],
             .fs.images[0] = sm->depth_stencil,
-            .fs.samplers[0] = ot->sampler
+            .fs.samplers[0] = ot->samplers[0]
         };
 
         sg_apply_pipeline(pipelines[i].pipeline);

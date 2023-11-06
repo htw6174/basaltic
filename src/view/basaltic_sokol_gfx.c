@@ -36,7 +36,7 @@ void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum se
 void bc_gfxCheck(void) {
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {
-        printf("GL ERROR: %x\n", err);
+        printf("GL ERROR: 0x%X\n", err);
     }
 }
 
@@ -167,10 +167,20 @@ int bc_loadShader(const char *vertSourcePath, const char *fragSourcePath, const 
     char *vert = htw_load(vertSourcePath);
     char *frag = htw_load(fragSourcePath);
 
-    // NOTE: not great to make a 3kb copy here just to set 2 pointers; better approach?
     sg_shader_desc sd = *shaderDescription;
     sd.vs.source = vert;
     sd.fs.source = frag;
+
+    // NOTE: std140 layout is only needed if intending to support non-GL backends
+    // NOTE: would be nice if this was all that was needed to use the std140 layout, however the actual size of the listed members must also match, making the checks below pointless.
+    // for (int i = 0; i < SG_MAX_SHADERSTAGE_UBS; i++) {
+    //     if (sd.vs.uniform_blocks[i].layout == SG_UNIFORMLAYOUT_STD140) {
+    //         sd.vs.uniform_blocks[i].size = htw_align(sd.vs.uniform_blocks[i].size, 16);
+    //     }
+    //     if (sd.fs.uniform_blocks[i].layout == SG_UNIFORMLAYOUT_STD140) {
+    //         sd.fs.uniform_blocks[i].size = htw_align(sd.fs.uniform_blocks[i].size, 16);
+    //     }
+    // }
 
     *out_shader = sg_make_shader(&sd);
 

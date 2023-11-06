@@ -20,7 +20,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
     // default settings
     bc_StartupSettings settings = {
         .startupMode = BC_STARTUP_MODE_START_MODEL,
-        .enableEditor = true,
+        .enableEditor = false,
         .dataDirectory = calloc(maxPathLength, sizeof(char)),
         .loadModelPath = calloc(maxPathLength, sizeof(char)),
         .startModelArgCount = 0,

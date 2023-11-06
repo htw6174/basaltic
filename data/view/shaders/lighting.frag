@@ -13,7 +13,7 @@ precision highp sampler2DShadow;
 
 uniform sampler2D diffuse;
 uniform sampler2D normal;
-uniform sampler2DShadow depth;
+uniform sampler2D depth;
 uniform sampler2DShadow shadowMap;
 
 uniform mat4 pv;
@@ -73,7 +73,7 @@ vec3 linearFog(in vec3 color, in vec3 fogColor, in float dist, in vec3 origin, i
 void main() {
     vec4 diff = texture(diffuse, uv);
     vec3 norm = texture(normal, uv).xyz;
-    float dep = texture(depth, vec3(uv, 1.0));
+    float dep = texture(depth, uv).x;
 
     float viewZ = reconstructDepth(dep);
     vec4 viewPos = view_dir * viewZ;
@@ -141,7 +141,7 @@ void main() {
 
     // DEBUG
     //vec3 wtf = lightPos.xyz;
-    vec3 wtf = fract(worldPos.xyz);
+    //vec3 wtf = fract(worldPos.xyz);
     //vec3 wtf = wd.xyz;
 
     //vec3 color = mix(sky, wtf, diff.a);

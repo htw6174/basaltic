@@ -56,7 +56,7 @@ static sg_pass_action gBufferPassAction = {
     .colors = {
         {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
         {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
-        {.load_action = SG_LOADACTION_CLEAR, .clear_value = COLOR_CLEAR},
+        {.load_action = SG_LOADACTION_DONTCARE, .clear_value = COLOR_CLEAR},
     },
     .depth = {
         .load_action = SG_LOADACTION_CLEAR,
@@ -107,7 +107,7 @@ static sg_shader_desc lightingShaderDescription = {
         [2] = {
             .used = true,
             .image_type = SG_IMAGETYPE_2D,
-            .sample_type = SG_IMAGESAMPLETYPE_DEPTH
+            .sample_type = SG_IMAGESAMPLETYPE_UNFILTERABLE_FLOAT
         },
         [3] = {
             .used = true,
@@ -121,6 +121,10 @@ static sg_shader_desc lightingShaderDescription = {
             .sampler_type = SG_SAMPLERTYPE_FILTERING
         },
         [1] = {
+            .used = true,
+            .sampler_type = SG_SAMPLERTYPE_NONFILTERING
+        },
+        [2] = {
             .used = true,
             .sampler_type = SG_SAMPLERTYPE_COMPARISON
         }
@@ -147,7 +151,7 @@ static sg_shader_desc lightingShaderDescription = {
         [3] = {
             .used = true,
             .image_slot = 3,
-            .sampler_slot = 1,
+            .sampler_slot = 2,
             .glsl_name = "shadowMap"
         }
     },
@@ -211,7 +215,7 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
             sg_pixelformat_info formatInfo = sg_query_pixelformat(format);
             assert(formatInfo.sample);
             assert(formatInfo.render);
-            if (rtd->filter == SG_FILTER_LINEAR) assert(formatInfo.filter);
+            sg_filter filter = formatInfo.filter ? rtd->filter : SG_FILTER_NEAREST;
 
             rt->images[i] = sg_make_image(&(sg_image_desc){
                 .render_target = true,
@@ -220,10 +224,22 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
                 .height = rtd->height
             });
             pd.color_attachments[i].image = rt->images[i];
+
+            rt->samplers[i] = sg_make_sampler(&(sg_sampler_desc){
+                .min_filter = filter,
+                .mag_filter = filter,
+                .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+                .wrap_v = SG_WRAP_CLAMP_TO_EDGE
+            });
         }
     }
 
     if (rtd->depthFormat != 0) {
+        // Ensure depth format will work as requested
+        sg_pixelformat_info formatInfo = sg_query_pixelformat(rtd->depthFormat);
+        assert(formatInfo.sample);
+        assert(formatInfo.render);
+        assert(formatInfo.depth);
         rt->depth_stencil = sg_make_image(&(sg_image_desc){
             .render_target = true,
             .pixel_format = rtd->depthFormat,
@@ -231,15 +247,16 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
             .height = rtd->height
         });
         pd.depth_stencil_attachment.image = rt->depth_stencil;
-    }
 
-    rt->sampler = sg_make_sampler(&(sg_sampler_desc){
-        .min_filter = rtd->filter,
-        .mag_filter = rtd->filter,
-        .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
-        .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
-        .compare = rtd->compare
-    });
+        sg_filter filter = formatInfo.filter ? rtd->filter : SG_FILTER_NEAREST;
+        rt->depthSampler = sg_make_sampler(&(sg_sampler_desc){
+            .min_filter = filter,
+            .mag_filter = filter,
+            .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = SG_WRAP_CLAMP_TO_EDGE,
+            .compare = rtd->compare
+        });
+    }
 
     *rp = (RenderPass){
         .action = rtd->action,
@@ -371,12 +388,17 @@ void RefreshRenderPasses(ecs_iter_t *it) {
                 if (rt->images[q].id != 0) {
                     sg_destroy_image(rt->images[q]);
                 }
+                if (rt->samplers[q].id != 0) {
+                    sg_destroy_sampler(rt->samplers[q]);
+                }
             }
             // destroy depth attachment if exists
             if (rt->depth_stencil.id != 0) {
                 sg_destroy_image(rt->depth_stencil);
             }
-            sg_destroy_sampler(rt->sampler);
+            if (rt->depth_stencil.id != 0) {
+                sg_destroy_sampler(rt->depthSampler);
+            }
         }
 
         const RenderPass *rp = ecs_get(it->world, it->entities[i], RenderPass);
@@ -578,8 +600,9 @@ void DrawLighting(ecs_iter_t *it) {
                 shadowTarget[0].depth_stencil
             },
             .fs.samplers = {
-                gBufferTarget[0].sampler,
-                shadowTarget[0].sampler
+                gBufferTarget[0].samplers[0],
+                gBufferTarget[0].depthSampler,
+                shadowTarget[0].depthSampler
             }
         };
 
@@ -623,7 +646,7 @@ void DrawFinal(ecs_iter_t *it) {
             rt->images[0]
         },
         .fs.samplers = {
-            rt->sampler
+            rt->samplers[0]
         }
     };
 
@@ -774,7 +797,10 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] Pipeline,
     );
 
-    ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
+    ecs_entity_t reloadTick = ecs_set_interval(world, 0, 1.0);
+    ecs_set_tick_source(world, ReloadPipelines, reloadTick);
+
+    //ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
 
     ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
         [in] QueryDesc,
@@ -842,7 +868,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
         .colorFormats = {
             SG_PIXELFORMAT_RGBA8,
             SG_PIXELFORMAT_RGBA16F,
-            SG_PIXELFORMAT_R32F
+            SG_PIXELFORMAT_RG16SI
         },
         .depthFormat = SG_PIXELFORMAT_DEPTH,
         .filter = SG_FILTER_LINEAR

@@ -182,7 +182,7 @@ static sg_pipeline_desc terrainPipelineDescription = {
     .colors = {
         [0].pixel_format = SG_PIXELFORMAT_RGBA8,
         [1].pixel_format = SG_PIXELFORMAT_RGBA16F,
-        [2].pixel_format = SG_PIXELFORMAT_R32F,
+        [2].pixel_format = SG_PIXELFORMAT_RG16SI,
     }
 };
 
@@ -1173,6 +1173,13 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, feedback[i].gluint);
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(hovered[i]), &hovered[i]);
 #endif
+
+        s32 pixels[4] = {0};
+        glReadBuffer(GL_COLOR_ATTACHMENT2);
+        // NOTE: readpixels is picky about format and type combos. Even though the framebuffer format is RG16I, need to read it using this combo which returns 4 ints
+        glReadPixels(mouse[i].x, mouse[i].y, 1, 1, GL_RGBA_INTEGER, GL_INT, &pixels);
+        hovered[i].x = pixels[0];
+        hovered[i].y = pixels[1];
     }
 }
 
