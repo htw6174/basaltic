@@ -1132,11 +1132,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, ++f);
     Mesh *mesh = ecs_field(it, Mesh, ++f);
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
+    RingBuffer *pixelPack = ecs_field(it, RingBuffer, ++f);
     PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
     Clock *programClock = ecs_field(it, Clock, ++f);
-    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
-    HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
+    //HoveredCell *hovered = ecs_field(it, HoveredCell, ++f); // may use as uniform input later
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -1166,7 +1166,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         }
 
         glReadBuffer(GL_COLOR_ATTACHMENT2);
-        glBindBuffer(GL_PIXEL_PACK_BUFFER, feedback[i].gluint);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelPack[i].writableBuffer);
         // NOTE: readpixels is picky about format and type combos. Even though the framebuffer format is RG16I, need to read it using this combo which returns 4 ints
         glReadPixels(mouse[i].x, mouse[i].y, 1, 1, GL_RGBA_INTEGER, GL_INT, 0);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -1175,11 +1175,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
 
 void ReadFeedbackBuffer(ecs_iter_t *it) {
     int f = 0;
-    FeedbackBuffer *feedback = ecs_field(it, FeedbackBuffer, ++f);
+    RingBuffer *feedback = ecs_field(it, RingBuffer, ++f);
     HoveredCell *hovered = ecs_field(it, HoveredCell, ++f);
 
     s32 pixels[4] = {0};
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, feedback->gluint);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, feedback->readableBuffer);
     glGetBufferSubData(GL_PIXEL_PACK_BUFFER, 0, sizeof(pixels), &pixels);
     // NOTE: on some platforms may need to use glMapBufferRange instead. glGetBufferSubData is known to work on destop OpenGL and emscripten builds
     //void *buf = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, sizeof(pixels), GL_MAP_READ_BIT);
@@ -1271,10 +1271,10 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] InstanceBuffer,
                [in] Mesh,
                [in] DataTexture,
+               [in] RingBuffer,
                [in] PVMatrix($),
                [in] Mouse($),
                [in] Clock($),
-               [in] FeedbackBuffer($),
                [out] HoveredCell($),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
@@ -1282,20 +1282,12 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     );
 
     ECS_SYSTEM(world, ReadFeedbackBuffer, EcsOnStore,
-               [in] FeedbackBuffer($),
+               [in] RingBuffer,
                [out] HoveredCell($),
+               [none] bcview.TerrainRender,
     );
 
-    GLuint feedbackBuffer;
-    glGenBuffers(1, &feedbackBuffer);
-
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, feedbackBuffer);
-    glBufferData(GL_PIXEL_PACK_BUFFER, sizeof(int) * 4, NULL, GL_STREAM_READ);
-    bc_gfxCheck();
-    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     sg_reset_state_cache();
-
-    ecs_singleton_set(world, FeedbackBuffer, {feedbackBuffer});
 
     // Pipeline, only need to create one per type
     ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "Terrain Pipeline");
@@ -1311,9 +1303,25 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_terrain.frag"});
     ecs_set(world, terrainShadowPipeline, PipelineDescription, {.shader_desc = &terrainShadowShaderDescription, .pipeline_desc = &terrainShadowPipelineDescription});
 
-    // Init mesh TODO: give this a better home?
+    // TODO: give these setup steps a better home
+
+    // init mesh
     //Mesh mesh = createHexmapMesh();
     Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
+
+    // initialize RingBuffer entries
+    RingBuffer pixelPackRingBuf = {0};
+    for (int i = 0; i < RING_BUFFER_LENGTH; i++) {
+        GLuint buf;
+        glGenBuffers(1, &buf);
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, buf);
+        glBufferData(GL_PIXEL_PACK_BUFFER, sizeof(int) * 4, NULL, GL_STREAM_READ);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        pixelPackRingBuf._buffers[i] = buf;
+    }
+    pixelPackRingBuf.readableBuffer = pixelPackRingBuf._buffers[0];
+    pixelPackRingBuf.writableBuffer = pixelPackRingBuf._buffers[0];
 
     ecs_entity_t terrainDraw = ecs_set_name(world, 0, "TerrainDraw");
     ecs_add_pair(world, terrainDraw, GBufferPass, terrainPipeline);
@@ -1323,4 +1331,5 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_add(world, terrainDraw, InstanceBuffer);
     ecs_add(world, terrainDraw, QueryDesc);
     ecs_set_id(world, terrainDraw, ecs_id(Mesh), sizeof(mesh), &mesh);
+    ecs_set_id(world, terrainDraw, ecs_id(RingBuffer), sizeof(pixelPackRingBuf), &pixelPackRingBuf);
 }

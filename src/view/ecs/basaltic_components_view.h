@@ -19,6 +19,12 @@
 #define BC_DECL
 #endif
 
+/** Number of "in-flight" buffers used for things like Pixel Pack Buffers
+ * The higher this number, the larger a delay between reads and writes
+ * However, if this number is too small, it will limit framerate for reasons explained here: https://www.khronos.org/opengl/wiki/Pixel_Buffer_Object
+ * Reasonable values are between 2 and 4
+ */
+#define RING_BUFFER_LENGTH 2
 #define MAX_QUERY_EXPR_LENGTH 1024
 
 /* Common types */
@@ -268,8 +274,15 @@ ECS_STRUCT(Elements, {
     s32 count;
 });
 
-ECS_STRUCT(FeedbackBuffer, {
-    u32 gluint;
+/** Collection of buffers to allow for async read/write from/to the gpu
+ *
+ */
+ECS_STRUCT(RingBuffer, {
+    u32 readableBuffer;
+    u32 writableBuffer; // NOTE: confusingly, this should be bound before a call to glReadPixels, as GL will write the result into this buffer
+    ECS_PRIVATE;
+    u32 _head;
+    u32 _buffers[RING_BUFFER_LENGTH];
 });
 
 // Immutable texture array, all get bound to the fragment stage

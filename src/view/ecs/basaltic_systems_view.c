@@ -656,6 +656,18 @@ void DrawFinal(ecs_iter_t *it) {
     sg_draw(0, 4, 1);
 }
 
+void CycleRingBuffers(ecs_iter_t *it) {
+    RingBuffer *rbs = ecs_field(it, RingBuffer, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        // current readableBuffer becomes next writableBuffer
+        rbs[i].writableBuffer = rbs[i].readableBuffer;
+        // next readableBuffer is the oldest writableBuffer
+        rbs[i].readableBuffer = rbs[i]._buffers[rbs[i]._head];
+        rbs[i]._head  = (rbs[i]._head + 1) % RING_BUFFER_LENGTH;
+    }
+}
+
 void BcviewSystemsImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystems);
 
@@ -844,6 +856,11 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] Elements,
         [in] PVMatrix($),
         [in] WrapInstanceOffsets($)
+    );
+
+    // TODO: on load or on store?
+    ECS_SYSTEM(world, CycleRingBuffers, EcsOnStore,
+        [inout] RingBuffer
     );
 
     //ecs_enable(world, DrawInstances, false);
