@@ -75,17 +75,23 @@ ivec4 terrainFetch(ivec2 coord) {
 }
 
 // clumsy replacement for glsl 4.0's bitfieldExtract
-int bitfieldExtract(int value, int offset, int bits) {
-    int top = (1 << (offset + bits)) - 1;
-    int bottom = (1 << offset) - 1;
-    int mask = (top ^ bottom) & top;
-    int extract = (value & mask) >> offset;
-    int sign_bit = (value >> (offset + bits - 1)) & 1;
-    int low = (1 << bits) - 1;
-    int high = -1^low;
+int bitfieldExtract(in int value, in int offset, in int bits) {
+    value = value >> offset;
+    int mask = (1 << bits) - 1;
+    value = value & mask;
+    int sign_bit = value >> (bits - 1);
+    int high = -1^mask;
+    // if sign bit is 1, set all high bits to 1
     int sign_high = high * sign_bit;
-    extract = extract | sign_high;
-    return extract;
+    value = value | sign_high;
+    return value;
+}
+
+uint bitfieldExtractU(in int value, in int offset, in int bits) {
+    value = value >> offset;
+    int mask = (1 << bits) - 1;
+    value = value & mask;
+    return uint(value);
 }
 
 float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
@@ -158,9 +164,9 @@ void main()
     //float elevation = float(cd.r);
 
     float biotemp = float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
-    float humidityPref = float(bitfieldExtract(cd.g, 16, 16)) / 255.0;
+    float humidityPref = float(bitfieldExtractU(cd.g, 16, 16)) / 255.0;
     float understory = float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
-    float canopy = float(bitfieldExtract(cd.b, 16, 16)) / 255.0;
+    float canopy = float(bitfieldExtractU(cd.b, 16, 16)) / 255.0;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;

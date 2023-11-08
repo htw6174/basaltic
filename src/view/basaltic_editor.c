@@ -29,6 +29,16 @@
 
 #define MAX_CUSTOM_QUERIES 4
 
+// Colors
+#define IG_COLOR_DEFAULT ((ImVec4){1.0, 1.0, 1.0, 1.0})
+#define IG_COLOR_DISABLED ((ImVec4){1.0, 1.0, 1.0, 0.5})
+// Flecs Explorer color defaults:
+// Module: Yellow
+// Component: Blue
+// Tag: ???
+// Prefab: White
+// Other: Green
+
 typedef struct {
     ecs_query_t *query;
     s32 queryPage;
@@ -93,7 +103,8 @@ void entityLabel(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
-void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity);
+/** Returns true if the cell was altered */
+bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity);
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
@@ -102,6 +113,8 @@ void renderTargetInspector(ecs_world_t *world);
 void toolPaletteInspector(ecs_world_t *world);
 
 /* Misc Functions*/
+/** Create query valid for iterating over results in an entity list, which adds several optional terms for prettifying results and includes disabled entities */
+ecs_query_t *createInspectorQuery(ecs_world_t *world, const char *expr);
 void possessEntity(ecs_world_t *world, ecs_entity_t target);
 
 
@@ -116,9 +129,9 @@ void bc_setupEditor(void) {
         .worldName = "View",
         .customQueries = {
             [0] = {.queryExpr = "bcview.Tool"},
-            [1] = {.queryExpr = "Pipeline || InstanceBuffer, ?Disabled"}, //(bcview.RenderPipeline, _)"},
+            [1] = {.queryExpr = "Pipeline || InstanceBuffer"}, //(bcview.RenderPipeline, _)"},
             [2] = {.queryExpr = "Prefab"},
-            [3] = {.queryExpr = "flecs.system.System, ?Disabled"},
+            [3] = {.queryExpr = "flecs.system.System"},
         }
     };
 
@@ -264,43 +277,51 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
             focusCoord = *(htw_geo_GridCoord*)hovered;
         }
 
-        cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity);
+        if (cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity)) {
+            // Tell view to update chunk map
+            bc_redraw_model(viewEcsWorld);
+        }
     }
 
     // Misc options
-    if (igButton("Take control of random character", (ImVec2){0, 0})) {
-        ecs_iter_t it = ecs_query_iter(world->ecsWorld, world->characters);
-        // TODO: not really random!
-        ecs_entity_t first = ecs_iter_first(&it);
-        possessEntity(world->ecsWorld, first);
-    }
-
     if (igButton("Focus on selected cell", (ImVec2){0, 0})) {
         // TODO: modify this function to take Camera, ChunkMap, and GridCoord
         //bc_focusCameraOnCell(ui, selectedCellCoord);
     }
 }
 
-void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity) {
+bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity) {
     const Plane *p = ecs_get(world, plane, Plane);
     htw_ChunkMap *cm = p->chunkMap;
+    bool edited = false;
 
     coordInspector("Cell coordinates", coord);
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Data", ImGuiTreeNodeFlags_DefaultOpen)) {
         igSpacing();
 
-        // TODO: use reflection info to get these fields automatically (could even make editable?)
-        // TODO: include read-only fields for derived cell data
+        // TODO: should make some of this layout automatic based on CellData component reflection info, in case I change the types around
         CellData *cellData = htw_geo_getCell(cm, coord);
         igText("Raw Cell Info:");
-        igValue_Int("Height", cellData->height);
+        igPushItemWidth(200.0);
+        //const s8 minHeight = INT8_MIN;
+        //const s8 maxHeight = INT8_MAX;
+        const s16 smallHeightStep = 1;
+        const s16 bigHeightStep = 8;
+
+        const u16 smallWaterStep = 8;
+        const u16 bigWaterStep = 64;
+
+        const u32 smallVegStep = 8;
+        const u32 bigVegStep = 64;
+        edited |= igInputScalar("Height", ImGuiDataType_S16, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
         igValue_Int("Geology", cellData->geology);
-        igValue_Int("Groundwater", cellData->groundwater);
-        igValue_Int("Surface Water", cellData->surfacewater);
-        igValue_Int("Understory", cellData->understory);
-        igValue_Int("Canopy", cellData->canopy);
-        igValue_Int("Humidity Preference", cellData->humidityPreference);
+        edited |= igInputScalar("Groundwater", ImGuiDataType_S16, &(cellData->groundwater), &smallWaterStep, &bigWaterStep, NULL, 0);
+        edited |= igInputScalar("Surface Water", ImGuiDataType_U16, &(cellData->surfacewater), &smallWaterStep, &bigWaterStep, NULL, 0);
+        edited |= igInputScalar("Humidity Preference", ImGuiDataType_U16, &(cellData->humidityPreference), &smallWaterStep, &bigWaterStep, NULL, 0);
+        edited |= igInputScalar("Understory", ImGuiDataType_U32, &(cellData->understory), &smallVegStep, &bigVegStep, NULL, 0);
+        edited |= igInputScalar("Canopy", ImGuiDataType_U32, &(cellData->canopy), &smallVegStep, &bigVegStep, NULL, 0);
+        igPopItemWidth();
 
         igText("Derived Cell Info:");
         s32 altitudeMeters = cellData->height * 100;
@@ -320,6 +341,8 @@ void cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         }
         igValue_Uint("Entities here", entityCountHere);
     }
+
+    return edited;
 }
 
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
@@ -387,13 +410,12 @@ void ecsQueryColumns(ecs_world_t *world, EcsInspectionContext *ic) {
 
 void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selected) {
     // TODO: could evaluate expression after every keypress, but only create query when enter is pressed. Would allow completion hints
-    // NOTE: Flecs explorer's entity tree also includes these terms in every query, to alter entity display by property (last term means singleton): "?Module, ?Component, ?Tag, ?Prefab, ?Disabled, ?ChildOf(_, $This)"
     if (igIsWindowAppearing() || igInputText("Query", qc->queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
         qc->queryExprError[0] = '\0';
         if (qc->query != NULL) {
             ecs_query_fini(qc->query);
         }
-        qc->query = ecs_query_new(world, qc->queryExpr);
+        qc->query = createInspectorQuery(world, qc->queryExpr);
         if (qc->query == NULL) {
             // TODO: figure out if there is a way to get detailed expression error information from Flecs
             strcpy(qc->queryExprError, "Error: invalid query expression");
@@ -517,7 +539,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     if (igButton("Add Component", (ImVec2){0, 0})) {
         if (ic->components == NULL) {
             // create component query
-            ic->components = ecs_query_new(world, "EcsComponent");
+            ic->components = createInspectorQuery(world, "EcsComponent");
         }
         igOpenPopup_Str("add_component_popup", 0);
         newComponent = 0;
@@ -537,7 +559,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     if (igButton("Add Tag", (ImVec2){0, 0})) {
         if (ic->tags == NULL) {
             // create tag query (any entity, could be slow to evaluate)
-            ic->tags = ecs_query_new(world, "_");
+            ic->tags = createInspectorQuery(world, "_");
         }
         igOpenPopup_Str("add_tag_popup", 0);
         newTag = 0;
@@ -557,7 +579,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     if (igButton("Add Pair", (ImVec2){0, 0})) {
         if (ic->relationships == NULL) {
             // create relationshp query as union of all relationship properties. May still miss some entities that can be used as relationships, can handle these cases later with a more general purpose drag-and-drop relationship builder or something
-            ic->relationships = ecs_query_new(world, "EcsComponent || EcsTag || EcsFinal || EcsDontInherit || EcsAlwaysOverride || EcsTransitive || EcsReflexive || EcsAcyclic || EcsTraversable || EcsExclusive || EcsUnion || EcsSymmetric || EcsWith || EcsOneOf");
+            ic->relationships = createInspectorQuery(world, "EcsComponent || EcsTag || EcsFinal || EcsDontInherit || EcsAlwaysOverride || EcsTransitive || EcsReflexive || EcsAcyclic || EcsTraversable || EcsExclusive || EcsUnion || EcsSymmetric || EcsWith || EcsOneOf");
         }
         igOpenPopup_Str("add_pair_popup", 0);
         newPair = 0;
@@ -846,6 +868,9 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     u32 lastResult = firstResult + pageLength;
 
     while (ecs_iter_next(it)) {
+        // Fields from default expression
+        bool disabled = ecs_field_is_set(it, 5);
+
         for (int i = 0; i < it->count; i++) {
             ecs_entity_t e = it->entities[i];
             const char *name = getEntityLabel(world, e);
@@ -853,11 +878,17 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
             if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
                 if (resultsCount >= firstResult && resultsCount < lastResult) {
                     igPushID_Int(e);
+                    if (disabled) {
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DISABLED);
+                    } else {
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DEFAULT);
+                    }
                     // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
                     if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
                         *selected = e;
                         anyClicked = true;
                     }
+                    igPopStyleColor(1);
                     // drag and drop
                     if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
                         igSetDragDropPayload("BC_PAYLOAD_ENTITY", &e, sizeof(ecs_entity_t), ImGuiCond_None);
@@ -1231,4 +1262,17 @@ void toolPaletteInspector(ecs_world_t *world) {
     // Keep track of selected tool
     // Mini entity inspector for editing tool values?
     // Assign selected tool to ActiveTool (how?)
+}
+
+ecs_query_t *createInspectorQuery(ecs_world_t *world, const char *expr) {
+    // NOTE: Flecs explorer's entity tree includes these terms in every query, to alter entity display by property
+    // Extra term not supported in cached queries, means singleton: ?ChildOf(_, $This)
+    const char *defaultExpr = "?Module, ?Component, ?Tag, ?Prefab, ?Disabled, ";
+    // Merge default and user query expressions together, with default terms first
+    char fullExpr[sizeof(defaultExpr) + MAX_QUERY_EXPR_LENGTH];
+    strcpy(fullExpr, defaultExpr);
+    strcat(fullExpr, expr);
+    return ecs_query_init(world, &(ecs_query_desc_t){
+        .filter.expr = fullExpr
+    });
 }

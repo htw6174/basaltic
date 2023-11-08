@@ -64,17 +64,16 @@ ivec4 terrainFetch(ivec2 coord) {
 }
 
 // clumsy replacement for glsl 4.0's bitfieldExtract
-int bitfieldExtract(int value, int offset, int bits) {
-    int top = (1 << (offset + bits)) - 1;
-    int bottom = (1 << offset) - 1;
-    int mask = (top ^ bottom) & top;
-    int extract = (value & mask) >> offset;
-    int sign_bit = (value >> (offset + bits - 1)) & 1;
-    int low = (1 << bits) - 1;
-    int high = -1^low;
+int bitfieldExtract(in int value, in int offset, in int bits) {
+    value = value >> offset;
+    int mask = (1 << bits) - 1;
+    value = value & mask;
+    int sign_bit = value >> (bits - 1);
+    int high = -1^mask;
+    // if sign bit is 1, set all high bits to 1
     int sign_high = high * sign_bit;
-    extract = extract | sign_high;
-    return extract;
+    value = value | sign_high;
+    return value;
 }
 
 float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {

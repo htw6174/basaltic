@@ -19,7 +19,6 @@ void main() {
     view_dir /= view_dir.w;
     view_dir /= view_dir.z;
     world_dir = inverse_view * vec4(view_dir.xyz, 1.0);
-    //world_dir /= world_dir.w;
 }
 
 

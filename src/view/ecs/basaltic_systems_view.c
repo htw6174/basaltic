@@ -874,7 +874,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
         .width = 2048,
         .height = 2048,
         .depthFormat = SG_PIXELFORMAT_DEPTH,
-        .filter = SG_FILTER_LINEAR,
+        .filter = SG_FILTER_NEAREST,
         .compare = SG_COMPAREFUNC_LESS
     });
 

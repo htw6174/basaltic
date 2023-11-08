@@ -2,34 +2,15 @@
 precision mediump float;
 
 // toggle for a more mobile-friendly version of this shader
-#define LIGHTWEIGHT
-
-// enable to make WebGL2 / GLES3 friendly
-#define WEBGL
+//#define LIGHTWEIGHT
 
 #define PI 3.14159
 
 //#include "uniforms.h"
 
-//const vec3 cliffColor = vec3(0.3, 0.2, 0.1);
-
-#ifndef WEBGL
-// NOTE: because we only want to write to the feedback buffer from visible fragments, early depth testing is required
-layout(early_fragment_tests) in;
-#endif
-
 uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
-
-#ifdef WEBGL
-
-#else
-layout(std430, binding = 0) buffer feedbackBuffer {
-	int hoveredX;
-	int hoveredY;
-} FeedbackBuffer;
-#endif
 
 in vec4 inout_color;
 in vec3 inout_pos;
@@ -77,7 +58,7 @@ float stableHash(in vec3 pos) {
 	float maxDeriv = max(length(dFdx(pos)),
 						 length(dFdy(pos)));
 	// TEST: limit frequency with a minimum deriv
-	maxDeriv = max(maxDeriv, 0.5);
+	//maxDeriv = max(maxDeriv, 0.5);
 	float pixScale = 1.0/(g_HashScale*maxDeriv);
 	// Find two nearest log-discretized noise scales
 	vec2 pixScales = vec2( exp2(floor(log2(pixScale))),
@@ -99,7 +80,8 @@ float stableHash(in vec3 pos) {
 	((x < a) ? cases.x : cases.y) :
 	cases.z;
 	// Avoids ατ == 0. Could also do ατ =1-ατ
-	at = clamp( at , 1.0e-6, 1.0 );
+	// NOTE: original paper cuts off small values becaues they don't make sense for alpha testing, but this causes artifacts near camera
+	//at = clamp( at , 1.0e-6, 1.0 );
 
 	return at;
 }
@@ -139,17 +121,6 @@ float fbm(vec2 x, float H) {
 
 void main()
 {
-#ifndef WEBGL
-	// Determine if mouse is over this cell, write to host-readable buffer if so
-	// NOTE: gl pixel centers lie on half integers. mousePosition should have 0.5 added to match OpenGL's pixel space.
-	vec2 windowPos = gl_FragCoord.xy;
-	float mouseDist = distance(windowPos, mousePosition);
-	if (mouseDist < 0.1) {
-		FeedbackBuffer.hoveredX = inout_cellCoord.x;
-		FeedbackBuffer.hoveredY = inout_cellCoord.y;
-	}
-#endif
-
 	out_id = inout_cellCoord;
 
 	// compute normal from position deriviatives
@@ -210,7 +181,10 @@ void main()
 	float treeThreshold = inout_radius;
 #else
 	// hashed stochastic test for vegetation coverage
-	float hashThreshold = stableHash(inout_pos * 100.0);
+	// NOTE: stableHash breaks down very close to the camera, < ~1 unit. No, scaling world position doesn't help. Mix to nearHash when close to camera
+	float farHash = stableHash(inout_pos);
+	//float nearHash = hash31(inout_pos * 1.0);
+	float hashThreshold = farHash;
 	float grassThreshold = hashThreshold;
 	float treeThreshold = hashThreshold;
 #endif
@@ -254,6 +228,9 @@ void main()
 	//vN = flatNormal;
 
 	out_color = vec4(albedo, 1.0);
+	//out_color = vec4(dFdy(inout_pos) * 100.0, 1.0);
+	//out_color = vec4(fract(inout_pos * 10.0), 1.0);
+	//out_color = vec4(vec3(hashThreshold), 1.0);
 	//out_color = inout_color;
 	//out_color = vec4(inout_uv, 0.0, 1.0);
 
