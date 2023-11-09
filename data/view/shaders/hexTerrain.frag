@@ -125,11 +125,11 @@ void main()
 
 	// compute normal from position deriviatives
 	// NOTE: frag shader derivative normals always give 'flat' shading
-	vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
-	//float cliff = 1.0 - normal.z;
-	bool isCliff = /*(flatNormal.z < sin(PI / 4)) &&*/ (inout_normal.z < sin(PI / 3.75));
+	//vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	bool isCliff = (inout_normal.z < sin(PI / 3.75));
+	//vec3 vN = isCliff ? flatNormal : inout_normal; // if flat shaded cliff edeges are desired, else:
+	vec3 vN = inout_normal;
 
-	vec3 vN = isCliff ? flatNormal : inout_normal;
 
 	//float normMix = smoothstep();
 	//vec3 vN = mix(flatNormal, inout_normal, inout_normal.z);
@@ -197,36 +197,43 @@ void main()
 
 	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
 
-	vec3 cliffColor = vec3(0.3, 0.25, 0.25);
+	// For simple rock color grading, start with slightly boosted red&blue then adjust +/- 0.05
+	vec3 cliffColor = vec3(0.4, 0.35, 0.4);
 
-	float noiseFreq = isCliff ? 20.0 : 4.0;
-	float bandFreq = isCliff ? 20.0 : 2.0;
+	float noiseFreq = isCliff ? 20.0 : 2.0;
+	float bandFreqLow = 1.0;
+	float bandFreqHigh = 20.0;
 
 	// Reusable noise samples
-	float noiseLowFreq = noise21sharp(inout_pos.xy * noiseFreq * 0.1);
+	float noiseLowFreq = noise21sharp(inout_pos.xy * noiseFreq * 0.01);
 	float noiseMidFreq = noise21sharp(inout_pos.xy * noiseFreq);
 	float noiseHighFreq = noise21sharp(inout_pos.xy * noiseFreq * 10.0);
 
 	// TODO: try out fbm for a different effect
 	//float noiseMidFreq = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
-	float strataNoise = (noiseMidFreq * 0.1) + (noiseLowFreq * 2.0);
+	float strataNoise = (noiseMidFreq * 0.1) + (noiseLowFreq * 20.0);
 	// Bands of random value between 0.9 and 1.1
-	float strataSample = floor(inout_pos.z + (strataNoise * bandFreq));
-	float cliffValue = (rand(strataSample) * 0.2) + 0.9;
+	float strataSample = floor(inout_pos.z + (strataNoise * bandFreqHigh));
+	float rockLayerSample = floor(inout_pos.z * 0.01 + (strataNoise * bandFreqHigh));
+	float strataValue = (rand(strataSample) * 0.4) + 0.8;
+	float rockLayerRed = rand(rockLayerSample) * 0.2 - 0.1;
+	float rockLayerBlue = -rockLayerRed; //rand(rockLayerSample + 69.0) * 0.2 - 0.1;
 
-	float groundSample = floor(inout_pos.z + noiseMidFreq * bandFreq);
+	vec3 cliffValue = vec3(rockLayerRed, 0.0, rockLayerBlue) + strataValue;
+
+	float groundSample = floor(inout_pos.z * 5.0 + noiseMidFreq * 2.0);
 	float groundValue = (rand(groundSample) * 0.2) + 0.9;
 
 	vec3 albedo = isCliff ? cliffColor * cliffValue : biomeColor * groundValue;
 
 	// TODO: proper water level recoloring
-	float waveMag = 0.005;
-	float waveFreq = 5.0;
-	float wave = sin((noiseMidFreq * waveFreq) + time);
+	float tideMag = 0.005;
+	float tideFreq = 5.0;
+	float tide = sin((noiseMidFreq * tideFreq) + time);
 
 	float seaLevelOffset = -0.05;
 	float seaLevel = inout_pos.z + seaLevelOffset;
-	float isOcean = step(seaLevel, wave * waveMag);
+	float isOcean = step(seaLevel, tide * tideMag);
 
 	float depth = 1.0 - min(-inout_pos.z, 1.0);
 	depth = depth * depth * depth;
@@ -234,8 +241,15 @@ void main()
 	vec3 oceanShallow = vec3(0.05, 0.5, 0.9);
 	vec3 oceanColor = mix(oceanDeep, oceanShallow, depth);
 
+	float waveMag = 1.0;
+	float waveFreq = 20.0;
+	float wave = sin((noiseHighFreq * waveFreq) + time) * waveMag;
+	float isWave = step(0.5, wave);
+	vec3 waveCrest = vec3(0.9, 0.9, 1.0);
+	//oceanColor = mix(oceanColor, waveCrest, isWave);
+
 	vec3 seaFoam = vec3(0.8, 1.0, 1.0);
-	float isFoam = step(wave * waveMag, seaLevel + 0.02);
+	float isFoam = step(tide * tideMag, seaLevel + 0.02);
 	oceanColor = mix(oceanColor, seaFoam, isFoam);
 
 	albedo = mix(albedo, oceanColor, isOcean);

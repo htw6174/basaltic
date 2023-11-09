@@ -36,14 +36,25 @@ bcview {
 
     Prefab VideoSettingsDefault {
         - VideoSettings
-        - RenderScale {1.0}
-        - ShadowMapSize {4096}
+        - RenderScale {0.3}
+        - ShadowMapSize {512}
         - RenderDistance {radius: 2}
     }
 
     Prefab VideoSettingsLow : VideoSettingsDefault {
+        - RenderScale {0.2}
+        - ShadowMapSize {512}
+    }
+
+    Prefab VideoSettingsMedium : VideoSettingsDefault {
         - RenderScale {0.5}
         - ShadowMapSize {2048}
+    }
+
+    Prefab VideoSettingsHigh : VideoSettingsDefault {
+        - RenderScale {1.0}
+        - ShadowMapSize {4096}
+        - RenderDistance {radius: 4}
     }
 
     VideoSettings : VideoSettingsDefault

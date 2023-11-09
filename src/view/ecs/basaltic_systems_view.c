@@ -269,12 +269,17 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
 
 void UniformPointerToMouse(ecs_iter_t *it) {
     Pointer *pointers = ecs_field(it, Pointer, 1);
-    const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
+    const WindowSize *w = ecs_field(it, WindowSize, 2);
+
+    float scale = 1.0;
+    if (ecs_field_is_set(it, 3)) {
+        scale = *ecs_field(it, RenderScale, 3);
+    }
 
     // TODO: need any special handling for multiple pointer inputs? For now just override with last pointer
     for (int i = 0; i < it->count; i++) {
-        float x = pointers[i].x + 0.5;
-        float y = (w->y - pointers[i].y) + 0.5;
+        float x = (pointers[i].x * scale) + 0.5;
+        float y = ((w->y - pointers[i].y) * scale) + 0.5;
         ecs_singleton_set(it->world, Mouse, {x, y});
     }
 }
@@ -360,8 +365,8 @@ void OnRenderSizeChanged(ecs_iter_t *it) {
     WindowSize *ws = ecs_field(it, WindowSize, 1);
     RenderScale *rs = ecs_field(it, RenderScale, 2);
 
-    // clamp render scale between 0.1 and 2
-    float scale = fminf(fmaxf(0.1, *rs), 2.0);
+    // clamp render scale between 0.05 and 2
+    float scale = fminf(fmaxf(0.05, *rs), 2.0);
     s32 width = ws->x * scale;
     s32 height = ws->y * scale;
 
@@ -679,6 +684,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
         [in] Pointer,
         [in] WindowSize($),
+        [in] ?RenderScale(VideoSettings),
         [out] ?Mouse($)
     );
 

@@ -208,8 +208,8 @@ static void translateCamera(ecs_world_t *world, Camera camDelta) {
     }
 
     cam->origin = (vec3){{wrappedX, wrappedY, cam->origin.z + camDelta.origin.z}};
-    cam->distance += camDelta.distance;
-    cam->pitch += camDelta.pitch;
+    cam->distance = CLAMP(cam->distance + camDelta.distance, 0.5, 100.0);
+    cam->pitch = CLAMP(cam->pitch + camDelta.pitch, -89.9, 89.9);
     cam->yaw += camDelta.yaw;
 
     ecs_singleton_modified(world, Camera);

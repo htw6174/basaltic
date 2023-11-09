@@ -165,10 +165,10 @@ void main()
     float elevation = interpolate_height(in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
 
-    float biotemp = float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
-    float humidityPref = float(bitfieldExtractU(cd.g, 16, 16)) / 255.0;
-    float understory = float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
-    float canopy = float(bitfieldExtractU(cd.b, 16, 16)) / 255.0;
+    float biotemp =         float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
+    float humidityPref =    float(bitfieldExtractU(cd.g, 16, 16)) / 255.0;
+    float understory =      float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
+    float canopy =          float(bitfieldExtractU(cd.b, 16, 16)) / 255.0;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
