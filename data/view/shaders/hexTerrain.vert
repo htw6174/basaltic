@@ -74,7 +74,8 @@ ivec4 terrainFetch(ivec2 coord) {
     return texelFetch(terrain, (coord + wrap) % wrap, 0);
 }
 
-// clumsy replacement for glsl 4.0's bitfieldExtract
+// costs ~2ms for 7 calls
+//clumsy replacement for glsl 4.0's bitfieldExtract
 int bitfieldExtract(in int value, in int offset, in int bits) {
     value = value >> offset;
     int mask = (1 << bits) - 1;
@@ -94,6 +95,7 @@ uint bitfieldExtractU(in int value, in int offset, in int bits) {
     return uint(value);
 }
 
+// costs ~3ms. Can eliminate one of the terrainFetch calls
 float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cd = terrainFetch(cellCoord);
     ivec4 offsets = sampleOffsets[neighborhood];

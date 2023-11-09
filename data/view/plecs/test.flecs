@@ -34,5 +34,5 @@ bcview {
     }
 
     // TEST: disable shadow pass by default
-    //phases.OnPassShadow :- Disabled
+    phases.OnPassShadow :- Disabled
 }

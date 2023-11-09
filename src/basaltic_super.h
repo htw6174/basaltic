@@ -21,7 +21,8 @@ typedef struct {
 } bc_EngineSettings;
 
 typedef struct {
-    u64 *frameDurations; // interval between start and end of frame SDL_GetPerformanceCounter calls
+    u64 *frameCPUTimes; // time from start to end of main loop SDL_GetPerformanceCounter calls
+    u64 *frameTotalTimes; // time from start of one main loop iteration to the next
     u64 *tickDurations;
     u64 *worldStepHistory;
 } bc_SuperInfo;

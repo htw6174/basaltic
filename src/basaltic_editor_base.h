@@ -11,7 +11,7 @@ static const u32 bc_frameHistoryLength = 300;
 typedef struct {
     bool isActive;
     bool showDemoWindow;
-    float *frameTimeSeconds;
+    float *frameTimes;
 
     bool modelRestarting;
 } bc_EditorEngineContext;

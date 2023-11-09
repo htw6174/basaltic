@@ -1,7 +1,7 @@
 #version 300 es
 precision mediump float;
 
-// toggle for a more mobile-friendly version of this shader
+// toggle for a more mobile-friendly version of this shader, saves ~3ms on laptop
 //#define LIGHTWEIGHT
 
 #define PI 3.14159
@@ -50,7 +50,6 @@ float hash31(vec3 x) {
 	return hash21( vec2( hash21( x.xy ), x.z ) );
 }
 
-// TODO: should place a limit on frequency; looks good from far away but too noisy close up
 float stableHash(in vec3 pos) {
 	const float g_HashScale = 1.0;
 
@@ -64,8 +63,9 @@ float stableHash(in vec3 pos) {
 	vec2 pixScales = vec2( exp2(floor(log2(pixScale))),
 						   exp2(ceil(log2(pixScale))) );
 	// Compute alpha thresholds at our two noise scales
-	vec2 alpha=vec2(hash31(floor(pixScales.x * pos)),
-					hash31(floor(pixScales.y * pos)));
+	// NOTE: swizzle here is to reduce precision issues with large x, y, and pixScale i.e. far from origin and close to camera
+	vec2 alpha=vec2(hash31(floor(pixScales.x * pos.zyx)),
+					hash31(floor(pixScales.y * pos.zyx)));
 	// Factor to interpolate lerp with
 	float lerpFactor = fract( log2(pixScale) );
 	// Interpolate alpha threshold from noise at two scales
@@ -105,7 +105,7 @@ float noise21sharp(vec2 x) {
 	(d - b) * f.x * f.y;
 }
 
-// Based on IQ's fBM article - https://iquilezles.org/articles/fbm/
+// Fractal Brownian Motion, Based on IQ's article - https://iquilezles.org/articles/fbm/
 float fbm(vec2 x, float H) {
 	float G = exp2(-H);
 	float f = 1.0;
@@ -181,7 +181,8 @@ void main()
 	float treeThreshold = inout_radius;
 #else
 	// hashed stochastic test for vegetation coverage
-	// NOTE: stableHash breaks down very close to the camera, < ~1 unit. No, scaling world position doesn't help. Mix to nearHash when close to camera
+	// NOTE: stableHash breaks down when close to the camera and far from origin. Scaling world position down may help
+	// Mix to nearHash when close to camera if lower frequency noise is desired
 	float farHash = stableHash(inout_pos);
 	//float nearHash = hash31(inout_pos * 1.0);
 	float hashThreshold = farHash;
@@ -196,32 +197,51 @@ void main()
 
 	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
 
-	vec3 cliffColor = vec3(0.6, 0.5, 0.5);
+	vec3 cliffColor = vec3(0.3, 0.25, 0.25);
 
 	float noiseFreq = isCliff ? 20.0 : 4.0;
-	float noiseMag = isCliff ? 0.1 : 0.5;
 	float bandFreq = isCliff ? 20.0 : 2.0;
 
-	//float noisyZ = inout_pos.z + (sin(inout_pos.x * 2.0) * 0.2);
-#ifdef LIGHTWEIGHT
-	float noisyZ = inout_pos.z;
-#else
-	float noisyZ = inout_pos.z + (noise21sharp(inout_pos.xy * noiseFreq) * noiseMag);
-#endif
-	//float noisyZ = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
-	float strataSample = floor(noisyZ * bandFreq);
-	float cliffValue = (rand(strataSample) * 0.2) + 0.4;
-	vec3 albedo = isCliff ? cliffValue * cliffColor : biomeColor * (1.0 + (cliffValue - 0.5));
+	// Reusable noise samples
+	float noiseLowFreq = noise21sharp(inout_pos.xy * noiseFreq * 0.1);
+	float noiseMidFreq = noise21sharp(inout_pos.xy * noiseFreq);
+	float noiseHighFreq = noise21sharp(inout_pos.xy * noiseFreq * 10.0);
+
+	// TODO: try out fbm for a different effect
+	//float noiseMidFreq = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
+	float strataNoise = (noiseMidFreq * 0.1) + (noiseLowFreq * 2.0);
+	// Bands of random value between 0.9 and 1.1
+	float strataSample = floor(inout_pos.z + (strataNoise * bandFreq));
+	float cliffValue = (rand(strataSample) * 0.2) + 0.9;
+
+	float groundSample = floor(inout_pos.z + noiseMidFreq * bandFreq);
+	float groundValue = (rand(groundSample) * 0.2) + 0.9;
+
+	vec3 albedo = isCliff ? cliffColor * cliffValue : biomeColor * groundValue;
 
 	// TODO: proper water level recoloring
-	float waveHeight = sin((inout_pos.x * 5.0) + time) * 0.01;
-	float elevation = inout_pos.z - waveHeight;
-	if (elevation < -0.02) {
-		vec3 oceanFloor = vec3(0.5, 0.3, 0.1) / -(elevation - 1.0);
-		vec3 oceanSurface = vec3(0.05, 0.2, 0.9);
-		albedo = mix(oceanFloor, oceanSurface, 0.5);
-		vN = vec3(0.0, 0.0, 1.0);
-	}
+	float waveMag = 0.005;
+	float waveFreq = 5.0;
+	float wave = sin((noiseMidFreq * waveFreq) + time);
+
+	float seaLevelOffset = -0.05;
+	float seaLevel = inout_pos.z + seaLevelOffset;
+	float isOcean = step(seaLevel, wave * waveMag);
+
+	float depth = 1.0 - min(-inout_pos.z, 1.0);
+	depth = depth * depth * depth;
+	vec3 oceanDeep = vec3(0.05, 0.05, 0.5);
+	vec3 oceanShallow = vec3(0.05, 0.5, 0.9);
+	vec3 oceanColor = mix(oceanDeep, oceanShallow, depth);
+
+	vec3 seaFoam = vec3(0.8, 1.0, 1.0);
+	float isFoam = step(wave * waveMag, seaLevel + 0.02);
+	oceanColor = mix(oceanColor, seaFoam, isFoam);
+
+	albedo = mix(albedo, oceanColor, isOcean);
+
+	vec3 oceanNormal = vec3(0.0, 0.0, 1.0);
+	vN = mix(vN, oceanNormal, isOcean);
 
 	// TEST: color per tile with obvious faces
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));

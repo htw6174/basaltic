@@ -133,7 +133,8 @@ static void mainLoop(void) {
     u64 frameEnd = SDL_GetPerformanceCounter();
     u64 duration = frameEnd - frameStart;
     u64 frameMod = wc->frame % bc_frameHistoryLength;
-    superInfo->frameDurations[frameMod] = duration;
+    superInfo->frameCPUTimes[frameMod] = duration;
+    superInfo->frameTotalTimes[frameMod] = wc->lastFrameDuration;
     wc->frame++;
 
     // no need to delay with vsync enabled
@@ -168,8 +169,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     };
 
     superInfo = calloc(1, sizeof(superInfo));
-    // TODO: move to coreEditor
-    superInfo->frameDurations = calloc(bc_frameHistoryLength, sizeof(superInfo->frameDurations[0]));
+    superInfo->frameCPUTimes = calloc(bc_frameHistoryLength, sizeof(superInfo->frameCPUTimes[0]));
+    superInfo->frameTotalTimes = calloc(bc_frameHistoryLength, sizeof(superInfo->frameTotalTimes[0]));
     // TODO: track logic thread timing in module code
     //superInfo->tickDurations = calloc(bc_frameHistoryLength, sizeof(superInfo->tickDurations[0]));
     //superInfo->worldStepHistory = calloc(bc_frameHistoryLength, sizeof(superInfo->worldStepHistory[0]));
