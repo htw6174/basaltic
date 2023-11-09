@@ -8,6 +8,7 @@ bcview {
         - DebugRender
     }
 
+    // debug draw
     carnivores : DebugDrawPrefab {
         - Color {0.7, 0.0, 0.0, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
@@ -35,4 +36,21 @@ bcview {
 
     // TEST: disable shadow pass by default
     //phases.OnPassShadow :- Disabled
+
+    // input map
+    using bcview.systems.input
+    cameraKeyboardBindings :- InputBindGroup
+    cameraKeyboardBindings {
+        //a :- InputBinding {key: 97}
+    }
+
+    cameraMouseBindings :- InputBindGroup
+    cameraMouseBindings {
+        pan :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraPanMouse}
+        orbit :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraOrbitMouse}
+        zoom :- InputBinding {motion: BC_MOTION_SCROLL, system: CameraZoomMouse}
+        // bindings to lock mouse while left or right click held
+        lockLeft :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
+        unlockLeft :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
+    }
 }

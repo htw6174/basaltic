@@ -14,8 +14,15 @@ bcview {
     }
 
     CameraSpeed :- CameraSpeed {
-        movement: 10.0f,
-        rotation: 90.0f
+        movement: 1.0,
+        rotation: 90.0,
+        zoom: 5.0
+    }
+
+    Pointer :- CameraSpeed {
+        movement: 1.0,
+        rotation: 90.0,
+        zoom: 5.0
     }
 
     // Sun

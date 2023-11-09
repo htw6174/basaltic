@@ -74,6 +74,15 @@ void BcviewImport(ecs_world_t *world) {
 
     // Interface
     ECS_TAG_DEFINE(world, Previous);
+    ECS_META_COMPONENT(world, MouseButton);
+    ECS_META_COMPONENT(world, InputType);
+    ECS_META_COMPONENT(world, InputMotion);
+    ECS_META_COMPONENT(world, InputModifier);
+    ECS_COMPONENT_DEFINE(world, KeyCode);
+    ecs_primitive(world, {.entity = ecs_id(KeyCode), .kind = EcsI32});
+    ECS_TAG_DEFINE(world, InputBindGroup);
+    ECS_META_COMPONENT(world, InputBinding);
+
     ECS_META_COMPONENT(world, DeltaTime);
     ECS_META_COMPONENT(world, Pointer);
     ECS_META_COMPONENT(world, Camera);
@@ -154,10 +163,6 @@ void BcviewImport(ecs_world_t *world) {
 
     /* Setup singleton defaults */
     // TODO: most of the singleton initialization moved to script. Play around with it, figure out if the rest can be moved / should be returned
-
-    //ecs_singleton_set(world, ModelLastRenderedStep, {0});
-
-    ecs_singleton_set(world, Pointer, {0});
 
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);

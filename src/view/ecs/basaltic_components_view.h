@@ -74,6 +74,70 @@ ECS_STRUCT(DeltaTime, {
     float seconds;
 });
 
+// Corresponds to SDL_BUTTON_* defines
+ECS_ENUM(MouseButton, {
+    BC_MOUSE_NONE =     0,
+    BC_MOUSE_LEFT =     1,
+    BC_MOUSE_MIDDLE =   2,
+    BC_MOUSE_RIGHT =    3,
+    BC_MOUSE_X1 =       4,
+    BC_MOUSE_X2 =       5
+});
+
+ECS_BITMASK(InputType, {
+    BC_INPUT_DEFAULT =  0x00,
+    BC_INPUT_PRESSED =  0x01,
+    BC_INPUT_RELEASED = 0x02,
+    BC_INPUT_HELD =     0x04
+});
+
+ECS_BITMASK(InputMotion, {
+    BC_MOTION_NONE =    0x00,
+    BC_MOTION_SCROLL =  0x01, // set by scroll events
+    BC_MOTION_MOUSE =   0x02, // set when mouse position changes
+    BC_MOTION_TILE =    0x04, // set when hovered map cell changes
+});
+
+// Corresponds to SDL_Keymod values
+ECS_BITMASK(InputModifier, {
+    BC_KMOD_NONE = 0x0000,
+    BC_KMOD_LSHIFT = 0x0001,
+    BC_KMOD_RSHIFT = 0x0002,
+    BC_KMOD_LCTRL = 0x0040,
+    BC_KMOD_RCTRL = 0x0080,
+    BC_KMOD_LALT = 0x0100,
+    BC_KMOD_RALT = 0x0200,
+    BC_KMOD_LGUI = 0x0400,
+    BC_KMOD_RGUI = 0x0800,
+    BC_KMOD_NUM = 0x1000,
+    BC_KMOD_CAPS = 0x2000,
+    BC_KMOD_MODE = 0x4000,
+    BC_KMOD_SCROLL = 0x8000,
+
+    // NOTE: don't use these, because input matching relies on exact modifier mask matching. OK for a game, but should have a better approach for a full editor
+    // Also, the reflection macro isn't able to parse these because they aren't numeric
+    // BC_KMOD_CTRL = BC_KMOD_LCTRL | BC_KMOD_RCTRL,
+    // BC_KMOD_SHIFT = BC_KMOD_LSHIFT | BC_KMOD_RSHIFT,
+    // BC_KMOD_ALT = BC_KMOD_LALT | BC_KMOD_RALT,
+    // BC_KMOD_GUI = BC_KMOD_LGUI | BC_KMOD_RGUI,
+});
+
+typedef s32 KeyCode;
+BC_DECL ECS_COMPONENT_DECLARE(KeyCode);
+
+// Place input bindings under a bindgroup to enable/disable multiple bindings at once
+BC_DECL ECS_TAG_DECLARE(InputBindGroup);
+
+// NOTE: must have either key, button, or motion set
+ECS_STRUCT(InputBinding, {
+    KeyCode key; // Keyboard key, should not be set at the same time as button. Treated as an SDL_KeyCode
+    MouseButton button; // Mouse button, should not be set at the same time as key
+    InputType triggerOn; // Can OR together multiple input types, fires when any of the set input types is true; defaults to PRESSED; only applicable if key or button is set
+    InputModifier modifiers; // Can OR together multiple modifiers, binding will only fire when modifier mask is identical
+    InputMotion motion; // Can OR together multiple motions. If a motion is set, binding will only fire when all set motions happen that frame AND key or button is held
+    ecs_entity_t system; // System to run when the binding is used
+});
+
 // Pixel coordinates directly from SDL; origin at top-left
 ECS_STRUCT(Pointer, {
     s32 x;
@@ -101,6 +165,7 @@ ECS_STRUCT(CameraWrap, {
 ECS_STRUCT(CameraSpeed, {
     float movement;
     float rotation;
+    float zoom;
 });
 
 ECS_STRUCT(FocusPlane, {

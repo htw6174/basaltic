@@ -10,6 +10,8 @@
 #include "basaltic_components_view.h"
 #include "components/basaltic_components_planes.h"
 
+static ecs_query_t *bindingsQuery;
+
 static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
 static void translateCamera(ecs_world_t *world, Camera camDelta);
 static void selectCell(ecs_world_t *world);
@@ -22,6 +24,51 @@ void spawnPrefab(ecs_world_t *world);
 
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
+    float dT = ecs_singleton_get(world, DeltaTime)->seconds;
+
+    if (bindingsQuery == NULL) {
+        bindingsQuery = ecs_query_init(world, &(ecs_query_desc_t){
+            .filter.terms = {
+                [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)}
+            }
+        });
+    }
+
+    ecs_iter_t it = ecs_query_iter(world, bindingsQuery);
+    while (ecs_query_next(&it)) {
+        InputBinding *bindings = ecs_field(&it, InputBinding, 1);
+
+        for (int i = 0; i < it.count; i++) {
+            InputBinding bind = bindings[i];
+            if (bind.system == 0) {
+                continue;
+            }
+            // Don't process button hold bindings here
+            if (bind.triggerOn == BC_INPUT_HELD) {
+                continue;
+            }
+            bool match = false;
+            // TODO: handle default case for bind.triggerOn
+            InputType mouseInputType = (e->type == SDL_MOUSEBUTTONDOWN) | ((e->type == SDL_MOUSEBUTTONUP) << 1);
+            if (bind.button && useMouse && mouseInputType) {
+                // type must match at least one triggerOn type i.e. at least one bit must match
+                if ((bind.triggerOn & mouseInputType) && (e->button.button == bind.button)) {
+                    match = true;
+                }
+            }
+            InputType keyInputType = (e->type == SDL_KEYDOWN) | ((e->type == SDL_KEYUP) << 1);
+            if (bind.key && useKeyboard && keyInputType) {
+                // type must match at least one triggerOn type i.e. at least one bit must match
+                if ((bind.triggerOn & keyInputType) && (e->key.keysym.sym == bind.key)) {
+                    match = true;
+                }
+            }
+            if (match) {
+                ecs_run(world, bind.system, dT, NULL);
+            }
+        }
+    }
+
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             //editTerrain(world, 1.0);
@@ -73,33 +120,79 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 
 void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bool useMouse, bool useKeyboard) {
     float dT = ecs_singleton_get(world, DeltaTime)->seconds;
+    const Pointer *p = ecs_singleton_get(world, Pointer);
+    const HoveredCell *currentHover = ecs_singleton_get(world, HoveredCell);
+    const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(Pointer), Previous, HoveredCell);
+
+    // get mouse state
+    s32 x, y, deltaX, deltaY;
+    Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
+    deltaX = x - p->x;
+    deltaY = y - p->y;
+    bool scrollMoved = false; // TODO
+    bool mouseMoved = deltaX != 0 || deltaY != 0;
+    bool hoverChanged = currentHover->x != prevHover->x || currentHover->y != prevHover->y;
+    InputMotion motionMask = (BC_MOTION_SCROLL * scrollMoved) | (BC_MOTION_MOUSE * mouseMoved) | (BC_MOTION_TILE * hoverChanged);
+
+    const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
+
+    if (bindingsQuery == NULL) {
+        bindingsQuery = ecs_query_init(world, &(ecs_query_desc_t){
+            .filter.terms = {
+                [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)}
+            }
+        });
+    }
+
+    ecs_iter_t it = ecs_query_iter(world, bindingsQuery);
+    while (ecs_query_next(&it)) {
+        InputBinding *bindings = ecs_field(&it, InputBinding, 1);
+
+        for (int i = 0; i < it.count; i++) {
+            InputBinding bind = bindings[i];
+            if (bind.system == 0) {
+                continue;
+            }
+            // Only process input held triggers here
+            if ((bind.triggerOn & BC_INPUT_HELD) == 0) {
+                continue;
+            }
+            if (bind.motion) {
+                // motionMask must have all bits in bind.motion
+                bool hasRequiredMotions = (bind.motion & motionMask) == bind.motion;
+                if (!useMouse || !hasRequiredMotions) {
+                    continue;
+                }
+            }
+            if (bind.button) {
+                // button must be one of the mouse buttons pressed this frame
+                bool buttonMatch = SDL_BUTTON(bind.button) & mouseStateMask;
+                if (!useMouse || !buttonMatch) {
+                    continue;
+                }
+            }
+            if (bind.key) {
+                bool keyMatch = keyboard[SDL_GetScancodeFromKey((SDL_KeyCode)bind.key)];
+                if (!useKeyboard || !keyMatch) {
+                    continue;
+                }
+            }
+            ecs_run(world, bind.system, dT, NULL);
+        }
+    }
 
     if (useMouse) {
-        // get mouse state
-        s32 x, y, deltaX, deltaY;
-        Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
-        const Pointer *p = ecs_singleton_get(world, Pointer);
-
-        deltaX = x - p->x;
-        deltaY = y - p->y;
-        bool mouseMoved = deltaX != 0 || deltaY != 0;
-
-        const HoveredCell *currentHover = ecs_singleton_get(world, HoveredCell);
-        const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(Pointer), Previous, HoveredCell);
-
-        bool hoverChanged = currentHover->x != prevHover->x || currentHover->y != prevHover->y;
-
         // Should only do this if mouse also moved this frame; prevents jittering on cell edges, and unintentional edits where lowering terrain changes the hovered cell
-        if (mouseMoved && hoverChanged) {
-            // Hovered cell changed
-            // TODO: onClick and onHoverChanged should usually be connected; make mouse actions configurable or context-dependent
-            if (mouseStateMask & SDL_BUTTON_LMASK) {
-                editTerrain(world, 1.0);
-            }
-            if (mouseStateMask & SDL_BUTTON_RMASK) {
-                editTerrain(world, -1.0);
-            }
-        }
+        // if (mouseMoved && hoverChanged) {
+        //     // Hovered cell changed
+        //     // TODO: onClick and onHoverChanged should usually be connected; make mouse actions configurable or context-dependent
+        //     if (mouseStateMask & SDL_BUTTON_LMASK) {
+        //         editTerrain(world, 1.0);
+        //     }
+        //     if (mouseStateMask & SDL_BUTTON_RMASK) {
+        //         editTerrain(world, -1.0);
+        //     }
+        // }
 
         ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
         ecs_set_pair_second(world, ecs_id(Pointer), Previous, HoveredCell, {currentHover->x, currentHover->y});
@@ -111,19 +204,18 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     Camera camDelta = {0};
     if (useKeyboard) {
         // handle continuous button presses
-        const Uint8 *k = SDL_GetKeyboardState(NULL);
-        if (k[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
-        if (k[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
-        if (k[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
-        if (k[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * dT * 0.1;
-        if (k[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation * dT;
-        if (k[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation * dT;
-        if (k[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation * dT;
-        if (k[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation * dT;
-        if (k[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->movement * dT;
-        if (k[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->movement * dT;
-        if (k[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->movement * dT;
-        if (k[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->movement * dT;
+        if (keyboard[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * dT;
+        if (keyboard[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * dT;
+        if (keyboard[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * dT;
+        if (keyboard[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * dT;
+        if (keyboard[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation * dT;
+        if (keyboard[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation * dT;
+        if (keyboard[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation * dT;
+        if (keyboard[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation * dT;
+        if (keyboard[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->zoom * dT;
+        if (keyboard[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->zoom * dT;
+        if (keyboard[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->zoom * dT;
+        if (keyboard[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->zoom * dT;
     }
 
     translateCamera(world, camDelta);
