@@ -39,6 +39,8 @@
 // Prefab: White
 // Other: Green
 
+#define IG_SIZE_DEFAULT ((ImVec2){0.0, 0.0})
+
 typedef struct {
     ecs_query_t *query;
     s32 queryPage;
@@ -100,6 +102,7 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e);
 /** Display entity name if it is named, otherwise display id */
 void entityLabel(ecs_world_t *world, ecs_entity_t e);
+bool entityButton(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
@@ -348,6 +351,8 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
 void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     igPushID_Ptr(world);
 
+    ecs_defer_begin(world);
+
     // Menu bar for common actions
     if (igButton("New Entity", (ImVec2){0, 0})) {
         igOpenPopup_Str("create_entity", 0);
@@ -390,6 +395,8 @@ void ecsWorldInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         ecsEntityInspector(world, ic);
     }
     igEndChild();
+
+    ecs_defer_end(world);
 
     igPopID();
 }
@@ -452,32 +459,20 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     if(!ecs_is_valid(world, e)) {
         return;
     }
-    // TODO: shouldn't let any entity be deleted or disabled. Components, anything in the flecs namespace; systems should only be disabled, etc.
-    bool enabled = !ecs_has_id(world, e, EcsDisabled);
-    if (igCheckbox("Enabled", &enabled)) {
-        ecs_enable(world, e, enabled);
-    }
-    // If deleting an entity would cause flecs to crash, don't have a button for it!
-    if (!ecs_has_pair(world, e, EcsOnDelete, EcsPanic)) {
-        igSameLine(0, -1);
-        if (igSmallButton("Delete")) {
-            ecs_delete(world, e);
-            return;
-        }
-    }
 
-    igBeginDisabled(!enabled);
+    // TODO: detail info for entity flags?
+    // TODO: button to quick query for children of this entity
+    // TODO: OR, auto expand selected entity in hierarchy
 
     // Editable name; must not set name if another entity in the same scope already has the same name
-    const char *currentName = getEntityLabel(world, e);
-    igText(currentName);
-    igSameLine(0, -1);
-    if (igSmallButton("edit")) {
+    if (entityButton(world, e)) {
         igOpenPopup_Str("edit_entity_name", 0);
     }
+    igSetItemTooltip("Click to rename");
     if (igBeginPopup("edit_entity_name", 0)) {
         static char newName[256];
         if (igIsWindowAppearing()) {
+            const char *currentName = getEntityLabel(world, e);
             strcpy(newName, currentName);
         }
         if (entityRenamer(world, ecs_get_target(world, e, EcsChildOf, 0), newName, 256)) {
@@ -496,9 +491,28 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
         igTextColored((ImVec4){0.5, 0.5, 0.5, 1}, path);
         ecs_os_free(path);
     }
-    // TODO: detail info for entity flags?
 
-    // TODO: button to quick query for children of this entity
+    // Shouldn't let any entity be deleted or disabled. Components, anything in the flecs namespace; systems should only be disabled, etc.
+    bool disableAllowed = !ecs_has_id(world, e, EcsPrefab);
+    bool deleteAllowed = disableAllowed &&
+    !ecs_has_pair(world, e, EcsOnDelete, EcsPanic) &&
+    !ecs_has_id(world, e, EcsSystem);
+
+    bool enabled = !ecs_has_id(world, e, EcsDisabled);
+    if (disableAllowed) {
+        if (igCheckbox("Enabled", &enabled)) {
+            ecs_enable(world, e, enabled);
+        }
+    }
+    if (deleteAllowed) {
+        igSameLine(0, -1);
+        if (igSmallButton("Delete")) {
+            ecs_delete(world, e);
+            return; // Just in case operations aren't being deferred
+        }
+    }
+
+    igBeginDisabled(!enabled);
 
     // Current Components, Tags, Relationships
     const ecs_type_t *type = ecs_get_type(world, e);
@@ -513,9 +527,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
                 componentInspector(world, e, id, &ic->focusEntity);
             } else {
                 // TODO: dedicated tag inspector
-                entityLabel(world, id);
-                igSameLine(0, -1);
-                if (igSmallButton("?")) {
+                if (entityButton(world, id)) {
                     ic->focusEntity = id;
                 }
                 igSameLine(0, -1);
@@ -607,15 +619,11 @@ void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity
     }
     igText("Pair: ");
     igSameLine(0, -1);
-    entityLabel(world, first);
-    igSameLine(0, -1);
-    if (igSmallButton("?##focus_first")) {
+    if (entityButton(world, first)) {
         *focusEntity = first;
     }
     igSameLine(0, -1);
-    entityLabel(world, second);
-    igSameLine(0, -1);
-    if (igSmallButton("?##focus_second")) {
+    if (entityButton(world, second)) {
         *focusEntity = second;
     }
     igSameLine(0, -1);
@@ -689,7 +697,10 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     if (node == EcsThis || node == EcsAny || node == EcsWildcard || node == EcsVariable) {
         flags |= ImGuiTreeNodeFlags_Leaf;
     } else {
-        children = ecs_children(world, node);
+        children = ecs_term_iter(world, &(ecs_term_t){
+            .id = ecs_childof(node),
+            .flags = EcsTermMatchDisabled
+        });
         // Display as a leaf if no children
         if (ecs_iter_is_true(&children)) {
             drawChildren = true;
@@ -699,8 +710,14 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     }
 
     const char *label = getEntityLabel(world, node);
+    if (ecs_has_id(world, node, EcsDisabled)) {
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DISABLED);
+    } else {
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DEFAULT);
+    }
     // Note: leaf nodes are always *expanded*, not collapsed. Should skip iterating children, but still TreePop if leaf.
     bool expandNode = igTreeNodeEx_Str(label, flags);
+    igPopStyleColor(1);
     // If tree node was clicked, but not expanded, inspect node
     if (igIsItemClicked(ImGuiMouseButton_Left) && !igIsItemToggledOpen()) {
         *focus = node;
@@ -725,8 +742,11 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
 
     if (expandNode && drawChildren) {
         // Re-aquire iterator, because ecs_iter_is_true invalidates it
-        children = ecs_children(world, node);
-        while (ecs_children_next(&children)) {
+        children = ecs_term_iter(world, &(ecs_term_t){
+            .id = ecs_childof(node),
+            .flags = EcsTermMatchDisabled
+        });
+        while (ecs_term_next(&children)) {
             for (int i = 0; i < children.count; i++) {
                 count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
             }
@@ -1113,30 +1133,18 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
         {
             ecs_entity_t e = *(ecs_entity_t*)(field);
             // FIXME: doesn't account for entities from other ECS worlds. Maybe create a special component type + inspector for displaying world entities?
-            entityLabel(world, e);
+            if (entityButton(world, e)) {
+                *focusEntity = e;
+            }
 
-            // drag and drop
+            // dragdrop assignable
             if (igBeginDragDropTarget()) {
                 const ImGuiPayload *payload = igAcceptDragDropPayload("BC_PAYLOAD_ENTITY", ImGuiDragDropFlags_None);
                 if (payload != NULL) {
                     memcpy(field, payload->Data, sizeof(ecs_entity_t));
+                    modified = true;
                 }
                 igEndDragDropTarget();
-            }
-            // FIXME: crash when editing other fields after assigning entity?
-            if (e != 0) {
-                // no reason to drag an invalid entity
-                if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
-                    igSetDragDropPayload("BC_PAYLOAD_ENTITY", field, sizeof(ecs_entity_t), ImGuiCond_None);
-                    modified = true;
-                    igEndDragDropSource();
-                }
-
-                // TODO: selection menu
-                igSameLine(0, -1);
-                if (igSmallButton("?")) {
-                    *focusEntity = e;
-                }
             }
             break;
         }
@@ -1148,16 +1156,23 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
 }
 
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e) {
-    if (ecs_is_valid(world, e)) {
+    static char idStr[64];
+    if (e == 0) {
+        return "(null entity)";
+    } else if (!ecs_is_alive(world, e)) {
+        sprintf(idStr, "non-alive entity %lu", e);
+        return idStr;
+    } else if (ecs_is_valid(world, e)) {
         const char *name = ecs_get_name(world, e);
         if (name == NULL) {
-            static char idStr[64];
             sprintf(idStr, "%lu", e);
-            name = idStr;
+            return idStr;
+        } else {
+            return name;
         }
-        return name;
     } else {
-        return "INVALID ENTITY";
+        sprintf(idStr, "INVALID ENTITY %lu", e);
+        return idStr;
     }
 }
 
@@ -1179,6 +1194,21 @@ void entityLabel(ecs_world_t *world, ecs_entity_t e) {
     //     igSetTooltip(tooltip);
     //     ecs_os_free(tooltip);
     // }
+}
+
+// TODO: recolor based on entity type?
+bool entityButton(ecs_world_t *world, ecs_entity_t e) {
+    const char *label = getEntityLabel(world, e);
+    igBeginDisabled(!ecs_is_valid(world, e));
+    bool pressed = igButton(label, IG_SIZE_DEFAULT);
+    // imgui doesn't allow dragging from disabled elements, so only valid entities can be picked from here
+    if (igBeginDragDropSource(ImGuiDragDropFlags_None)) {
+        igSetDragDropPayload("BC_PAYLOAD_ENTITY", &e, sizeof(ecs_entity_t), ImGuiCond_None);
+        igText(label);
+        igEndDragDropSource();
+    }
+    igEndDisabled();
+    return pressed;
 }
 
 

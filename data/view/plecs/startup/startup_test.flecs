@@ -19,10 +19,11 @@ bcview {
         zoom: 5.0
     }
 
-    Pointer :- CameraSpeed {
-        movement: 1.0,
-        rotation: 90.0,
-        zoom: 5.0
+    MousePreferences :- MousePreferences {
+        sensitivity: 20.0,
+        verticalSensitivity: 1.0,
+        invertX: false,
+        invertY: false
     }
 
     // Sun

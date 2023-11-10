@@ -85,6 +85,7 @@ void BcviewImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, DeltaTime);
     ECS_META_COMPONENT(world, Pointer);
+    ECS_META_COMPONENT(world, MousePreferences);
     ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);

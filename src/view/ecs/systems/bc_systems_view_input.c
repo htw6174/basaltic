@@ -5,6 +5,7 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 
+// TODO: would like it if mouse didn't move from starting position between lock and unlock, or gets warped back to starting position on unlock
 void LockMouse(ecs_iter_t *it) {
     SDL_SetRelativeMouseMode(true);
 }
@@ -13,18 +14,20 @@ void UnlockMouse(ecs_iter_t *it) {
     SDL_SetRelativeMouseMode(false);
 }
 
-void CameraPanMouse(ecs_iter_t *it) {
+void CameraPan(ecs_iter_t *it) {
     Camera *cam = ecs_field(it, Camera, 1);
-    Pointer *pointer = ecs_field(it, Pointer, 2);
 
     float dT = it->delta_time;
-    float speed = powf(cam->distance, 2.0) * dT * 0.1;
+    void *param = it->param;
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+
+    float speed = powf(cam->distance, 2.0) * dT;
     if (ecs_field_is_set(it, 3)) {
-        CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 3);
+        CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.movement;
     }
-    float dX = (pointer->x - pointer->lastX) * speed * -1.0; // flip sign to match expected movement direction
-    float dY = (pointer->y - pointer->lastY) * speed;
+    float dX = ic.delta.x * speed * -1.0; // flip sign to match expected movement direction
+    float dY = ic.delta.y * speed;
     // No need to modify z here; TODO: system to drift camera origin.z toward terrain height at origin.xy
     vec3 camDelta = (vec3){{dX, dY, 0.0}};
 
@@ -39,8 +42,8 @@ void CameraPanMouse(ecs_iter_t *it) {
     float wrappedX = unwrappedX;
     float wrappedY = unwrappedY;
 
-    if (ecs_field_is_set(it, 4)) {
-        CameraWrap wrap = *ecs_field(it, CameraWrap, 4);
+    if (ecs_field_is_set(it, 3)) {
+        CameraWrap wrap = *ecs_field(it, CameraWrap, 3);
         // Wrap camera if outsize wrap limit:
         // Convert camera cartesian coordinates to hex space (expands y)
         // Check against camera wrap bounds
@@ -70,25 +73,40 @@ void CameraPanMouse(ecs_iter_t *it) {
     cam->origin = (vec3){{wrappedX, wrappedY, cam->origin.z + camDelta.z}};
 }
 
-void CameraOrbitMouse(ecs_iter_t *it) {
+void CameraOrbit(ecs_iter_t *it) {
     Camera *cam = ecs_field(it, Camera, 1);
-    Pointer *pointer = ecs_field(it, Pointer, 2);
 
     float dT = it->delta_time;
-    float speed = powf(cam->distance, 2.0) * dT * 0.1;
-    if (ecs_field_is_set(it, 3)) {
-        CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 3);
-        speed *= camSpeed.movement;
+    void *param = it->param;
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+
+    float speed = dT;
+    if (ecs_field_is_set(it, 2)) {
+        CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
+        speed *= camSpeed.rotation;
     }
-    float pitch = (pointer->y - pointer->lastY) * speed;
-    float yaw = (pointer->x - pointer->lastX) * speed * -1.0; // flip sign to match expected movement direction
+    float pitch = ic.delta.y * speed;
+    float yaw = ic.delta.x * speed * -1.0; // flip sign to match expected movement direction
 
     cam->pitch = CLAMP(cam->pitch + pitch, -89.9, 89.9);
     cam->yaw += yaw;
 }
 
-void CameraZoomMouse(ecs_iter_t *it) {
+void CameraZoom(ecs_iter_t *it) {
+    Camera *cam = ecs_field(it, Camera, 1);
 
+    float dT = it->delta_time;
+    void *param = it->param;
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+
+    float speed = dT;
+    if (ecs_field_is_set(it, 2)) {
+        CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
+        speed *= camSpeed.zoom;
+    }
+    float delta = ic.delta.y * speed;
+
+    cam->distance = CLAMP(cam->distance + delta, 0.5, 100.0);
 }
 
 void BcviewSystemsInputImport(ecs_world_t *world) {
@@ -100,22 +118,19 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, UnlockMouse, 0);
 
-    ECS_SYSTEM(world, CameraPanMouse, 0,
+    ECS_SYSTEM(world, CameraPan, 0,
         Camera($),
-        Pointer($),
-        ?CameraSpeed(Pointer),
+        ?CameraSpeed($),
         ?CameraWrap($)
     );
 
-    ECS_SYSTEM(world, CameraOrbitMouse, 0,
+    ECS_SYSTEM(world, CameraOrbit, 0,
         Camera($),
-        Pointer($),
-        ?CameraSpeed(Pointer)
+        ?CameraSpeed($)
     );
 
-    ECS_SYSTEM(world, CameraZoomMouse, 0,
+    ECS_SYSTEM(world, CameraZoom, 0,
         Camera($),
-        Pointer($),
-        ?CameraSpeed(Pointer)
+        ?CameraSpeed($)
     );
 }

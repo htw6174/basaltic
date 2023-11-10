@@ -25,6 +25,8 @@ void spawnPrefab(ecs_world_t *world);
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
     float dT = ecs_singleton_get(world, DeltaTime)->seconds;
+    const WindowSize *windowSize = ecs_singleton_get(world, WindowSize);
+    const MousePreferences *mousePreferences = ecs_singleton_get(world, MousePreferences);
 
     if (bindingsQuery == NULL) {
         bindingsQuery = ecs_query_init(world, &(ecs_query_desc_t){
@@ -40,35 +42,72 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 
         for (int i = 0; i < it.count; i++) {
             InputBinding bind = bindings[i];
+            vec2 delta = {{0.0, 0.0}};
+            bool match = false; // Does this event satisfy the binding requirements?
             if (bind.system == 0) {
                 continue;
             }
-            // Don't process button hold bindings here
-            if (bind.triggerOn == BC_INPUT_HELD) {
-                continue;
+            // First, determine what kind of event(s) the binding should trigger on
+            if (useKeyboard && bind.key) {
+                // keydown or keyup
+                InputType keyInputType = (e->type == SDL_KEYDOWN) | ((e->type == SDL_KEYUP) << 1);
+                if (keyInputType) {
+                    // type must match at least one triggerOn type i.e. at least one bit must match
+                    InputType triggerOn = bind.triggerOn ? bind.triggerOn : BC_INPUT_PRESSED; // default to pressed
+                    if ((triggerOn & keyInputType) && (e->key.keysym.sym == bind.key)) {
+                        match = true;
+                        delta = bind.axis;
+                    }
+                }
             }
-            bool match = false;
+            if (useMouse) {
+                if (bind.button) {
+                    // mousebuttondown or mousebuttonup
+                    InputType mouseInputType = (e->type == SDL_MOUSEBUTTONDOWN) | ((e->type == SDL_MOUSEBUTTONUP) << 1);
+                    if (mouseInputType) {
+                        // type must match at least one triggerOn type i.e. at least one bit must match
+                        InputType triggerOn = bind.triggerOn ? bind.triggerOn : BC_INPUT_PRESSED; // default to pressed
+                        if ((triggerOn & mouseInputType) && (e->button.button == bind.button)) {
+                            match = true;
+                        }
+                    }
+                }
+                if (bind.motion == BC_MOTION_MOUSE) {
+                    // mousemotion
+                    if (e->type == SDL_MOUSEMOTION) {
+                        // Normalize mouse motion by window width
+                        float dX = ((float)e->motion.xrel * mousePreferences->sensitivity * (mousePreferences->invertX ? -1.0 : 1.0)) / windowSize->x;
+                        float dY = ((float)e->motion.yrel * mousePreferences->sensitivity * mousePreferences->verticalSensitivity * (mousePreferences->invertY ? -1.0 : 1.0)) / windowSize->x;
+                        delta = (vec2){{dX, dY}};
+                        // if button is set, must check state for matching mask
+                        if (bind.button) {
+                            match = SDL_BUTTON(bind.button) & e->motion.state;
+                        } else {
+                            match = true;
+                        }
+                    }
+                } else if (bind.motion == BC_MOTION_SCROLL) {
+                    // mousewheel
+                    if (e->type == SDL_MOUSEWHEEL) {
+                        delta = (vec2){{e->wheel.x, e->wheel.y}};
+                        // TODO: could add a buttonpressed requirement along with this but no need to right now
+                        match = true;
+                    }
+                } else if (bind.motion == BC_MOTION_TILE) {
+                    // userevent BC_HOVER_CHANGED injected back into SDL
+                }
+            }
+
             // TODO: handle default case for bind.triggerOn
-            InputType mouseInputType = (e->type == SDL_MOUSEBUTTONDOWN) | ((e->type == SDL_MOUSEBUTTONUP) << 1);
-            if (bind.button && useMouse && mouseInputType) {
-                // type must match at least one triggerOn type i.e. at least one bit must match
-                if ((bind.triggerOn & mouseInputType) && (e->button.button == bind.button)) {
-                    match = true;
-                }
-            }
-            InputType keyInputType = (e->type == SDL_KEYDOWN) | ((e->type == SDL_KEYUP) << 1);
-            if (bind.key && useKeyboard && keyInputType) {
-                // type must match at least one triggerOn type i.e. at least one bit must match
-                if ((bind.triggerOn & keyInputType) && (e->key.keysym.sym == bind.key)) {
-                    match = true;
-                }
-            }
             if (match) {
-                ecs_run(world, bind.system, dT, NULL);
+                InputContext ic = {
+                    .delta = delta
+                };
+                ecs_run(world, bind.system, dT, &ic);
             }
         }
     }
-
+/*
     if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
         if (e->button.button == SDL_BUTTON_LEFT) {
             //editTerrain(world, 1.0);
@@ -80,7 +119,8 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
         } else if (e->button.button == SDL_BUTTON_MIDDLE) {
             selectCell(world);
         }
-    }
+    }*/
+
     if (useKeyboard && e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
             case SDLK_p:
@@ -157,13 +197,14 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
             if ((bind.triggerOn & BC_INPUT_HELD) == 0) {
                 continue;
             }
-            if (bind.motion) {
-                // motionMask must have all bits in bind.motion
-                bool hasRequiredMotions = (bind.motion & motionMask) == bind.motion;
-                if (!useMouse || !hasRequiredMotions) {
-                    continue;
-                }
-            }
+            // TEST: comment out to process motions only in response to events
+            // if (bind.motion) {
+            //     // motionMask must have all bits in bind.motion
+            //     bool hasRequiredMotions = (bind.motion & motionMask) == bind.motion;
+            //     if (!useMouse || !hasRequiredMotions) {
+            //         continue;
+            //     }
+            // }
             if (bind.button) {
                 // button must be one of the mouse buttons pressed this frame
                 bool buttonMatch = SDL_BUTTON(bind.button) & mouseStateMask;
@@ -177,7 +218,10 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
                     continue;
                 }
             }
-            ecs_run(world, bind.system, dT, NULL);
+            InputContext ic = {
+                .delta = bind.axis
+            };
+            ecs_run(world, bind.system, dT, &ic);
         }
     }
 
@@ -197,28 +241,6 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
         ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
         ecs_set_pair_second(world, ecs_id(Pointer), Previous, HoveredCell, {currentHover->x, currentHover->y});
     }
-
-    // camera
-    const Camera *cam = ecs_singleton_get(world, Camera);
-    const CameraSpeed *camSpeed = ecs_singleton_get(world, CameraSpeed);
-    Camera camDelta = {0};
-    if (useKeyboard) {
-        // handle continuous button presses
-        if (keyboard[SDL_SCANCODE_A]) camDelta.origin.x -= camSpeed->movement * powf(cam->distance, 2.0) * dT;
-        if (keyboard[SDL_SCANCODE_D]) camDelta.origin.x += camSpeed->movement * powf(cam->distance, 2.0) * dT;
-        if (keyboard[SDL_SCANCODE_W]) camDelta.origin.y += camSpeed->movement * powf(cam->distance, 2.0) * dT;
-        if (keyboard[SDL_SCANCODE_S]) camDelta.origin.y -= camSpeed->movement * powf(cam->distance, 2.0) * dT;
-        if (keyboard[SDL_SCANCODE_Q]) camDelta.yaw -= camSpeed->rotation * dT;
-        if (keyboard[SDL_SCANCODE_E]) camDelta.yaw += camSpeed->rotation * dT;
-        if (keyboard[SDL_SCANCODE_R]) camDelta.pitch += camSpeed->rotation * dT;
-        if (keyboard[SDL_SCANCODE_F]) camDelta.pitch -= camSpeed->rotation * dT;
-        if (keyboard[SDL_SCANCODE_T]) camDelta.origin.z += camSpeed->zoom * dT;
-        if (keyboard[SDL_SCANCODE_X]) camDelta.distance -= camSpeed->zoom * dT;
-        if (keyboard[SDL_SCANCODE_G]) camDelta.origin.z -= camSpeed->zoom * dT;
-        if (keyboard[SDL_SCANCODE_Z]) camDelta.distance += camSpeed->zoom * dT;
-    }
-
-    translateCamera(world, camDelta);
 }
 
 // TODO: should put all of this in an observer of focusplane changes
@@ -258,53 +280,6 @@ void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
     //htw_geo_GridCoord characterCoord = subject->currentState.worldCoord;
     //bc_focusCameraOnCell(ui, characterCoord);
     // TODO: would like to set camera height also, but that requires inspecting world data as well. Maybe setup a general purpose height adjust in bc_window
-}
-
-static void translateCamera(ecs_world_t *world, Camera camDelta) {
-    Camera *cam = ecs_singleton_get_mut(world, Camera);
-    const CameraWrap *wrap = ecs_singleton_get(world, CameraWrap);
-    float yaw = cam->yaw * DEG_TO_RAD;
-    float sinYaw = sin(yaw);
-    float cosYaw = cos(yaw);
-    float xGlobalMovement = (camDelta.origin.x * cosYaw) + (camDelta.origin.y * -sinYaw);
-    float yGlobalMovement = (camDelta.origin.y * cosYaw) + (camDelta.origin.x * sinYaw);
-
-    float unwrappedX = cam->origin.x + xGlobalMovement;
-    float unwrappedY = cam->origin.y + yGlobalMovement;
-    float wrappedX = unwrappedX;
-    float wrappedY = unwrappedY;
-
-    // Wrap camera if outsize wrap limit:
-    // Convert camera cartesian coordinates to hex space (expands y)
-    // Check against camera wrap bounds
-    // If out of bounds: wrap in hex space, convert back to cartesian space, and assign back to camera
-    float cameraHexX = htw_geo_cartesianToHexPositionX(unwrappedX, unwrappedY);
-    float cameraHexY = htw_geo_cartesianToHexPositionY(unwrappedY);
-    if (cameraHexX > wrap->x) {
-        cameraHexX -= wrap->x * 2;
-        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    } else if (cameraHexX < -wrap->x) {
-        cameraHexX += wrap->x * 2;
-        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    }
-
-    if (cameraHexY > wrap->y) {
-        cameraHexY -= wrap->y * 2;
-        wrappedY = htw_geo_hexToCartesianPositionY(cameraHexY);
-        // x position is dependent on y position when converting between hex and cartesian space, so also need to assign back to cameraX
-        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    } else if (cameraHexY < -wrap->y) {
-        cameraHexY += wrap->y * 2;
-        wrappedY = htw_geo_hexToCartesianPositionY(cameraHexY);
-        wrappedX = htw_geo_hexToCartesianPositionX(cameraHexX, cameraHexY);
-    }
-
-    cam->origin = (vec3){{wrappedX, wrappedY, cam->origin.z + camDelta.origin.z}};
-    cam->distance = CLAMP(cam->distance + camDelta.distance, 0.5, 100.0);
-    cam->pitch = CLAMP(cam->pitch + camDelta.pitch, -89.9, 89.9);
-    cam->yaw += camDelta.yaw;
-
-    ecs_singleton_modified(world, Camera);
 }
 
 static void selectCell(ecs_world_t *world) {

@@ -132,11 +132,18 @@ BC_DECL ECS_TAG_DECLARE(InputBindGroup);
 ECS_STRUCT(InputBinding, {
     KeyCode key; // Keyboard key, should not be set at the same time as button. Treated as an SDL_KeyCode
     MouseButton button; // Mouse button, should not be set at the same time as key
+    vec2 axis; // Optionally set a motion direction for this binding, which will be passed to input systems. If not set, axis will come from motion delta
+    // TODO: could probably unify triggerOn and motion, as motion only applies when triggerOn is INPUT_HELD or INPUT_DEFAULT
     InputType triggerOn; // Can OR together multiple input types, fires when any of the set input types is true; defaults to PRESSED; only applicable if key or button is set
     InputModifier modifiers; // Can OR together multiple modifiers, binding will only fire when modifier mask is identical
-    InputMotion motion; // Can OR together multiple motions. If a motion is set, binding will only fire when all set motions happen that frame AND key or button is held
+    // TODO: consider removing the ability to map multiple motions at once. Only really needed for terrain height editing, and the system for that can check for mouse motions manually
+    InputMotion motion; // Can OR together multiple motions. If a motion is set, binding will only fire when all set motions happen that frame AND button (if any) is held
     ecs_entity_t system; // System to run when the binding is used
 });
+
+typedef struct InputContext {
+    vec2 delta;
+} InputContext;
 
 // Pixel coordinates directly from SDL; origin at top-left
 ECS_STRUCT(Pointer, {
@@ -144,6 +151,13 @@ ECS_STRUCT(Pointer, {
     s32 y;
     s32 lastX;
     s32 lastY;
+});
+
+ECS_STRUCT(MousePreferences, {
+    float sensitivity;
+    float verticalSensitivity; // Extra factor applied to vertical movement only
+    bool invertX;
+    bool invertY;
 });
 
 // TODO: setup camera 'real' position and 'target' position, smoothly interpolate each frame
