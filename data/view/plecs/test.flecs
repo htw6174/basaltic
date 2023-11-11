@@ -35,35 +35,55 @@ bcview {
     }
 
     // TEST: disable shadow pass by default
-    //phases.OnPassShadow :- Disabled
+    phases.OnPassShadow :- Disabled
 
     // input map
-    using bcview.systems.input
-    cameraKeyboardBindings :- InputBindGroup
-    cameraKeyboardBindings {
-        w :- InputBinding {key: 119, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-        a :- InputBinding {key: 97, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-        s :- InputBinding {key: 115, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-        d :- InputBinding {key: 100, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
+    Input {
+        using bcview.systems.input
+        cameraKeyboardBindings {
+            - InputBindGroup
+            w :- InputBinding {key: 119, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
+            a :- InputBinding {key: 97, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
+            s :- InputBinding {key: 115, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
+            d :- InputBinding {key: 100, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
 
-        q :- InputBinding {key: 113, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-        e :- InputBinding {key: 101, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-        r :- InputBinding {key: 114, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-        f :- InputBinding {key: 102, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
+            q :- InputBinding {key: 113, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
+            e :- InputBinding {key: 101, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
+            r :- InputBinding {key: 114, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
+            f :- InputBinding {key: 102, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
 
-        x :- InputBinding {key: 120, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
-        z :- InputBinding {key: 122, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
-    }
+            x :- InputBinding {key: 120, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
+            z :- InputBinding {key: 122, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
+        }
 
-    cameraMouseBindings :- InputBindGroup
-    cameraMouseBindings {
-        pan :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraPan}
-        orbit :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraOrbit}
-        zoom :- InputBinding {motion: BC_MOTION_SCROLL, system: CameraZoom}
-        // bindings to lock mouse while left or right click held
-        lockLeft :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
-        unlockLeft :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
-        lockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
-        unlockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
+        cameraMouseBindings {
+            - InputBindGroup
+            pan :- InputBinding {button: BC_MOUSE_MIDDLE, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraPan}
+            orbit :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraOrbit}
+            zoom :- InputBinding {motion: BC_MOTION_SCROLL, system: CameraZoom}
+            // bindings to lock mouse while left or right click held
+            lockMiddle :- InputBinding {button: BC_MOUSE_MIDDLE, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
+            unlockMiddle :- InputBinding {button: BC_MOUSE_MIDDLE, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
+            lockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
+            unlockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
+        }
+        cameraMouseBindings :- Disabled
+
+        selectCell :- InputBinding {button: BC_MOUSE_MIDDLE, system: SelectCell}
+
+        actorMouseBindings {
+            - InputBindGroup
+            spawnPrefab :- InputBinding {button: BC_MOUSE_LEFT, system: PaintPrefabBrush}
+        }
+        actorMouseBindings :- Disabled
+
+        terrainMouseBindings {
+            - InputBindGroup
+            raise :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, system: PaintTerrainBrush}
+            raiseOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintTerrainBrush}
+            lower :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, system: PaintTerrainBrush}
+            lowerOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintTerrainBrush}
+        }
+        //terrainMouseBindings :- Disabled
     }
 }

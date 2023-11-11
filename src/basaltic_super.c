@@ -10,6 +10,7 @@
 #include "basaltic_view.h"
 #include "basaltic_super_window.h"
 #include "basaltic_editor_base.h"
+#include "bc_sdl_utils.h"
 
 static bc_SuperInfo *superInfo = NULL;
 
@@ -153,6 +154,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) != 0) {
         printf("Error initializing SDL: %s\n", SDL_GetError());
     }
+
+    BC_SDL_REGISTER_USER_EVENTS();
 
     superContext = (SuperContext){
         .engineConfig = loadEngineConfig("path does nothing right now!"),

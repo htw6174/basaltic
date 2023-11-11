@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <SDL2/SDL.h>
+#include "bc_sdl_utils.h"
 #include "htw_core.h"
 #include "htw_geomap.h"
 #include "bc_flecs_utils.h"
@@ -13,14 +14,19 @@
 static ecs_query_t *bindingsQuery;
 
 static void setCameraWrapLimits(bc_UiState *ui, u32 worldGridSizeX, u32 worldGridSizeY);
-static void translateCamera(ecs_world_t *world, Camera camDelta);
-static void selectCell(ecs_world_t *world);
 static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
-void editTerrain(ecs_world_t *world, float strength);
-void spawnPrefab(ecs_world_t *world);
+ecs_query_t *createBindingsQuery(ecs_world_t *world) {
+    return ecs_query_init(world, &(ecs_query_desc_t){
+        .filter.terms = {
+            [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)},
+            // Don't use bindings whose parents are disabled, so groups of bindings can be toggled together
+            [1] = {.inout = EcsInOutNone, .id = EcsDisabled, .src.trav = EcsChildOf, .oper = EcsNot}
+        }
+    });
+}
 
 // TODO: add seperate input handling for each interfaceMode setting
 void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
@@ -29,11 +35,7 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
     const MousePreferences *mousePreferences = ecs_singleton_get(world, MousePreferences);
 
     if (bindingsQuery == NULL) {
-        bindingsQuery = ecs_query_init(world, &(ecs_query_desc_t){
-            .filter.terms = {
-                [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)}
-            }
-        });
+        bindingsQuery = createBindingsQuery(world);
     }
 
     ecs_iter_t it = ecs_query_iter(world, bindingsQuery);
@@ -42,7 +44,7 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 
         for (int i = 0; i < it.count; i++) {
             InputBinding bind = bindings[i];
-            vec2 delta = {{0.0, 0.0}};
+            vec2 delta = bind.axis; // Default to binding, override with motion if set
             bool match = false; // Does this event satisfy the binding requirements?
             if (bind.system == 0) {
                 continue;
@@ -56,7 +58,6 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                     InputType triggerOn = bind.triggerOn ? bind.triggerOn : BC_INPUT_PRESSED; // default to pressed
                     if ((triggerOn & keyInputType) && (e->key.keysym.sym == bind.key)) {
                         match = true;
-                        delta = bind.axis;
                     }
                 }
             }
@@ -94,7 +95,15 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                         match = true;
                     }
                 } else if (bind.motion == BC_MOTION_TILE) {
-                    // userevent BC_HOVER_CHANGED injected back into SDL
+                    // userevent TILEMOTION pushed back into SDL
+                    if (e->type == BC_SDL_USEREVENT_TYPE(BC_SDL_TILEMOTION)) {
+                        // if button is set, must check state for matching mask
+                        if (bind.button) {
+                            match = SDL_BUTTON(bind.button) & e->motion.state;
+                        } else {
+                            match = true;
+                        }
+                    }
                 }
             }
 
@@ -107,34 +116,13 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
             }
         }
     }
-/*
-    if (useMouse && e->type == SDL_MOUSEBUTTONDOWN) {
-        if (e->button.button == SDL_BUTTON_LEFT) {
-            //editTerrain(world, 1.0);
-            spawnPrefab(world);
-        } else if (e->button.button == SDL_BUTTON_RIGHT) {
-            //TODO: moveCharacter();
-            //advanceStep(commandBuffer);
-            editTerrain(world, -1.0);
-        } else if (e->button.button == SDL_BUTTON_MIDDLE) {
-            selectCell(world);
-        }
-    }*/
 
+    // TODO: create input systems for these so they can be remapped
     if (useKeyboard && e->type == SDL_KEYDOWN) {
         switch (e->key.keysym.sym) {
             case SDLK_p:
                 //ui->cameraMode = ui->cameraMode ^ 1; // invert
                 playStep(commandBuffer);
-                break;
-            case SDLK_c:
-                //bc_snapCameraToCharacter(ui, ui->activeCharacter);
-                break;
-            case SDLK_UP:
-                editTerrain(world, 1.0);
-                break;
-            case SDLK_DOWN:
-                editTerrain(world, -1.0);
                 break;
             case SDLK_LEFT:
             {
@@ -162,26 +150,31 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     float dT = ecs_singleton_get(world, DeltaTime)->seconds;
     const Pointer *p = ecs_singleton_get(world, Pointer);
     const HoveredCell *currentHover = ecs_singleton_get(world, HoveredCell);
-    const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(Pointer), Previous, HoveredCell);
+    const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(HoveredCell), Previous, HoveredCell);
 
     // get mouse state
     s32 x, y, deltaX, deltaY;
     Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
     deltaX = x - p->x;
     deltaY = y - p->y;
-    bool scrollMoved = false; // TODO
-    bool mouseMoved = deltaX != 0 || deltaY != 0;
     bool hoverChanged = currentHover->x != prevHover->x || currentHover->y != prevHover->y;
-    InputMotion motionMask = (BC_MOTION_SCROLL * scrollMoved) | (BC_MOTION_MOUSE * mouseMoved) | (BC_MOTION_TILE * hoverChanged);
+    if (hoverChanged) {
+        SDL_Event tileMotionEvent = {
+            .motion = {
+                .type = BC_SDL_USEREVENT_TYPE(BC_SDL_TILEMOTION),
+                .timestamp = SDL_GetTicks(),
+                .state = mouseStateMask,
+                .x = currentHover->x,
+                .y = currentHover->y
+            }
+        };
+        SDL_PushEvent(&tileMotionEvent);
+    }
 
     const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
 
     if (bindingsQuery == NULL) {
-        bindingsQuery = ecs_query_init(world, &(ecs_query_desc_t){
-            .filter.terms = {
-                [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)}
-            }
-        });
+        bindingsQuery = createBindingsQuery(world);
     }
 
     ecs_iter_t it = ecs_query_iter(world, bindingsQuery);
@@ -197,14 +190,6 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
             if ((bind.triggerOn & BC_INPUT_HELD) == 0) {
                 continue;
             }
-            // TEST: comment out to process motions only in response to events
-            // if (bind.motion) {
-            //     // motionMask must have all bits in bind.motion
-            //     bool hasRequiredMotions = (bind.motion & motionMask) == bind.motion;
-            //     if (!useMouse || !hasRequiredMotions) {
-            //         continue;
-            //     }
-            // }
             if (bind.button) {
                 // button must be one of the mouse buttons pressed this frame
                 bool buttonMatch = SDL_BUTTON(bind.button) & mouseStateMask;
@@ -226,20 +211,8 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     }
 
     if (useMouse) {
-        // Should only do this if mouse also moved this frame; prevents jittering on cell edges, and unintentional edits where lowering terrain changes the hovered cell
-        // if (mouseMoved && hoverChanged) {
-        //     // Hovered cell changed
-        //     // TODO: onClick and onHoverChanged should usually be connected; make mouse actions configurable or context-dependent
-        //     if (mouseStateMask & SDL_BUTTON_LMASK) {
-        //         editTerrain(world, 1.0);
-        //     }
-        //     if (mouseStateMask & SDL_BUTTON_RMASK) {
-        //         editTerrain(world, -1.0);
-        //     }
-        // }
-
         ecs_singleton_set(world, Pointer, {x, y, p->x, p->y});
-        ecs_set_pair_second(world, ecs_id(Pointer), Previous, HoveredCell, {currentHover->x, currentHover->y});
+        ecs_set_pair_second(world, ecs_id(HoveredCell), Previous, HoveredCell, {currentHover->x, currentHover->y});
     }
 }
 
@@ -282,11 +255,6 @@ void bc_snapCameraToCharacter(bc_UiState *ui, ecs_entity_t e) {
     // TODO: would like to set camera height also, but that requires inspecting world data as well. Maybe setup a general purpose height adjust in bc_window
 }
 
-static void selectCell(ecs_world_t *world) {
-    const HoveredCell *hovered = ecs_singleton_get(world, HoveredCell);
-    ecs_singleton_set(world, SelectedCell, {.x = hovered->x, .y = hovered->y});
-}
-
 static void advanceStep(bc_CommandBuffer commandBuffer) {
     bc_WorldCommand stepCommand = {
         .commandType = BC_COMMAND_TYPE_STEP_ADVANCE,
@@ -306,68 +274,4 @@ static void pauseStep(bc_CommandBuffer commandBuffer) {
         .commandType = BC_COMMAND_TYPE_STEP_PAUSE,
     };
     bc_pushCommandToBuffer(commandBuffer, &stepCommand, sizeof(stepCommand));
-}
-
-void editTerrain(ecs_world_t *world, float strength) {
-    const TerrainBrush *tb = ecs_singleton_get(world, TerrainBrush);
-    const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
-    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
-
-    const FocusPlane *fp = ecs_singleton_get(world, FocusPlane);
-    const ModelWorld *mw = ecs_singleton_get(world, ModelWorld);
-
-    // TODO: also check to see if world is locked, don't edit if so
-    if (tb && hoveredCoord && fp && mw) {
-        ecs_entity_t focusPlane = fp->entity;
-        ecs_world_t *modelWorld = mw->world;
-        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
-
-        u32 area = htw_geo_getHexArea(tb->radius);
-        htw_geo_GridCoord offsetCoord = {0, 0};
-        for (int i = 0; i < area; i++) {
-            CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
-            cd->height += tb->value * strength;
-            htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
-            htw_geo_getNextHexSpiralCoord(&cubeOffset);
-            offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
-        }
-
-        // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
-        // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
-        // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
-        // dirty->chunks[dirty->count++] = chunk;
-        // ecs_singleton_modified(world, DirtyChunkBuffer);
-
-        bc_redraw_model(world);
-    }
-}
-
-void spawnPrefab(ecs_world_t *world) {
-    const PrefabBrush *pb = ecs_singleton_get(world, PrefabBrush);
-    const HoveredCell *hoveredCoord = ecs_singleton_get(world, HoveredCell);
-    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
-
-    const FocusPlane *fp = ecs_singleton_get(world, FocusPlane);
-    const ModelWorld *mw = ecs_singleton_get(world, ModelWorld);
-
-    // TODO: also check to see if world is locked, don't edit if so
-    if (pb && hoveredCoord && fp && mw) {
-        ecs_entity_t focusPlane = fp->entity;
-        ecs_world_t *modelWorld = mw->world;
-        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
-        Step step = *ecs_singleton_get(modelWorld, Step);
-
-        ecs_entity_t e;
-        if (pb->prefab != 0) {
-            e = bc_instantiateRandomizer(modelWorld, pb->prefab);
-        } else {
-            e = ecs_new_w_pair(modelWorld, EcsChildOf, focusPlane);
-        }
-        ecs_add_pair(modelWorld, e, IsOn, focusPlane);
-        ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
-        ecs_set(modelWorld, e, CreationTime, {step});
-        plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);
-
-        bc_redraw_model(world);
-    }
 }

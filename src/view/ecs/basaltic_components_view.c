@@ -179,7 +179,7 @@ void BcviewImport(ecs_world_t *world) {
 
     // Input
     ecs_singleton_add(world, Pointer);
-    ecs_add_pair(world, ecs_id(Pointer), Previous, ecs_id(HoveredCell));
+    ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
 
     // Global uniforms
     ecs_singleton_add(world, DeltaTime);
