@@ -12,6 +12,7 @@
 #include "basaltic_worldState.h"
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
+#include "basaltic_phases_view.h"
 #include "basaltic_components_view.h"
 #include "basaltic_components.h"
 #include "basaltic_sokol_gfx.h"
@@ -32,6 +33,8 @@
 // Colors
 #define IG_COLOR_DEFAULT ((ImVec4){1.0, 1.0, 1.0, 1.0})
 #define IG_COLOR_DISABLED ((ImVec4){1.0, 1.0, 1.0, 0.5})
+#define IG_COLOR_WARNING ((ImVec4){0.9, 0.7, 0.0, 1.0})
+#define IG_COLOR_ERROR ((ImVec4){1.0, 0.0, 0.0, 1.0})
 // Flecs Explorer color defaults:
 // Module: Yellow
 // Component: Blue
@@ -105,6 +108,7 @@ void entityLabel(ecs_world_t *world, ecs_entity_t e);
 bool entityButton(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
+void modelSetupInspector(bc_SupervisorInterface *si);
 void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
 /** Returns true if the cell was altered */
 bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity);
@@ -172,23 +176,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 
     igBegin("Model Inspector", NULL, ImGuiWindowFlags_None);
     if (model == NULL) {
-        igText("Generation Settings");
-
-        igSliderInt("(in chunks)##chunkWidth", (int*)&ec.worldChunkWidth, 1, 16, "Width: %u", 0);
-        igSliderInt("(in chunks)##chunkHeight", (int*)&ec.worldChunkHeight, 1, 16, "Height: %u", 0);
-        igText("World generation seed:");
-        igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
-
-        if (igButton("Generate world", (ImVec2){0, 0})) {
-            bc_ModelSetupSettings newSetupSettings = {
-                .width = ec.worldChunkWidth,
-                .height = ec.worldChunkHeight,
-                .seed = ec.newGameSeed
-            };
-
-            si->modelSettings = newSetupSettings;
-            si->signal = BC_SUPERVISOR_SIGNAL_START_MODEL;
-        }
+        modelSetupInspector(si);
     } else {
         bc_WorldState *world = model->world;
         if (igButton("Stop model", (ImVec2){0, 0})) {
@@ -200,7 +188,6 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 
         igValue_Uint("World seed", world->seed);
         igValue_Uint("Logic step", world->step);
-        // TODO: convert step to date and time (1 step/hour)
         dateTimeInspector(world->step);
         igPushItemWidth(200);
 
@@ -244,6 +231,162 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
     igEnd();
 }
 
+void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *viewWorld) {
+    if (igBegin("Settings", NULL, 0)) {
+        if (model == NULL) {
+            modelSetupInspector(si);
+        } else {
+            bc_WorldState *worldState = model->world;
+            if (igButton("Create new world", (ImVec2){0, 0})) {
+                si->signal = BC_SUPERVISOR_SIGNAL_STOP_MODEL;
+            }
+            igText("Seed: %s", worldState->seedString);
+            dateTimeInspector(worldState->step);
+            igPushItemWidth(200);
+            int tps = 1000 / MAX(model->tickInterval, 1);
+            igSliderInt("Max Ticks per Second", &tps, 1, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+            model->tickInterval = 1000 / tps;
+            igPopItemWidth();
+
+            if (igCollapsingHeader_TreeNodeFlags("Video Settings", ImGuiTreeNodeFlags_None)) {
+                // Toggle shadows
+                bool shadows = !ecs_has_id(viewWorld, OnPassShadow, EcsDisabled);
+                if (igCheckbox("Enable Shadows", &shadows)) {
+                    ecs_enable(viewWorld, OnPassShadow, shadows);
+                }
+                // Render scale
+                RenderScale *rs = ecs_get_mut(viewWorld, VideoSettings, RenderScale);
+                if (igSliderFloat("RenderScale", rs, 0.05, 1.0, "%.2f", 0)) {
+                    ecs_modified(viewWorld, VideoSettings, RenderScale);
+                }
+                // Sun
+                SunLight *sun = ecs_singleton_get_mut(viewWorld, SunLight);
+                igSliderFloat("Sun Inclination", &sun->inclination, -90.0, 90.0, "%.1f", 0);
+                igSliderFloat("Sun Azimuth", &sun->azimuth, -360.0, 360.0, "%.1f", 0);
+                ecs_singleton_modified(viewWorld, SunLight);
+
+            }
+
+            // TODO
+            //if (igCollapsingHeader_TreeNodeFlags("Scripting", ImGuiTreeNodeFlags_None)) {}
+
+
+            if (igCollapsingHeader_TreeNodeFlags("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+                igText("Spacebar: advance time 1 hour or pause time");
+                igText("p: auto advance time at max ticks per second");
+                igText("w/a/s/d: pan camera");
+                igText("q/e/r/f: rotate camera");
+                igText("scroll wheel or z/x: zoom in and out");
+                igText("`: enable full editor (WIP)");
+            }
+
+            igSpacing();
+
+            // Tool tabs
+            igText("Tool mode: ");
+            if (igBeginTabBar("Tools", ImGuiTabBarFlags_None)) {
+                // Lookup entities to bind to tab state
+                ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.cameraMouseBindings");
+                ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.terrainMouseBindings");
+                ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.actorMouseBindings");
+                if (camBindGroup) {
+                    bool camBindActive = igBeginTabItem("Camera", NULL, ImGuiTabItemFlags_None);
+                    if (camBindActive) {
+                        igText("Left click and drag to pan");
+                        igText("Right click and drag to orbit");
+                        // Sensitivity settings
+                        MousePreferences *mp = ecs_singleton_get_mut(viewWorld, MousePreferences);
+                        igSliderFloat("Mouse sensitivity", &mp->sensitivity, 1.0, 400.0, "%.1f", ImGuiSliderFlags_Logarithmic);
+                        igCheckbox("Flip Horizontal", &mp->invertX);
+                        igCheckbox("Flip Vertical", &mp->invertY);
+
+                        ecs_singleton_modified(viewWorld, MousePreferences);
+                        igEndTabItem();
+                    }
+                    ecs_enable(viewWorld, camBindGroup, camBindActive);
+                }
+                if (terrainBindGroup) {
+                    bool terrainBindActive = igBeginTabItem("Edit Terrain", NULL, ImGuiTabItemFlags_None);
+                    if (terrainBindActive) {
+                        igText("Left click and drag to raise terrain");
+                        igText("Right click and drag to lower terrain");
+                        // Brush settings
+                        TerrainBrush *tb = ecs_singleton_get_mut(viewWorld, TerrainBrush);
+                        igSliderInt("Brush Strength", &tb->value, 1, 20, "%d", 0);
+                        igSliderInt("Brush Radius", &tb->radius, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
+
+                        ecs_singleton_modified(viewWorld, TerrainBrush);
+                        igEndTabItem();
+                    }
+                    ecs_enable(viewWorld, terrainBindGroup, terrainBindActive);
+                }
+                if (actorBindGroup) {
+                    bool actorBindActive = igBeginTabItem("Create Actors", NULL, ImGuiTabItemFlags_None);
+                    if (actorBindActive) {
+                        igText("Click to create an entity from selected prefab");
+                        // Brush settings
+                        PrefabBrush *pb = ecs_singleton_get_mut(viewWorld, PrefabBrush);
+                        /* Ensure the model isn't running before doing anything else */
+                        if (!bc_model_isRunning(model)) {
+                            if (SDL_SemWaitTimeout(worldState->lock, 16) != SDL_MUTEX_TIMEDOUT) {
+                                ecs_world_t *world = worldState->ecsWorld;
+                                // set model ecs world scope, to keep view's external tags/queries separate
+                                ecs_entity_t oldScope = ecs_get_scope(world);
+                                ecs_entity_t viewScope = ecs_entity_init(world, &(ecs_entity_desc_t){.name = "bcview"});
+                                ecs_set_scope(world, viewScope);
+
+                                const char *prefabName = getEntityLabel(world, pb->prefab);
+                                if (igBeginCombo("Select Prefab", prefabName, 0)) {
+                                    ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){
+                                        .id = EcsPrefab,
+                                        .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
+                                    });
+                                    while (ecs_term_next(&it)) {
+                                        for (int i = 0; i < it.count; i++) {
+                                            ecs_entity_t ent = it.entities[i];
+                                            const char *entName = getEntityLabel(world, ent);
+                                            if (igSelectable_Bool(entName, ent == pb->prefab, 0, IG_SIZE_DEFAULT)) {
+                                                modelInspector.focusEntity = ent;
+                                                pb->prefab = ent;
+                                            }
+                                        }
+                                    }
+                                    igEndCombo();
+                                }
+
+                                if (pb->prefab) {
+                                    if (igCollapsingHeader_TreeNodeFlags("Edit Prefab", ImGuiTreeNodeFlags_None)) {
+                                        // FIXME: cloning prefabs seems to crash flecs
+                                        // if (igButton("Create new Prefab from this", IG_SIZE_DEFAULT)) {
+                                        //     // copy to new prefab
+                                        //     pb->prefab = ecs_clone(world, 0, pb->prefab, true);
+                                        // }
+                                        ecsEntityInspector(world, &modelInspector);
+                                    }
+                                }
+
+                                ecs_set_scope(world, oldScope);
+                                SDL_SemPost(worldState->lock);
+                            }
+                        } else {
+                            igTextColored(IG_COLOR_WARNING, "Simulation currently running, press space to pause and edit prefabs");
+                        }
+
+
+                        ecs_singleton_modified(viewWorld, PrefabBrush);
+                        igEndTabItem();
+                    }
+                    ecs_enable(viewWorld, actorBindGroup, actorBindActive);
+                }
+
+                igEndTabBar();
+            }
+
+        }
+    }
+    igEnd();
+}
+
 void bc_editorOnModelStart(void) {
     modelInspector = (EcsInspectionContext){
         .worldName = "Model",
@@ -258,6 +401,29 @@ void bc_editorOnModelStart(void) {
 
 void bc_editorOnModelStop(void) {
     modelInspector = (EcsInspectionContext){0};
+}
+
+void modelSetupInspector(bc_SupervisorInterface *si) {
+    igText("World Generation Settings");
+
+    igSliderInt("(in chunks)##chunkWidth", (int*)&ec.worldChunkWidth, 1, 16, "Width: %u", 0);
+    igSliderInt("(in chunks)##chunkHeight", (int*)&ec.worldChunkHeight, 1, 16, "Height: %u", 0);
+    if (ec.worldChunkWidth * ec.worldChunkHeight > 64) {
+        igTextColored(IG_COLOR_WARNING, "Large worlds are currently unoptimized!", 0);
+    }
+    igText("Seed:");
+    igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+
+    if (igButton("Generate world", (ImVec2){0, 0})) {
+        bc_ModelSetupSettings newSetupSettings = {
+            .width = ec.worldChunkWidth,
+            .height = ec.worldChunkHeight,
+            .seed = ec.newGameSeed
+        };
+
+        si->modelSettings = newSetupSettings;
+        si->signal = BC_SUPERVISOR_SIGNAL_START_MODEL;
+    }
 }
 
 // TODO: consider seperating the parts that require viewEcsWorld to another inspector section
@@ -699,7 +865,7 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     } else {
         children = ecs_term_iter(world, &(ecs_term_t){
             .id = ecs_childof(node),
-            .flags = EcsTermMatchDisabled
+            .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
         });
         // Display as a leaf if no children
         if (ecs_iter_is_true(&children)) {
@@ -1158,7 +1324,7 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
 const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e) {
     static char idStr[64];
     if (e == 0) {
-        return "(null entity)";
+        return "(nothing)";
     } else if (!ecs_is_alive(world, e)) {
         sprintf(idStr, "non-alive entity %lu", e);
         return idStr;
@@ -1258,7 +1424,8 @@ void dateTimeInspector(u64 step) {
     u64 day = ((step / 24) % 30) + 1;
     u64 hour = step % 24;
 
-    igText("%i/%i/%i Hour %i", year, month, day, hour);
+    // probably don't need to fixed width format specifiers, but handy to know how to use them
+    igText("%" PRIu64 "/%" PRIu64 "/%" PRIu64 " Hour %" PRIu64, year, month, day, hour);
 }
 
 void coordInspector(const char *label, htw_geo_GridCoord coord) {

@@ -104,9 +104,38 @@ void CameraZoom(ecs_iter_t *it) {
         CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.zoom;
     }
-    float delta = ic.delta.y * speed;
+    // positive y zooms in
+    float delta = ic.delta.y * speed * -1.0;
 
     cam->distance = CLAMP(cam->distance + delta, 0.5, 100.0);
+}
+
+// TODO: unsure if this is the right module to put non-manual run systems in
+void CameraDriftToElevation(ecs_iter_t *it) {
+    Camera *cam = ecs_field(it, Camera, 1);
+
+    float dT = it->delta_time;
+    float targetElevation = 0.0; // drift to 0 if terrain elevation isn't available
+    if (ecs_field_is_set(it, 2) && ecs_field_is_set(it, 3)) {
+        FocusPlane *fp = ecs_field(it, FocusPlane, 2);
+        ModelWorld *mw = ecs_field(it, ModelWorld, 3);
+        const vec3 *scale = ecs_singleton_get(it->world, Scale);
+
+        ecs_entity_t focusPlane = fp->entity;
+        ecs_world_t *modelWorld = mw->world;
+        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+
+        htw_geo_GridCoord originCoord = htw_geo_cartesianToHexCoord(cam->origin.x, cam->origin.y);
+        CellData *cd = htw_geo_getCell(cm, originCoord);
+        targetElevation = (cd->height * scale->z) + scale->z; // target point just above surface
+        // if within half an elevation step already, no need to move
+        if (fabsf(cam->origin.z - targetElevation) < (scale->z / 2.0)) {
+            return;
+        }
+    }
+    targetElevation = MAX(targetElevation, 0.0); // don't sink into the ocean
+
+    cam->origin.z = lerpClamp(cam->origin.z, targetElevation, 2.0 * dT);
 }
 
 void SelectCell(ecs_iter_t *it) {
@@ -191,19 +220,25 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_SYSTEM(world, UnlockMouse, 0);
 
     ECS_SYSTEM(world, CameraPan, 0,
-        Camera($),
+        [inout] Camera($),
         ?CameraSpeed($),
         ?CameraWrap($)
     );
 
     ECS_SYSTEM(world, CameraOrbit, 0,
-        Camera($),
+        [inout] Camera($),
         ?CameraSpeed($)
     );
 
     ECS_SYSTEM(world, CameraZoom, 0,
-        Camera($),
+        [inout] Camera($),
         ?CameraSpeed($)
+    );
+
+    ECS_SYSTEM(world, CameraDriftToElevation, EcsPreUpdate,
+        [inout] Camera($),
+        ?FocusPlane($),
+        ?ModelWorld($)
     );
 
     ECS_SYSTEM(world, SelectCell, 0,

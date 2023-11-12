@@ -28,6 +28,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface* si, bc_WindowContext* wc, bc_Comma
 void bc_view_setupEditor();
 void bc_view_teardownEditor();
 void bc_view_drawEditor(bc_SupervisorInterface* si, bc_CommandBuffer inputBuffer);
+void bc_view_drawGUI(bc_SupervisorInterface* si);
 
 void bc_view_onModelStart(bc_ModelData *md);
 void bc_view_onModelStop(bc_ModelData *md);

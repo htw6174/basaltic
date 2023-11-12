@@ -63,8 +63,7 @@ void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool
     bc_processInputState(vc.ecsWorld, inputBuffer, useMouse, useKeyboard);
 }
 
-u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_CommandBuffer inputBuffer)
-{
+u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_CommandBuffer inputBuffer) {
     // TODO: should happen in response to SDL resize events instead of every frame
     const WindowSize *currentWindow = ecs_singleton_get(vc.ecsWorld, WindowSize);
     // Only set if changed so that OnSet observers for WindowSize only run when needed
@@ -125,8 +124,7 @@ void bc_view_onModelStart(bc_ModelData *md) {
     bc_editorOnModelStart();
 }
 
-void bc_view_onModelStop(bc_ModelData *md)
-{
+void bc_view_onModelStop(bc_ModelData *md) {
     ecs_singleton_remove(vc.ecsWorld, ModelWorld);
     bc_editorOnModelStop();
     model = NULL;
@@ -141,7 +139,10 @@ void bc_view_teardownEditor() {
     bc_teardownEditor();
 }
 
-void bc_view_drawEditor(bc_SupervisorInterface *si, bc_CommandBuffer inputBuffer)
-{
+void bc_view_drawEditor(bc_SupervisorInterface *si, bc_CommandBuffer inputBuffer) {
     bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, vc.ui);
+}
+
+void bc_view_drawGUI(bc_SupervisorInterface* si) {
+    bc_drawGUI(si, model, vc.ecsWorld);
 }

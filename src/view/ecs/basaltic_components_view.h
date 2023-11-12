@@ -125,8 +125,10 @@ ECS_BITMASK(InputModifier, {
 typedef s32 KeyCode;
 BC_DECL ECS_COMPONENT_DECLARE(KeyCode);
 
-// Place input bindings under a bindgroup to enable/disable multiple bindings at once
+// Place input bindings under a bind group to enable/disable multiple bindings at once
 BC_DECL ECS_TAG_DECLARE(InputBindGroup);
+// Tag which can override a disabled bind group
+BC_DECL ECS_TAG_DECLARE(ActiveBindGroup);
 
 // NOTE: must have either key, button, or motion set
 ECS_STRUCT(InputBinding, {
@@ -156,6 +158,7 @@ ECS_STRUCT(Pointer, {
 ECS_STRUCT(MousePreferences, {
     float sensitivity;
     float verticalSensitivity; // Extra factor applied to vertical movement only
+    float scrollSensitivity;
     bool invertX;
     bool invertY;
 });

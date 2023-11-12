@@ -101,6 +101,10 @@ void landslideParticle(htw_ChunkMap *cm, htw_geo_GridCoord start) {
                 candidate = sample;
                 greatestDrop = drop;
             }
+            // Wipe out vegetation and add some nutrient (groundwater)
+            sampleCell->understory = 0;
+            sampleCell->canopy = 0;
+            sampleCell->groundwater += 150;
         }
         sliding = greatestDrop > maxSlope;
         pos = candidate;
@@ -202,8 +206,20 @@ void ExecuteErupt(ecs_iter_t *it) {
     Elevation *elevation = ecs_field(it, Elevation, 2);
     Plane *plane = ecs_field(it, Plane, 3);
     htw_ChunkMap *cm = plane->chunkMap;
+    SpiritLifetime *lifetime = ecs_field(it, SpiritLifetime, 4);
+    CreationTime *createTime = ecs_field(it, CreationTime, 5);
+    Step step = *ecs_field(it, Step, 6);
 
     for (int i = 0; i < it->count; i++) {
+        u64 age = step - createTime[i];
+        SpiritLifetime lt = lifetime[i];
+        s32 maturityEnd = lt.youngSteps + lt.matureSteps;
+        s32 lifeEnd = maturityEnd + lt.oldSteps;
+        if (age > lifeEnd) {
+            // End of life, destroy
+            ecs_delete(it->world, it->entities[i]);
+        }
+
         CellData *cell = htw_geo_getCell(cm, positions[i]);
 
         htw_geo_GridCoord start = positions[i];
@@ -259,6 +275,9 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
         [in] Position,
         [in] Elevation,
         [in] Plane(up(bc.planes.IsOn)),
+        [in] SpiritLifetime,
+        [in] CreationTime,
+        [in] Step($),
         [none] (bc.actors.Action, bc.actors.Action.ActionErupt)
     );
 

@@ -47,11 +47,11 @@ void bc_resizeEditor(bc_EditorEngineContext *eec) {
 }
 
 bool bc_editorWantCaptureMouse(bc_EditorEngineContext *eec) {
-    return eec->isActive & igGetIO()->WantCaptureMouse;
+    return igGetIO()->WantCaptureMouse;
 }
 
 bool bc_editorWantCaptureKeyboard(bc_EditorEngineContext *eec) {
-    return eec->isActive & igGetIO()->WantCaptureKeyboard;
+    return igGetIO()->WantCaptureKeyboard;
 }
 
 void bc_handleEditorInputEvents(bc_EditorEngineContext *eec, SDL_Event *e) {
@@ -61,9 +61,9 @@ void bc_handleEditorInputEvents(bc_EditorEngineContext *eec, SDL_Event *e) {
             eec->isActive ^= 1;
         }
     }
-    if (eec->isActive) {
-        ImGui_ImplSDL2_ProcessEvent(e);
-    }
+    ImGui_ImplSDL2_ProcessEvent(e);
+    // if (eec->isActive) {
+    // }
 }
 
 void bc_beginEditor() {

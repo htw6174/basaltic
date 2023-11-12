@@ -20,8 +20,9 @@ bcview {
     }
 
     MousePreferences :- MousePreferences {
-        sensitivity: 20.0,
+        sensitivity: 50.0,
         verticalSensitivity: 1.0,
+        scrollSensitivity: 5.0,
         invertX: false,
         invertY: false
     }
@@ -47,6 +48,9 @@ bcview {
         - RenderScale {0.3}
         - ShadowMapSize {512}
         - RenderDistance {radius: 2}
+        - OVERRIDE|RenderScale
+        - OVERRIDE|ShadowMapSize
+        - OVERRIDE|RenderDistance
     }
 
     Prefab VideoSettingsLow : VideoSettingsDefault {

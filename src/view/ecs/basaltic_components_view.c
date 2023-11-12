@@ -81,6 +81,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_COMPONENT_DEFINE(world, KeyCode);
     ecs_primitive(world, {.entity = ecs_id(KeyCode), .kind = EcsI32});
     ECS_TAG_DEFINE(world, InputBindGroup);
+    ECS_TAG_DEFINE(world, ActiveBindGroup);
     ECS_META_COMPONENT(world, InputBinding);
 
     ECS_META_COMPONENT(world, DeltaTime);

@@ -18,12 +18,16 @@ static void advanceStep(bc_CommandBuffer commandBuffer);
 static void playStep(bc_CommandBuffer commandBuffer);
 static void pauseStep(bc_CommandBuffer commandBuffer);
 
+// FIXME: can't combine operators, so no way to have (!Disabled || ActiveBindGroup). Need different solution
 ecs_query_t *createBindingsQuery(ecs_world_t *world) {
     return ecs_query_init(world, &(ecs_query_desc_t){
+        //.filter.expr = "[in] InputBinding, !Disabled(parent) || bcview.ActiveBindGroup(parent)"
         .filter.terms = {
             [0] = {.inout = EcsIn, .id = ecs_id(InputBinding)},
             // Don't use bindings whose parents are disabled, so groups of bindings can be toggled together
-            [1] = {.inout = EcsInOutNone, .id = EcsDisabled, .src.trav = EcsChildOf, .oper = EcsNot}
+            [1] = {.inout = EcsInOutNone, .id = EcsDisabled, .src.flags = EcsParent, .oper = EcsNot}
+            // Override for otherwise disabled bindgroups
+            // [2] = {.inout = EcsInOutNone, .id = ActiveBindGroup, .src.flags = EcsParent, .oper = EcsOptional},
         }
     });
 }
@@ -90,7 +94,8 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 } else if (bind.motion == BC_MOTION_SCROLL) {
                     // mousewheel
                     if (e->type == SDL_MOUSEWHEEL) {
-                        delta = (vec2){{e->wheel.x, e->wheel.y}};
+                        delta = (vec2){{e->wheel.x * mousePreferences->scrollSensitivity,
+                                        e->wheel.y * mousePreferences->scrollSensitivity}};
                         // TODO: could add a buttonpressed requirement along with this but no need to right now
                         match = true;
                     }
@@ -107,7 +112,6 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 }
             }
 
-            // TODO: handle default case for bind.triggerOn
             if (match) {
                 InputContext ic = {
                     .delta = delta

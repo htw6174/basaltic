@@ -16,7 +16,7 @@ Prefab ActorPrefab {
     - Condition
 }
 
-Prefab WolfPackPrefab : ActorPrefab {
+Prefab PredatorPack : ActorPrefab {
     - (Ego, EgoPredator)
     - (Diet, Meat)
     - Condition {maxHealth: 30, health: 30, maxStamina: 150, stamina: 150}
@@ -25,7 +25,7 @@ Prefab WolfPackPrefab : ActorPrefab {
     - ActorSize {ACTOR_SIZE_AVERAGE}
 }
 
-Prefab BisonHerdPrefab : ActorPrefab {
+Prefab GrazerHerd : ActorPrefab {
     - (Ego, EgoGrazer)
     - (Diet, Grasses)
     - Condition {maxHealth: 100, health: 100, maxStamina: 25, stamina: 25}
@@ -49,7 +49,7 @@ Prefab TectonicSpiritPrefab {
 }
 
 // Everest is 8800 meters high = 88 height units
-Prefab EverestPrefab : TectonicSpiritPrefab {
+Prefab MountainSpirit : TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 100, matureSteps: 10, oldSteps: 100}
     - (RandomizeInt, PlateShiftStrength.left) {min: 70, max: 110, mean: 80, distribution: RAND_DISTRIBUTION_NORMAL}
     - (RandomizeInt, PlateShiftStrength.right) {min: 70, max: 110, mean: 80, distribution: RAND_DISTRIBUTION_NORMAL}
@@ -57,85 +57,81 @@ Prefab EverestPrefab : TectonicSpiritPrefab {
 }
 
 // Marinas trench is 11000 meters deep = 110 height units
-Prefab OceansPrefab : TectonicSpiritPrefab {
+Prefab OceanSpirit : TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 60, matureSteps: 180, oldSteps: 60}
     - (RandomizeInt, PlateShiftStrength.left) {min: -128, max: -90, mean: -100, distribution: RAND_DISTRIBUTION_NORMAL}
     - (RandomizeInt, PlateShiftStrength.right) {min: -128, max: -90, mean: -100, distribution: RAND_DISTRIBUTION_NORMAL}
     - (RandomizeFloat, PlateShiftStrength.falloff) {min:12, max: 16}
 }
 
-Prefab MountainsPrefab : TectonicSpiritPrefab {
+Prefab HillSpirit : TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 40, matureSteps: 100, oldSteps: 40}
     - (RandomizeInt, PlateShiftStrength.left) {min: 20, max: 40}
     - (RandomizeInt, PlateShiftStrength.right) {min: 20, max: 40}
     - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 16}
 }
 
-Prefab SeasPrefab : TectonicSpiritPrefab {
+Prefab SeaSpirit : TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 20, matureSteps: 50, oldSteps: 20}
     - (RandomizeInt, PlateShiftStrength.left) {min: -30, max: -10}
     - (RandomizeInt, PlateShiftStrength.right) {min: -30, max: -10}
     - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 8}
 }
 
-Prefab CliffsPrefab : TectonicSpiritPrefab {
+Prefab CliffSpirit : TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 20, matureSteps: 20, oldSteps: 20}
     - (RandomizeInt, PlateShiftStrength.left) {min: -10, max: 20}
     - (RandomizeInt, PlateShiftStrength.right) {min: -10, max: 20}
     - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 8}
 }
 
-Prefab TestPlatesPrefab : TectonicSpiritPrefab {
-    - (RandomizeInt, SpiritLifetime.youngSteps) {min: 0, max: 40, mean: 30, distribution: RAND_DISTRIBUTION_NORMAL}
-    - (RandomizeInt, SpiritLifetime.matureSteps) {min: 0, max: 100, mean: 50, distribution: RAND_DISTRIBUTION_NORMAL}
-    - (RandomizeInt, SpiritLifetime.oldSteps) {min: 0, max: 40, mean: 30, distribution: RAND_DISTRIBUTION_NORMAL}
-    - (RandomizeInt, PlateShiftStrength.left) {min: 0, max: 80, mean: 20, distribution: RAND_DISTRIBUTION_NORMAL}
-    - (RandomizeInt, PlateShiftStrength.right) {min: 0, max: 80, mean: 20, distribution: RAND_DISTRIBUTION_NORMAL}
-    - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 16, mean: 10, distribution: RAND_DISTRIBUTION_NORMAL}
-}
+// Prefab TestPlatesPrefab : TectonicSpiritPrefab {
+//     - (RandomizeInt, SpiritLifetime.youngSteps) {min: 0, max: 40, mean: 30, distribution: RAND_DISTRIBUTION_NORMAL}
+//     - (RandomizeInt, SpiritLifetime.matureSteps) {min: 0, max: 100, mean: 50, distribution: RAND_DISTRIBUTION_NORMAL}
+//     - (RandomizeInt, SpiritLifetime.oldSteps) {min: 0, max: 40, mean: 30, distribution: RAND_DISTRIBUTION_NORMAL}
+//     - (RandomizeInt, PlateShiftStrength.left) {min: 0, max: 80, mean: 20, distribution: RAND_DISTRIBUTION_NORMAL}
+//     - (RandomizeInt, PlateShiftStrength.right) {min: 0, max: 80, mean: 20, distribution: RAND_DISTRIBUTION_NORMAL}
+//     - (RandomizeFloat, PlateShiftStrength.falloff) {min: 4, max: 16, mean: 10, distribution: RAND_DISTRIBUTION_NORMAL}
+// }
 
-Prefab VolcanoSpiritPrefab {
+Prefab VolcanoSpirit {
     - ElementalSpirit
     - (Ego, EgoVolcanoSpirit)
     - OVERRIDE|Position
     - OVERRIDE|Elevation
-    - SpiritPower {maxValue: 65535}
+    - (RandomizeInt, SpiritLifetime.matureSteps) {min: 500, max: 2500, mean: 1500, distribution: RAND_DISTRIBUTION_NORMAL}
+    - SpiritPower {maxValue: 2e16}
     - (IsOn, Overworld)
 }
 
 
-everest_spawner {
-    - Spawner{prefab: EverestPrefab, count: 2, oneShot: true}
+mountains_spawner {
+    - Spawner{prefab: MountainSpirit, count: 2, oneShot: true}
     - (IsOn, Overworld)
 }
 
 oceans_spawner {
-    - Spawner{prefab: OceansPrefab, count: 2, oneShot: true}
+    - Spawner{prefab: OceanSpirit, count: 2, oneShot: true}
     - (IsOn, Overworld)
 }
 
-mountains_spawner {
-    - Spawner{prefab: MountainsPrefab, count: 16, oneShot: true}
+hills_spawner {
+    - Spawner{prefab: HillSpirit, count: 16, oneShot: true}
     - (IsOn, Overworld)
 }
 
 seas_spawner {
-    - Spawner{prefab: SeasPrefab, count: 24, oneShot: true}
+    - Spawner{prefab: SeaSpirit, count: 24, oneShot: true}
     - (IsOn, Overworld)
 }
 
 cliffs_spawner {
-    - Spawner{prefab: CliffsPrefab, count: 24, oneShot: true}
-    - (IsOn, Overworld)
-}
-
-test_spawner {
-    - Spawner{prefab: TestPlatesPrefab, count: 0, oneShot: true}
+    - Spawner{prefab: CliffSpirit, count: 24, oneShot: true}
     - (IsOn, Overworld)
 }
 
 volcano_spawner {
-    - Spawner{prefab: VolcanoSpiritPrefab, count: 0, oneShot: true}
+    - Spawner{prefab: VolcanoSpirit, count: 10, oneShot: true}
     - (IsOn, Overworld)
 }
 

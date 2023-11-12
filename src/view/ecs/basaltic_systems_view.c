@@ -269,20 +269,17 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
 }
 
 void UniformPointerToMouse(ecs_iter_t *it) {
-    Pointer *pointers = ecs_field(it, Pointer, 1);
-    const WindowSize *w = ecs_field(it, WindowSize, 2);
+    Pointer *pointer = ecs_field(it, Pointer, 1);
+    WindowSize *w = ecs_field(it, WindowSize, 2);
 
     float scale = 1.0;
     if (ecs_field_is_set(it, 3)) {
         scale = *ecs_field(it, RenderScale, 3);
     }
 
-    // TODO: need any special handling for multiple pointer inputs? For now just override with last pointer
-    for (int i = 0; i < it->count; i++) {
-        float x = (pointers[i].x * scale) + 0.5;
-        float y = ((w->y - pointers[i].y) * scale) + 0.5;
-        ecs_singleton_set(it->world, Mouse, {x, y});
-    }
+    float x = (pointer->x * scale) + 0.5;
+    float y = ((w->y - pointer->y) * scale) + 0.5;
+    ecs_singleton_set(it->world, Mouse, {x, y});
 }
 
 void UniformCameraToPVMatrix(ecs_iter_t *it) {
@@ -326,7 +323,7 @@ void UniformSunToMatrix(ecs_iter_t *it) {
     // Should be minimally larger than part of terrain camera can see
     // TODO more reliable for lower cam inclinations
     float viewSize = powf(cam->distance, 2.0) + cam->origin.z;
-    float width = viewSize * 4;
+    float width = viewSize * 8; // 4 is too low, 8 catches almost everything in view with decent shadow quality
 
     // Remap to tightly wrap shadow casters affecting visible area
     // min = max terrain height in world units ~= 25, at inclination = 0
@@ -684,7 +681,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcviewSystemsTerrain);
 
     ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
-        [in] Pointer,
+        [in] Pointer($),
         [in] WindowSize($),
         [in] ?RenderScale(VideoSettings),
         [out] ?Mouse($)
