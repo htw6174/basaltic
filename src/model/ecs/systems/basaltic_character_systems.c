@@ -211,8 +211,6 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
 
         CellData *currentCell = htw_geo_getCell(cm, positions[i]);
         u32 availableHere = currentCell->understory;
-        // track best candidate
-        CellData *cell = currentCell;
 
         // if there is enough here, stay put and feed. Otherwise, find best nearby cell
         // TODO: first check for and move directly away from predators
@@ -223,10 +221,12 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
             // get number of cells to check based on character's attributes
             u32 sightRange = 2;
             u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
-            u32 bestAvailable = availableHere;
-            s32 minDiff = INT16_MAX;
+            // track best candidate
+            s32 bestScore = INT32_MIN;
+            CellData *cell = currentCell;
             htw_geo_CubeCoord bestDirection = {0, 0, 0};
             for (int c = 0; c < cellsInSightRange; c++) {
+                htw_geo_getNextHexSpiralCoord(&relativeCoord);
                 // Result coordinate is not confined to chunkmap, but converting to chunk and cell will also wrap input coords
                 htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
                 htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
@@ -234,27 +234,28 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
                 htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
                 cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
+                s32 score = 0;
+
                 // exclude cells that can't be moved to
                 s32 heightDiff = abs(currentCell->height - cell->height);
-                bool canMoveToCell = heightDiff <= 3 && cell->height >= 0;
-
-                // Get cell data, find best vegetation
-                if (cell->understory > bestAvailable && canMoveToCell) {
-                    bestAvailable = cell->understory;
-                    bestDirection = relativeCoord;
-                } else if (heightDiff < minDiff && canMoveToCell) {
-                    minDiff = heightDiff;
-                    bestDirection = relativeCoord;
+                bool canMoveToCell = heightDiff < 5 && cell->height >= 0;
+                if (!canMoveToCell) {
+                    continue;
                 }
 
-                htw_geo_getNextHexSpiralCoord(&relativeCoord);
+                score -= (heightDiff * heightDiff) * 10;
+                score += cell->understory;
+                score += cell->canopy / 10;
+                score += cell->surfacewater / 10;
+                // TODO: add small random score to break ties?
+                score += htw_randInt(10);
+                //score += xxh_hash2d(it->entities[i], worldCoord.x, worldCoord.y) % 10;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestDirection = relativeCoord;
+                }
             }
-            // if no cell with more than scraps, move randomly
-            // if (bestAvailable < tolerance) {
-            //     // TODO: don't move into the ocean!
-            //     s32 dir = htw_randIndex(HEX_DIRECTION_COUNT);
-            //     bestDirection = htw_geo_cubeDirections[dir];
-            // }
 
             // Apply best direction found
             destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));

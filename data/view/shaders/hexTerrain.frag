@@ -231,9 +231,8 @@ void main()
 	float tideFreq = 5.0;
 	float tide = sin((noiseMidFreq * tideFreq) + time);
 
-	float seaLevelOffset = -0.05;
-	float seaLevel = inout_pos.z + seaLevelOffset;
-	float isOcean = step(seaLevel, tide * tideMag);
+	float seaLevelOffset = 0.05;
+	float isOcean = step(inout_pos.z + seaLevelOffset, tide * tideMag);
 
 	float depth = 1.0 - min(-inout_pos.z, 1.0);
 	depth = depth * depth * depth;
@@ -249,7 +248,7 @@ void main()
 	//oceanColor = mix(oceanColor, waveCrest, isWave);
 
 	vec3 seaFoam = vec3(0.8, 1.0, 1.0);
-	float isFoam = step(tide * tideMag, seaLevel + 0.02);
+	float isFoam = step(tide * tideMag, inout_pos.z + 0.07);
 	oceanColor = mix(oceanColor, seaFoam, isFoam);
 
 	albedo = mix(albedo, oceanColor, isOcean);

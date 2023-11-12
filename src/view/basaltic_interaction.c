@@ -78,7 +78,6 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                     }
                 }
                 if (bind.motion == BC_MOTION_MOUSE) {
-                    // mousemotion
                     if (e->type == SDL_MOUSEMOTION) {
                         // Normalize mouse motion by window width
                         float dX = ((float)e->motion.xrel * mousePreferences->sensitivity * (mousePreferences->invertX ? -1.0 : 1.0)) / windowSize->x;
@@ -90,14 +89,17 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                         } else {
                             match = true;
                         }
+                    } else {
+                        match = false;
                     }
                 } else if (bind.motion == BC_MOTION_SCROLL) {
-                    // mousewheel
                     if (e->type == SDL_MOUSEWHEEL) {
                         delta = (vec2){{e->wheel.x * mousePreferences->scrollSensitivity,
                                         e->wheel.y * mousePreferences->scrollSensitivity}};
                         // TODO: could add a buttonpressed requirement along with this but no need to right now
                         match = true;
+                    } else {
+                        match =false;
                     }
                 } else if (bind.motion == BC_MOTION_TILE) {
                     // userevent TILEMOTION pushed back into SDL
@@ -108,6 +110,8 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                         } else {
                             match = true;
                         }
+                    } else {
+                        match = false;
                     }
                 }
             }
