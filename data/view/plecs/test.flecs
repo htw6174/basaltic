@@ -37,6 +37,19 @@ bcview {
     // TEST: disable shadow pass by default
     phases.OnPassShadow :- Disabled
 
+    // brush tools
+    AdditiveBrush {
+        - Tool
+        - AdditiveBrush {value: 1}
+        - BrushSize {radius: 1}
+        - (BrushField, bc.planes.CellData.height)
+    }
+
+    PrefabBrush {
+        - Tool
+        - PrefabBrush {prefab: 0}
+    }
+
     // input map
     Input {
         using bcview.systems.input
@@ -84,10 +97,10 @@ bcview {
 
         terrainMouseBindings {
             - InputBindGroup
-            raise :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, system: PaintTerrainBrush}
-            raiseOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintTerrainBrush}
-            lower :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, system: PaintTerrainBrush}
-            lowerOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintTerrainBrush}
+            raise :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, system: PaintAdditiveBrush}
+            raiseOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
+            lower :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, system: PaintAdditiveBrush}
+            lowerOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
         }
         //terrainMouseBindings :- Disabled
     }

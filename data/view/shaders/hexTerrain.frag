@@ -12,7 +12,8 @@ uniform float time;
 uniform vec2 mousePosition;
 uniform int chunkIndex;
 
-in vec4 inout_color;
+in vec4 inout_data1;
+in vec4 inout_data2;
 in vec3 inout_pos;
 in vec3 inout_normal;
 in float inout_radius; // approximate distance from center of cell, based on vert barycentric. == 1 at cell corners, == 0.75 at center of edge
@@ -135,10 +136,14 @@ void main()
 	//vec3 vN = mix(flatNormal, inout_normal, inout_normal.z);
 
 	// Sample color
-	float biotemp = inout_color.r;
-	float understory = inout_color.g; // == % of tile with low vegetation coverage
-	float canopy = inout_color.b; // == % of tile with tall vegetation coverage
-	float humidityPref = inout_color.a;
+	// data1.x
+	float geology = inout_data1.y;
+	float biotemp = inout_data1.z;
+	float humidityPref = inout_data1.w;
+	float understory = inout_data2.x; // == % of tile with low vegetation coverage
+	float canopy = inout_data2.y; // == % of tile with tall vegetation coverage
+	// data2.z
+	float visibility = inout_data2.w;
 
 	// TODO: pick from colormap
 	const vec3 dirt_cold_dry = vec3(0.6, 0.6, 0.5);
@@ -260,8 +265,7 @@ void main()
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
 	//vN = flatNormal;
 
-	out_color = vec4(albedo, 1.0);
-	//out_color = vec4(dFdy(inout_pos) * 100.0, 1.0);
+	out_color = vec4(albedo, 1.0 - visibility);
 	//out_color = vec4(fract(inout_pos * 10.0), 1.0);
 	//out_color = vec4(vec3(hashThreshold), 1.0);
 	//out_color = inout_color;

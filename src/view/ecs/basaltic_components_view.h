@@ -205,17 +205,34 @@ ECS_STRUCT(DirtyChunkBuffer, {
     u32 *chunks;
 });
 
+// Singletons that can be picked in the editor to change interaction mode
 BC_DECL ECS_TAG_DECLARE(Tool);
 
-ECS_STRUCT(TerrainBrush, {
-    s32 value;
-    s32 radius;
-    // TODO: repeat modes
-    // TODO: brush types
-    // TODO: data layer
-    // - TODO: bitmask brush for bitmask layers
+// Exclusive relationship where target is a meta member of a Component (child of Component entity)
+BC_DECL ECS_TAG_DECLARE(BrushField);
+
+ECS_STRUCT(BrushSize, {
+    s32 radius; // in cells
 });
 
+// Add specific value to cells
+ECS_STRUCT(AdditiveBrush, {
+    s32 value;
+});
+
+// Average nearby cells towards each other
+ECS_STRUCT(SmoothBrush, {
+    float strength;
+});
+
+// Set value on cells
+ECS_STRUCT(ValueBrush, {
+    s32 value;
+});
+
+// TODO: bitmask brush?
+
+// Instantiate prefabs
 ECS_STRUCT(PrefabBrush, {
     ecs_entity_t prefab;
 });

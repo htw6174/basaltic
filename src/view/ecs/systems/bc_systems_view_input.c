@@ -174,40 +174,56 @@ void PaintPrefabBrush(ecs_iter_t *it) {
     }
 }
 
-void PaintTerrainBrush(ecs_iter_t *it) {
-    TerrainBrush *tb = ecs_field(it, TerrainBrush, 1);
-    HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 2);
+void PaintAdditiveBrush(ecs_iter_t *it) {
+    AdditiveBrush *ab = ecs_field(it, AdditiveBrush, 1);
+    BrushSize *brushSize = ecs_field(it, BrushSize, 2);
+    ecs_entity_t brushField = ECS_PAIR_SECOND(ecs_field_id(it, 3));
+    HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 4);
     htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
-    FocusPlane *fp = ecs_field(it, FocusPlane, 3);
-    ModelWorld *mw = ecs_field(it, ModelWorld, 4);
+    FocusPlane *fp = ecs_field(it, FocusPlane, 5);
+    ModelWorld *mw = ecs_field(it, ModelWorld, 6);
 
+    // Get field offset and type info
+    const EcsMember *member = ecs_get(it->world, brushField, EcsMember);
+    if (!member) {
+        ecs_err("Target of BrushField has no member metadata: %s", ecs_get_name(it->world, brushField));
+        return;
+    }
+    const EcsPrimitive *prim = ecs_get(it->world, member->type, EcsPrimitive);
+
+    ptrdiff_t offset = member->offset;
+
+    // Get axis data to multiply value by input strength
     void *param = it->param;
     InputContext ic = param ? (*(InputContext*)param) : (InputContext){.delta.x = 1.0};
 
-    // TODO: also check to see if world is locked, don't edit if so
-    if (tb && hoveredCoord && fp && mw) {
-        ecs_entity_t focusPlane = fp->entity;
-        ecs_world_t *modelWorld = mw->world;
-        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+    ecs_entity_t focusPlane = fp->entity;
+    ecs_world_t *modelWorld = mw->world;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-        u32 area = htw_geo_getHexArea(tb->radius);
-        htw_geo_GridCoord offsetCoord = {0, 0};
-        for (int i = 0; i < area; i++) {
-            CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
-            cd->height += tb->value * ic.delta.x;
-            htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
-            htw_geo_getNextHexSpiralCoord(&cubeOffset);
-            offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
-        }
+    u32 area = htw_geo_getHexArea(brushSize->radius);
+    htw_geo_GridCoord offsetCoord = {0, 0};
+    for (int i = 0; i < area; i++) {
+        CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
+        void *fieldPtr = ((void*)cd) + offset;
 
-        // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
-        // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
-        // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
-        // dirty->chunks[dirty->count++] = chunk;
-        // ecs_singleton_modified(world, DirtyChunkBuffer);
+        // get value from cell by offset and primkind
+        s64 value = bc_getMetaComponentMember(fieldPtr, prim->kind);
+        value += ab->value * ic.delta.x;
+        bc_setMetaComponentMember(fieldPtr, prim->kind, value);
 
-        bc_redraw_model(it->world);
+        htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
+        htw_geo_getNextHexSpiralCoord(&cubeOffset);
+        offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
     }
+
+    // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
+    // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
+    // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
+    // dirty->chunks[dirty->count++] = chunk;
+    // ecs_singleton_modified(world, DirtyChunkBuffer);
+
+    bc_redraw_model(it->world);
 }
 
 void BcviewSystemsInputImport(ecs_world_t *world) {
@@ -253,8 +269,10 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
         ModelWorld($)
     );
 
-    ECS_SYSTEM(world, PaintTerrainBrush, 0,
-        TerrainBrush($),
+    ECS_SYSTEM(world, PaintAdditiveBrush, 0,
+        AdditiveBrush($),
+        BrushSize(AdditiveBrush),
+        BrushField(AdditiveBrush, _),
         HoveredCell($),
         FocusPlane($),
         ModelWorld($)

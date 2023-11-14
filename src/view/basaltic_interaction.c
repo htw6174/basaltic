@@ -132,20 +132,6 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 //ui->cameraMode = ui->cameraMode ^ 1; // invert
                 playStep(commandBuffer);
                 break;
-            case SDLK_LEFT:
-            {
-                TerrainBrush *tb = ecs_singleton_get_mut(world, TerrainBrush);
-                tb->value -= 1;
-                ecs_singleton_modified(world, TerrainBrush);
-                break;
-            }
-            case SDLK_RIGHT:
-            {
-                TerrainBrush *tb = ecs_singleton_get_mut(world, TerrainBrush);
-                tb->value += 1;
-                ecs_singleton_modified(world, TerrainBrush);
-                break;
-            }
             case SDLK_SPACE:
                 advanceStep(commandBuffer);
                 pauseStep(commandBuffer);

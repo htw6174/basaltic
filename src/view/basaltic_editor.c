@@ -308,14 +308,35 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 if (terrainBindGroup) {
                     bool terrainBindActive = igBeginTabItem("Edit Terrain", NULL, ImGuiTabItemFlags_None);
                     if (terrainBindActive) {
-                        igText("Left click and drag to raise terrain");
-                        igText("Right click and drag to lower terrain");
+                        ecs_entity_t brushField = ecs_get_target(viewWorld, ecs_id(AdditiveBrush), BrushField, 0);
+                        const char *fieldName = getEntityLabel(viewWorld, brushField);
+                        igText("Left click and drag to increase %s", fieldName);
+                        igText("Right click and drag to decrease %s", fieldName);
                         // Brush settings
-                        TerrainBrush *tb = ecs_singleton_get_mut(viewWorld, TerrainBrush);
-                        igSliderInt("Brush Strength", &tb->value, 1, 20, "%d", 0);
-                        igSliderInt("Brush Radius", &tb->radius, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
+                        AdditiveBrush *ab = ecs_singleton_get_mut(viewWorld, AdditiveBrush);
+                        BrushSize *bs = ecs_get_mut(viewWorld, ecs_id(AdditiveBrush), BrushSize);
+                        igSliderInt("Brush Strength", &ab->value, 1, 20, "%d", 0);
+                        igSliderInt("Brush Radius", &bs->radius, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
+                        // dropdown for possible BrushField targets
+                        if (igBeginCombo("Data Layer", fieldName, 0)) {
+                            // iterate through CellData members
+                            ecs_iter_t it = ecs_term_iter(viewWorld, &(ecs_term_t){
+                                .id = ecs_childof(ecs_id(CellData)),
+                            });
+                            while (ecs_term_next(&it)) {
+                                for (int i = 0; i < it.count; i++) {
+                                    ecs_entity_t ent = it.entities[i];
+                                    const char *entName = getEntityLabel(viewWorld, ent);
+                                    if (igSelectable_Bool(entName, ent == brushField, 0, IG_SIZE_DEFAULT)) {
+                                        ecs_add_pair(viewWorld, ecs_id(AdditiveBrush), BrushField, ent);
+                                    }
+                                }
+                            }
+                            igEndCombo();
+                        }
 
-                        ecs_singleton_modified(viewWorld, TerrainBrush);
+                        ecs_singleton_modified(viewWorld, AdditiveBrush);
+                        ecs_modified(viewWorld, ecs_id(AdditiveBrush), BrushSize);
                         igEndTabItem();
                     }
                     ecs_enable(viewWorld, terrainBindGroup, terrainBindActive);
@@ -483,13 +504,17 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
 
         const u32 smallVegStep = 8;
         const u32 bigVegStep = 64;
+
+        const u16 minVisibility = 0;
+        const u16 maxVisibility = 2;
         edited |= igInputScalar("Height", ImGuiDataType_S16, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
-        igValue_Int("Geology", cellData->geology);
+        edited |= igInputScalar("Geology", ImGuiDataType_U16, &(cellData->geology), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Groundwater", ImGuiDataType_S16, &(cellData->groundwater), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Surface Water", ImGuiDataType_U16, &(cellData->surfacewater), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Humidity Preference", ImGuiDataType_U16, &(cellData->humidityPreference), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Understory", ImGuiDataType_U32, &(cellData->understory), &smallVegStep, &bigVegStep, NULL, 0);
         edited |= igInputScalar("Canopy", ImGuiDataType_U32, &(cellData->canopy), &smallVegStep, &bigVegStep, NULL, 0);
+        edited |= igSliderScalar("Visibility", ImGuiDataType_U16, &(cellData->visibility), &minVisibility, &maxVisibility, NULL, 0);
         igPopItemWidth();
 
         igText("Derived Cell Info:");

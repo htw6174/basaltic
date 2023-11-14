@@ -5,6 +5,29 @@
 #include "time.h"
 #include <sys/stat.h>
 
+// Based on ecs_meta_bounds_signed in flecs.c, but just used for clamping int types to valid range
+static struct {
+    int64_t min, max;
+} bc_ecs_meta_bounds_signed[EcsPrimitiveKindLast + 1] = {
+    [EcsBool]    = {false,      true},
+    [EcsChar]    = {INT8_MIN,   INT8_MAX},
+    [EcsByte]    = {0,          UINT8_MAX},
+    [EcsU8]      = {0,          UINT8_MAX},
+    [EcsU16]     = {0,          UINT16_MAX},
+    [EcsU32]     = {0,          UINT32_MAX},
+    [EcsU64]     = {0,          INT64_MAX},
+    [EcsI8]      = {INT8_MIN,   INT8_MAX},
+    [EcsI16]     = {INT16_MIN,  INT16_MAX},
+    [EcsI32]     = {INT32_MIN,  INT32_MAX},
+    [EcsI64]     = {INT64_MIN,  INT64_MAX},
+    [EcsUPtr]    = {0, ((sizeof(void*) == 4) ? UINT32_MAX : INT64_MAX)},
+    [EcsIPtr]    = {
+        ((sizeof(void*) == 4) ? INT32_MIN : INT64_MIN),
+        ((sizeof(void*) == 4) ? INT32_MAX : INT64_MAX)
+    },
+    [EcsEntity]  = {0,          INT64_MAX}
+};
+
 ecs_meta_cursor_t bc_meta_cursorFromField(ecs_world_t *world, ecs_entity_t e, ecs_entity_t field, ecs_entity_t *out_component) {
     // Detect if target is a struct or primitive component & get base component
     ecs_entity_t component;
@@ -161,4 +184,47 @@ void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query) {
             }
         }
     }
+}
+
+s64 bc_clampToType(s64 value, ecs_primitive_kind_t kind) {
+    return CLAMP(value, bc_ecs_meta_bounds_signed[kind].min, bc_ecs_meta_bounds_signed[kind].max);
+}
+
+s64 bc_getMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind) {
+    switch (kind) {
+        case EcsBool: return *(bool*)component_at_member;
+        case EcsChar: return *(char*)component_at_member;
+        case EcsByte: return *(u8*)component_at_member;
+        case EcsU8:   return *(u8*)component_at_member;
+        case EcsU16:  return *(u16*)component_at_member;
+        case EcsU32:  return *(u32*)component_at_member;
+        case EcsU64:  return *(u64*)component_at_member;
+        case EcsI8:   return *(s8*)component_at_member;
+        case EcsI16:  return *(s16*)component_at_member;
+        case EcsI32:  return *(s32*)component_at_member;
+        case EcsI64:  return *(s64*)component_at_member;
+        default:
+            ecs_err("Invalid type kind for getMetaComponentMemberInt: %d", kind);
+            return 0;
+    }
+}
+
+int bc_setMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind, s64 value) {
+    switch (kind) {
+        case EcsBool: *(bool*)component_at_member = bc_clampToType(value, kind); break;
+        case EcsChar: *(char*)component_at_member = bc_clampToType(value, kind); break;
+        case EcsByte: *(u8*)component_at_member = bc_clampToType(value, kind);   break;
+        case EcsU8:   *(u8*)component_at_member = bc_clampToType(value, kind);   break;
+        case EcsU16:  *(u16*)component_at_member = bc_clampToType(value, kind);  break;
+        case EcsU32:  *(u32*)component_at_member = bc_clampToType(value, kind);  break;
+        case EcsU64:  *(u64*)component_at_member = bc_clampToType(value, kind);  break;
+        case EcsI8:   *(s8*)component_at_member = bc_clampToType(value, kind);   break;
+        case EcsI16:  *(s16*)component_at_member = bc_clampToType(value, kind);  break;
+        case EcsI32:  *(s32*)component_at_member = bc_clampToType(value, kind);  break;
+        case EcsI64:  *(s64*)component_at_member = bc_clampToType(value, kind);  break;
+        default:
+            ecs_err("Invalid type kind for setMetaComponentMemberInt: %d", kind);
+            return -1;
+    }
+    return 0;
 }

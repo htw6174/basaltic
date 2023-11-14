@@ -44,7 +44,8 @@ layout(location = 3) in float in_neighborWeight; // integral part is index into 
 layout(location = 4) in vec3 in_barycentric;
 layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16 normalized to a float. Multiply by 2e16 to restore.
 
-out vec4 inout_color;
+out vec4 inout_data1;
+out vec4 inout_data2;
 out vec3 inout_pos;
 out vec3 inout_normal;
 out float inout_radius;
@@ -81,7 +82,7 @@ int bitfieldExtract(in int value, in int offset, in int bits) {
     int mask = (1 << bits) - 1;
     value = value & mask;
     int sign_bit = value >> (bits - 1);
-    int high = -1^mask;
+    int high = ~mask;
     // if sign bit is 1, set all high bits to 1
     int sign_high = high * sign_bit;
     value = value | sign_high;
@@ -165,10 +166,14 @@ void main()
     float elevation = interpolate_height(in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
 
+    // cd.r low 16
+    float geology =         float(bitfieldExtractU(cd.r, 16, 16)) / 255.0;
     float biotemp =         float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
     float humidityPref =    float(bitfieldExtractU(cd.g, 16, 16)) / 255.0;
     float understory =      float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
     float canopy =          float(bitfieldExtractU(cd.b, 16, 16)) / 255.0;
+    // cd.a low 16
+    float visibility =      float(bitfieldExtractU(cd.a, 16, 2)) / 2.0;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
@@ -183,12 +188,8 @@ void main()
 
     gl_Position = pv * worldPosition;
 
-    //inout_radius = length(in_barycentric.yz) * 2.0; // * sqrt(0.75) * (4.0 / 3.0);
     inout_radius = (1.0 - in_barycentric.x) * 1.5;
 
-    //out_color = vec3(rand(cellIndex + 0.0), rand(cellIndex + 0.3), rand(cellIndex + 0.6));
-
-    //inout_color = vec4(in_barycentric, 1.0);
-    inout_color = vec4(biotemp, understory, canopy, humidityPref);
-    //inout_color = vec4(biomeColor, 1.0);
+    inout_data1 = vec4(0.0, geology, biotemp, humidityPref);
+    inout_data2 = vec4(understory, canopy, 0.0, visibility);
 }
