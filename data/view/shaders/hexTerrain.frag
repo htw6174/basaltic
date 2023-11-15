@@ -131,19 +131,19 @@ void main()
 	//vec3 vN = isCliff ? flatNormal : inout_normal; // if flat shaded cliff edeges are desired, else:
 	vec3 vN = inout_normal;
 
-
 	//float normMix = smoothstep();
 	//vec3 vN = mix(flatNormal, inout_normal, inout_normal.z);
 
-	// Sample color
-	// data1.x
+	// packed data names
+	float visibility = inout_data1.x;
 	float geology = inout_data1.y;
-	float biotemp = inout_data1.z;
-	float humidityPref = inout_data1.w;
-	float understory = inout_data2.x; // == % of tile with low vegetation coverage
-	float canopy = inout_data2.y; // == % of tile with tall vegetation coverage
-	// data2.z
-	float visibility = inout_data2.w;
+	float understory = inout_data1.z; // == % of tile with low vegetation coverage
+	float canopy = inout_data1.w; // == % of tile with tall vegetation coverage
+
+	float tracks = inout_data2.x;
+	float humidityPref = inout_data2.y;
+	float surfacewater = inout_data2.z;
+	float biotemp = inout_data2.w;
 
 	// TODO: pick from colormap
 	const vec3 dirt_cold_dry = vec3(0.6, 0.6, 0.5);
@@ -201,6 +201,8 @@ void main()
 	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
 
 	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
+
+	// TODO: remove some vegetation based on tracks
 
 	// For simple rock color grading, start with slightly boosted red&blue then adjust +/- 0.05
 	vec3 cliffColor = vec3(0.4, 0.35, 0.4);
@@ -261,11 +263,20 @@ void main()
 	vec3 oceanNormal = vec3(0.0, 0.0, 1.0);
 	vN = mix(vN, oceanNormal, isOcean);
 
+	// non-visible terrain fades to transparent
+	// TODO: use noise adjusted step instead
+	float fadeout = smoothstep(0.95, 1.0, visibility);
+	// half-visible terrain fades to darkened grayscale
+	float visible = smoothstep(1.0, 1.9, visibility);
+	float grayscale = (albedo.r + albedo.g + albedo.b) / 6.0;
+	albedo = mix(vec3(grayscale), albedo, visible);
+
 	// TEST: color per tile with obvious faces
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
 	//vN = flatNormal;
 
-	out_color = vec4(albedo, 1.0 - visibility);
+	//out_color = vec4(vec3(inout_data2.x), fadeout);
+	out_color = vec4(albedo, fadeout);
 	//out_color = vec4(fract(inout_pos * 10.0), 1.0);
 	//out_color = vec4(vec3(hashThreshold), 1.0);
 	//out_color = inout_color;

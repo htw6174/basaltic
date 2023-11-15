@@ -35,14 +35,15 @@ ECS_STRUCT(SpatialStorage, {
 
 // Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though
 ECS_STRUCT(CellData, {
-    s16 height; // Each height step represents 100m of elevation change TODO: only need to represent ~200 values here, could change to s8. Could probably reduce range of other values too
-    u16 geology;
-    s16 groundwater; // If > 0: Units undefined atm, base decrease of 1/hour; if <= 0: Represents number of hours without groundwater, always decreases by 1/hour 
-    u16 surfacewater;
-    u32 understory;
-    u32 canopy;
-    u16 humidityPreference;
-    u16 visibility; // bitmask
+    s8 height; // Each height step represents 100m of elevation change
+    u8 visibility; // bitmask
+    u16 geology; // reserving some space for later TODO: how to implement and represent varying cell geology
+    u16 tracks; // Increases when actors move into a tile, decreases over time. Persists longer in some terrain types than others
+    s16 groundwater; // If > 0: Units currently undefined, base decrease of 1/hour; if <= 0: Represents number of hours without groundwater, always decreases by 1/hour
+    u16 surfacewater; // Converts into groundwater and evaporates over time, rate based on geology and vegetation
+    u16 humidityPreference; // Type of vegetation growing here; the higher this is, the less time water can be unavailable before vegetation starts dying off. Moves toward average water availability over time
+    u32 understory; // Units currently undefined; biomass of grasses, shrubs, etc.
+    u32 canopy; // Units currently undefined; biomass of trees
 });
 
 ECS_STRUCT(Plane, {

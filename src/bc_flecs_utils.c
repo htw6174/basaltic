@@ -190,7 +190,7 @@ s64 bc_clampToType(s64 value, ecs_primitive_kind_t kind) {
     return CLAMP(value, bc_ecs_meta_bounds_signed[kind].min, bc_ecs_meta_bounds_signed[kind].max);
 }
 
-s64 bc_getMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind) {
+s64 bc_getMetaComponentMemberInt(void *component_at_member, ecs_primitive_kind_t kind) {
     switch (kind) {
         case EcsBool: return *(bool*)component_at_member;
         case EcsChar: return *(char*)component_at_member;
@@ -209,7 +209,7 @@ s64 bc_getMetaComponentMember(void *component_at_member, ecs_primitive_kind_t ki
     }
 }
 
-int bc_setMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind, s64 value) {
+int bc_setMetaComponentMemberInt(void *component_at_member, ecs_primitive_kind_t kind, s64 value) {
     switch (kind) {
         case EcsBool: *(bool*)component_at_member = bc_clampToType(value, kind); break;
         case EcsChar: *(char*)component_at_member = bc_clampToType(value, kind); break;

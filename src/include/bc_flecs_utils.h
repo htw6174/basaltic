@@ -43,7 +43,7 @@ void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query);
  * @param kind p_kind:...
  * @return s64
  */
-s64 bc_getMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind);
+s64 bc_getMetaComponentMemberInt(void *component_at_member, ecs_primitive_kind_t kind);
 
 /**
  * @brief Directly set the value of a component member by primitive kind. Value will first be clamped to the range of the type identified by kind, then cast to that type
@@ -53,7 +53,7 @@ s64 bc_getMetaComponentMember(void *component_at_member, ecs_primitive_kind_t ki
  * @param value value to assign, will be cast to the type matching prim
  * @return 0 on success, error code if kind isn't an integral type or other failure
  */
-int bc_setMetaComponentMember(void *component_at_member, ecs_primitive_kind_t kind, s64 value);
+int bc_setMetaComponentMemberInt(void *component_at_member, ecs_primitive_kind_t kind, s64 value);
 
 
 #endif // BC_FLECS_UTILS_H_INCLUDED

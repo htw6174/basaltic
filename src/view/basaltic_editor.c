@@ -496,8 +496,8 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         igPushItemWidth(200.0);
         //const s8 minHeight = INT8_MIN;
         //const s8 maxHeight = INT8_MAX;
-        const s16 smallHeightStep = 1;
-        const s16 bigHeightStep = 8;
+        const s8 smallHeightStep = 1;
+        const s8 bigHeightStep = 8;
 
         const u16 smallWaterStep = 8;
         const u16 bigWaterStep = 64;
@@ -505,16 +505,17 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         const u32 smallVegStep = 8;
         const u32 bigVegStep = 64;
 
-        const u16 minVisibility = 0;
-        const u16 maxVisibility = 2;
-        edited |= igInputScalar("Height", ImGuiDataType_S16, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
+        const u8 minVisibility = 0;
+        const u8 maxVisibility = UINT8_MAX;
+        edited |= igInputScalar("Height", ImGuiDataType_S8, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
         edited |= igInputScalar("Geology", ImGuiDataType_U16, &(cellData->geology), &smallWaterStep, &bigWaterStep, NULL, 0);
+        edited |= igInputScalar("Tracks", ImGuiDataType_U16, &(cellData->tracks), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Groundwater", ImGuiDataType_S16, &(cellData->groundwater), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Surface Water", ImGuiDataType_U16, &(cellData->surfacewater), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Humidity Preference", ImGuiDataType_U16, &(cellData->humidityPreference), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Understory", ImGuiDataType_U32, &(cellData->understory), &smallVegStep, &bigVegStep, NULL, 0);
         edited |= igInputScalar("Canopy", ImGuiDataType_U32, &(cellData->canopy), &smallVegStep, &bigVegStep, NULL, 0);
-        edited |= igSliderScalar("Visibility", ImGuiDataType_U16, &(cellData->visibility), &minVisibility, &maxVisibility, NULL, 0);
+        edited |= igSliderScalar("Visibility", ImGuiDataType_U8, &(cellData->visibility), &minVisibility, &maxVisibility, NULL, 0);
         igPopItemWidth();
 
         igText("Derived Cell Info:");

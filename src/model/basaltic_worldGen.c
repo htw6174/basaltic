@@ -76,11 +76,6 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
     u32 height = bc_chunkSize;
     u32 cellsPerChunk = width * height;
 
-    // FIXME: mountain frequency is way higher on release builds???
-    //u32 mountainsPerCell = 4;
-    //bc_seedMountains(cm, mountainsPerCell * cm->chunkCountX * cm->chunkCountY, 128, 64);
-    //bc_growMountains(cm, 0.5);
-
     for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
         for (int x = 0; x < cm->chunkCountX; x++, c++) {
             CellData *cellData = cm->chunks[c].cellData;
@@ -88,18 +83,20 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
             for (int i = 0; i < cellsPerChunk; i++) {
                 CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
+                // noise values in 0..1
                 float baseNoise = htw_geo_simplex(cm, cellCoord, seed, 8, 8);
                 float nutrientNoise = htw_geo_simplex(cm, cellCoord, seed + 1, 4, 16);
                 float rainNoise = htw_geo_simplex(cm, cellCoord, seed + 2, 4, 4);
-                cell->height += (baseNoise - 0.5) * 64;
-                //cell->height = -10;
+                cell->height = (baseNoise - 0.5) * 64;
+                cell->visibility = 0; // TEST: default to an explored world
                 cell->geology = 0;
-                cell->groundwater = rainNoise * 256;
-                cell->surfacewater = rainNoise * 256;
-                cell->understory = nutrientNoise * 256;
-                //cell->canopy = nutrientNoise * 128;
-                cell->humidityPreference = rainNoise * 256;
-                cell->visibility = 0;
+                cell->tracks = 0;
+                cell->groundwater = rainNoise * INT16_MAX;
+                cell->surfacewater = rainNoise * UINT16_MAX;
+                cell->humidityPreference = rainNoise * UINT16_MAX;
+                // Just use the u16 range for now, may want more detail later
+                cell->understory = nutrientNoise * UINT16_MAX;
+                cell->canopy = nutrientNoise * UINT16_MAX / 16;
             }
         }
     }

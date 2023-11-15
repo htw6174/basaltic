@@ -861,22 +861,37 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
             CellData *cell = bc_getCellByIndex(chunkMap, chunkIndex, c);
             /* Info the shader needs:
              * - height
+             * - visibility
              * - geology
-             * - biotemperature
+             * - tracks
+             * - surface water details
              * - humidity provence
              * - understory coverage
              * - canopy coverage
-             * - surface water details
-             * - visibility
+             * - biotemperature
              */
             s32 biotemp = plane_GetCellBiotemperature(plane, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
-            u16 tempIndex = remap_int(biotemp, -3000, 3000, 0, 255);
+            u8 tempIndex = remap_int(biotemp, -3000, 3000, 0, UINT8_MAX);
 
-            s32 rChannel = ((u32)cell->geology << 16) + (u16)cell->height; // base terrain
-            u32 gChannel = ((u32)cell->humidityPreference << 16) + (u16)tempIndex; // life zone
-            u32 bChannel = ((u32)cell->canopy << 16) + (u16)cell->understory; // vegetation
-            u32 aChannel = ((u32)cell->visibility << 16) + (u16)0; // water and visibility TODO
-            s32 texelData[4] = {
+            // Cast to u32 before shifting so that sign bits stay with the packed value
+            // Continuous values compressed to 8-bit range
+            // Shape and visibility
+            u32 rChannel =  ((u32)cell->height) |
+                            ((u32)cell->visibility << 8) |
+                            ((u32)cell->geology << 16);
+            // Things on the surface
+            u32 gChannel =  ((u32)cell->understory >> 8) |
+                            ((u32)(cell->canopy >> 8) << 8) |
+                            ((u32)(cell->tracks >> 8) << 16) |
+                            0; // unused 8 bits, may use for roads
+            // Water features
+            u32 bChannel =  ((u32)cell->humidityPreference >> 8) |
+                            ((u32)(cell->surfacewater >> 8) << 8) |
+                            0; // unused 16 bits, will probably use for rivers, lakes, ponds, swamps
+            // Extra features
+            u32 aChannel =  (u32)tempIndex |
+                            0; // unused 24 bits, will probably use for weather, snow accumulation
+            u32 texelData[4] = {
                 rChannel,
                 gChannel,
                 bChannel,

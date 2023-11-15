@@ -75,7 +75,6 @@ ivec4 terrainFetch(ivec2 coord) {
     return texelFetch(terrain, (coord + wrap) % wrap, 0);
 }
 
-// costs ~2ms for 7 calls
 //clumsy replacement for glsl 4.0's bitfieldExtract
 int bitfieldExtract(in int value, in int offset, in int bits) {
     value = value >> offset;
@@ -103,9 +102,9 @@ float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
     ivec4 cdr = terrainFetch(cellCoord + ivec2(offsets.z, offsets.w));
 
-    int h1 = bitfieldExtract(cd.r, 0, 16);
-    int h2 = bitfieldExtract(cdl.r, 0, 16);
-    int h3 = bitfieldExtract(cdr.r, 0, 16);
+    int h1 = bitfieldExtract(cd.r, 0, 8);
+    int h2 = bitfieldExtract(cdl.r, 0, 8);
+    int h3 = bitfieldExtract(cdr.r, 0, 8);
 
     // create sharp cliffs
     // warp barycentric space along one axis if slope in that direction is high enough
@@ -166,14 +165,21 @@ void main()
     float elevation = interpolate_height(in_barycentric, inout_cellCoord, neighborhood);
     //float elevation = float(cd.r);
 
-    // cd.r low 16
-    float geology =         float(bitfieldExtractU(cd.r, 16, 16)) / 255.0;
-    float biotemp =         float(bitfieldExtract(cd.g, 0, 16)) / 255.0;
-    float humidityPref =    float(bitfieldExtractU(cd.g, 16, 16)) / 255.0;
-    float understory =      float(bitfieldExtract(cd.b, 0, 16)) / 255.0;
-    float canopy =          float(bitfieldExtractU(cd.b, 16, 16)) / 255.0;
-    // cd.a low 16
-    float visibility =      float(bitfieldExtractU(cd.a, 16, 2)) / 2.0;
+    //float height =      float(bitfieldExtract(cd.r, 0, 8)); // interpolated instead of single-sampled
+    float visibility =      float(bitfieldExtractU(cd.r, 8, 8)); // Leave un-normalized
+    float geology =         float(bitfieldExtractU(cd.r, 16, 16)); // TODO: figure out what to do with this
+
+    float understory =      float(bitfieldExtractU(cd.g, 0, 8)) / 255.0;
+    float canopy =          float(bitfieldExtractU(cd.g, 8, 8)) / 255.0;
+    float tracks =          float(bitfieldExtractU(cd.g, 16, 8)) / 255.0;
+
+    float humidityPref =    float(bitfieldExtractU(cd.b, 0, 8)) / 255.0;
+    float surfacewater =    float(bitfieldExtractU(cd.b, 8, 8)) / 255.0;
+
+    float biotemp =         float(bitfieldExtractU(cd.a, 0, 8)) / 255.0;
+
+    // Drop non-visible terrain to just below sea level
+    elevation = visibility == 0.0 ? -1.0 : elevation;
 
     //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
     //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
@@ -190,6 +196,6 @@ void main()
 
     inout_radius = (1.0 - in_barycentric.x) * 1.5;
 
-    inout_data1 = vec4(0.0, geology, biotemp, humidityPref);
-    inout_data2 = vec4(understory, canopy, 0.0, visibility);
+    inout_data1 = vec4(visibility, geology, understory, canopy);
+    inout_data2 = vec4(tracks, humidityPref, surfacewater, biotemp);
 }

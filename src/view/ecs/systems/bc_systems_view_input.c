@@ -208,9 +208,9 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
         void *fieldPtr = ((void*)cd) + offset;
 
         // get value from cell by offset and primkind
-        s64 value = bc_getMetaComponentMember(fieldPtr, prim->kind);
+        s64 value = bc_getMetaComponentMemberInt(fieldPtr, prim->kind);
         value += ab->value * ic.delta.x;
-        bc_setMetaComponentMember(fieldPtr, prim->kind, value);
+        bc_setMetaComponentMemberInt(fieldPtr, prim->kind, value);
 
         htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
         htw_geo_getNextHexSpiralCoord(&cubeOffset);
