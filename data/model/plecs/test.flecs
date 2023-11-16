@@ -5,15 +5,25 @@ using bc.actors.Ego
 using bc.wildlife
 using bc.wildlife.Diet
 using bc.elementals
+using flecs.doc
 
 // use with `$[name]`
 const PI = 3.141592
 const TAU = 6.283185
 
 Prefab ActorPrefab {
-    - Position
-    - Destination
-    - Condition
+    - OVERRIDE|Position
+    - OVERRIDE|Destination
+    - OVERRIDE|Condition
+    // NOTE: no simple way to avoid inheriting this description, so must override for at least direct inheritors of ActorPrefab
+    - (Description, Brief) {"Base prefab for other actors, doesn't do anything on its own"}
+}
+
+Prefab PlayerPrefab : ActorPrefab {
+    - (Ego, EgoNone)
+    - MapVision {range: 3}
+    - ActorSize {ACTOR_SIZE_AVERAGE}
+    - (Description, Brief) {"Player instances reveal the map wherever they move"}
 }
 
 Prefab PredatorPack : ActorPrefab {
@@ -22,7 +32,11 @@ Prefab PredatorPack : ActorPrefab {
     - Condition {maxHealth: 30, health: 30, maxStamina: 150, stamina: 150}
     - Group {count: 10}
     - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
+    - OVERRIDE|Condition
+    - OVERRIDE|Group
+    - OVERRIDE|GrowthRate
     - ActorSize {ACTOR_SIZE_AVERAGE}
+    - (Description, Brief) {"Predator packs follow grazer trails and hunt when hungry"}
 }
 
 Prefab GrazerHerd : ActorPrefab {
@@ -30,8 +44,12 @@ Prefab GrazerHerd : ActorPrefab {
     - (Diet, Grasses)
     - Condition {maxHealth: 100, health: 100, maxStamina: 25, stamina: 25}
     - Group {count: 100}
-    - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
+    - bc.actors.GrowthRate {stepsRequired: 360 * 24 * 2, progress: 0}
+    - OVERRIDE|Condition
+    - OVERRIDE|Group
+    - OVERRIDE|GrowthRate
     - ActorSize {ACTOR_SIZE_LARGE}
+    - (Description, Brief) {"Grazer herds look for plentiful, undisturbed grasslands"}
 }
 
 Prefab TectonicSpiritPrefab {
@@ -46,6 +64,7 @@ Prefab TectonicSpiritPrefab {
     - SpiritLifetime {youngSteps: 40, matureSteps: 200, oldSteps: 40}
     - PlateShiftStrength {left: 50, right: -50}
     - (RandomizeFloat, AngleRadians) {min: 0, max: $TAU}
+    - (Description, Brief) {"Tectonic Spirits move forward in a jagged arc, shifting the land around them"}
 }
 
 // Everest is 8800 meters high = 88 height units
@@ -102,6 +121,7 @@ Prefab VolcanoSpirit {
     - (RandomizeInt, SpiritLifetime.matureSteps) {min: 500, max: 2500, mean: 1500, distribution: RAND_DISTRIBUTION_NORMAL}
     - SpiritPower {maxValue: 2e16}
     - (IsOn, Overworld)
+    - (Description, Brief) {"Volcanos raise the land around them, destroying vegetation while active but covering the area in nutrient-rich ash"}
 }
 
 
@@ -132,6 +152,11 @@ cliffs_spawner {
 
 volcano_spawner {
     - Spawner{prefab: VolcanoSpirit, count: 10, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+player_spawner {
+    - Spawner{prefab: PlayerPrefab, count: 1, oneShot: true}
     - (IsOn, Overworld)
 }
 

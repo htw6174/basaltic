@@ -40,6 +40,14 @@ typedef struct {
     //int64_t aligner;
 } terrainCellData;
 
+typedef struct {
+    u32 visibility;
+} terrainPipelineUniformsVert;
+
+typedef struct {
+    vec2 mouse;
+} terrainPipelineUniformsFrag;
+
 static sg_shader_desc terrainShadowShaderDescription = {
     .vs.uniform_blocks[0] = {
         .size = sizeof(PVMatrix),
@@ -49,6 +57,13 @@ static sg_shader_desc terrainShadowShaderDescription = {
         }
     },
     .vs.uniform_blocks[1] = {
+        .size = sizeof(terrainPipelineUniformsVert),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "visibilityOverride", .type = SG_UNIFORMTYPE_INT},
+        }
+    },
+    .vs.uniform_blocks[2] = {
         .size = sizeof(ModelMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
@@ -111,6 +126,13 @@ static sg_shader_desc terrainShaderDescription = {
         }
     },
     .vs.uniform_blocks[1] = {
+        .size = sizeof(terrainPipelineUniformsVert),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "visibilityOverride", .type = SG_UNIFORMTYPE_INT}
+        }
+    },
+    .vs.uniform_blocks[2] = {
         .size = sizeof(ModelMatrix),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
@@ -133,6 +155,7 @@ static sg_shader_desc terrainShaderDescription = {
         .glsl_name = "terrain"
     },
     .vs.source = NULL,
+    // Global uniforms
     .fs.uniform_blocks[0] = {
         .size = sizeof(float),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
@@ -140,21 +163,22 @@ static sg_shader_desc terrainShaderDescription = {
             [0] = {.name = "time", .type = SG_UNIFORMTYPE_FLOAT}
         }
     },
+    // Pipeline specific uniforms
     .fs.uniform_blocks[1] = {
         // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
-        .size = sizeof(vec2),
+        .size = sizeof(terrainPipelineUniformsFrag),
         .layout = SG_UNIFORMLAYOUT_NATIVE,
         .uniforms = {
             [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
         }
     },
-    .fs.uniform_blocks[2] = {
-        .size = sizeof(s32),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "chunkIndex", .type = SG_UNIFORMTYPE_INT}
-        }
-    },
+    // Unused per-instance uniforms
+    // .fs.uniform_blocks[2] = {
+    //     .size = 0,
+    //     .layout = SG_UNIFORMLAYOUT_NATIVE,
+    //     .uniforms = {
+    //     }
+    // },
     .fs.source = NULL
 };
 
@@ -876,7 +900,7 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
             // Cast to u32 before shifting so that sign bits stay with the packed value
             // Continuous values compressed to 8-bit range
             // Shape and visibility
-            u32 rChannel =  ((u32)cell->height) |
+            u32 rChannel =  ((u32)(u8)cell->height) | //((u32)cell->height) |
                             ((u32)cell->visibility << 8) |
                             ((u32)cell->geology << 16);
             // Things on the surface
@@ -1130,11 +1154,11 @@ void DrawHexTerrainShadows(ecs_iter_t *it) {
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(sun[i]));
 
         if (wraps != NULL) {
-            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 2, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
         } else {
             mat4x4 model;
             mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 2, &SG_RANGE(model));
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
     }
@@ -1148,10 +1172,18 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     Mesh *mesh = ecs_field(it, Mesh, ++f);
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
     RingBuffer *pixelPack = ecs_field(it, RingBuffer, ++f);
-    PVMatrix *pvs = ecs_field(it, PVMatrix, ++f);
+    // Singletons
+    PVMatrix *pv = ecs_field(it, PVMatrix, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
     Clock *programClock = ecs_field(it, Clock, ++f);
-    //HoveredCell *hovered = ecs_field(it, HoveredCell, ++f); // may use as uniform input later
+    Visibility *visibility = ecs_field(it, Visibility, ++f);
+    // FIXME: field_is_set returns false may return false when ecs_field returns valid component
+    // if (ecs_field_is_set(it, ++f)) {
+    //     visibility = *ecs_field(it, Visibility, f);
+    // }
+    // if (ecs_field_is_set(it, ++f)) {
+    //     HoveredCell *hovered = ecs_field(it, HoveredCell, f); // may use as uniform input later
+    // }
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -1167,16 +1199,24 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
 
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(programClock[i]));
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(mouse[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(*pv));
+        terrainPipelineUniformsVert tvu = {
+            .visibility = visibility == NULL ? 0 : visibility->override
+        };
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(tvu));
+
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(*programClock));
+        terrainPipelineUniformsFrag tfu = {
+            .mouse = {{mouse->x, mouse->y}}
+        };
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(tfu));
 
         if (wraps != NULL) {
-            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
+            bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 2, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
         } else {
             mat4x4 model;
             mat4x4SetTranslation(model, (vec3){{0.0, 0.0, 0.0}});
-            sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(model));
+            sg_apply_uniforms(SG_SHADERSTAGE_VS, 2, &SG_RANGE(model));
             sg_draw(0, mesh[i].elements, instanceBuffers[i].instances);
         }
 
@@ -1290,7 +1330,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] PVMatrix($),
                [in] Mouse($),
                [in] Clock($),
-               [out] HoveredCell($),
+               [in] ?Visibility($),
+               [in] ?HoveredCell($),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
                [none] bcview.TerrainRender,

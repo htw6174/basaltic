@@ -10,7 +10,6 @@ precision mediump float;
 
 uniform float time;
 uniform vec2 mousePosition;
-uniform int chunkIndex;
 
 in vec4 inout_data1;
 in vec4 inout_data2;
@@ -265,7 +264,7 @@ void main()
 
 	// non-visible terrain fades to transparent
 	// TODO: use noise adjusted step instead
-	float fadeout = smoothstep(0.95, 1.0, visibility);
+	float fadeout = smoothstep(0.5, 1.0, visibility);
 	// half-visible terrain fades to darkened grayscale
 	float visible = smoothstep(1.0, 1.9, visibility);
 	float grayscale = (albedo.r + albedo.g + albedo.b) / 6.0;

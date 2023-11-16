@@ -145,6 +145,49 @@ void SelectCell(ecs_iter_t *it) {
     selected->y = hovered->y;
 }
 
+void SelectEntity(ecs_iter_t *it) {
+    HoveredCell *hovered = ecs_field(it, HoveredCell, 1);
+    FocusPlane *fp = ecs_field(it, FocusPlane, 2);
+    ModelWorld *mw = ecs_field(it, ModelWorld, 3);
+    FocusEntity *fe = ecs_field(it, FocusEntity, 4);
+
+    // Use spatial storage to lookup root entity on hovered cell
+    // TODO: later, GUI for focus entity will show details if an actor is selected, or a list of options if a CellRoot is selected
+    fe->entity = plane_GetRootEntity(mw->world, fp->entity, (Position){hovered->x, hovered->y});
+}
+
+void CameraToPlayer(ecs_iter_t *it) {
+    PlayerEntity *player = ecs_field(it, PlayerEntity, 1);
+    ModelWorld *mw = ecs_field(it, ModelWorld, 2);
+    Camera *cam = ecs_field(it, Camera, 3);
+
+    ecs_world_t *world = mw->world;
+    if (ecs_is_valid(world, player->entity)) {
+        const Position *pos = ecs_get(world, player->entity, Position);
+        if (pos != NULL) {
+            float x, y;
+            htw_geo_getHexCellPositionSkewed(*pos, &x, &y);
+            // TODO: implement camera lerping, assign to lerp target instead of cam directly
+            cam->origin.x = x;
+            cam->origin.y = y;
+            cam->distance = 2.0;
+        }
+    }
+}
+
+void SetPlayerDestination(ecs_iter_t *it) {
+    PlayerEntity *player = ecs_field(it, PlayerEntity, 1);
+    HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 2);
+    FocusPlane *fp = ecs_field(it, FocusPlane, 3); // TODO: use this to set destination to a different plane
+    ModelWorld *mw = ecs_field(it, ModelWorld, 4);
+
+    ecs_world_t *world = mw->world;
+    if (ecs_is_valid(world, player->entity)) {
+        ecs_set(world, player->entity, Destination, {hoveredCoord->x, hoveredCoord->y});
+        ecs_add_pair(world, player->entity, Action, ActionMove);
+    }
+}
+
 void PaintPrefabBrush(ecs_iter_t *it) {
     PrefabBrush *pb = ecs_field(it, PrefabBrush, 1);
     HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 2);
@@ -152,26 +195,22 @@ void PaintPrefabBrush(ecs_iter_t *it) {
     FocusPlane *fp = ecs_field(it, FocusPlane, 3);
     ModelWorld *mw = ecs_field(it, ModelWorld, 4);
 
-    // TODO: also check to see if world is locked, don't edit if so
-    if (pb && hoveredCoord && fp && mw) {
-        ecs_entity_t focusPlane = fp->entity;
-        ecs_world_t *modelWorld = mw->world;
-        htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
-        Step step = *ecs_singleton_get(modelWorld, Step);
+    ecs_entity_t focusPlane = fp->entity;
+    ecs_world_t *modelWorld = mw->world;
+    Step step = *ecs_singleton_get(modelWorld, Step);
 
-        ecs_entity_t e;
-        if (pb->prefab != 0) {
-            e = bc_instantiateRandomizer(modelWorld, pb->prefab);
-        } else {
-            e = ecs_new_w_pair(modelWorld, EcsChildOf, focusPlane);
-        }
-        ecs_add_pair(modelWorld, e, IsOn, focusPlane);
-        ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
-        ecs_set(modelWorld, e, CreationTime, {step});
-        plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);
-
-        bc_redraw_model(it->world);
+    ecs_entity_t e;
+    if (pb->prefab != 0) {
+        e = bc_instantiateRandomizer(modelWorld, pb->prefab);
+    } else {
+        e = ecs_new_w_pair(modelWorld, EcsChildOf, focusPlane);
     }
+    ecs_add_pair(modelWorld, e, IsOn, focusPlane);
+    ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
+    ecs_set(modelWorld, e, CreationTime, {step});
+    plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);
+
+    bc_redraw_model(it->world);
 }
 
 void PaintAdditiveBrush(ecs_iter_t *it) {
@@ -260,6 +299,26 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_SYSTEM(world, SelectCell, 0,
         [in] HoveredCell($),
         [out] SelectedCell($)
+    );
+
+    ECS_SYSTEM(world, SelectEntity, 0,
+        [in] HoveredCell($),
+        [in] FocusPlane($),
+        [in] ModelWorld($),
+        [out] FocusEntity($)
+    );
+
+    ECS_SYSTEM(world, CameraToPlayer, 0,
+        [in] PlayerEntity($),
+        [in] ModelWorld($),
+        [out] Camera($)
+    );
+
+    ECS_SYSTEM(world, SetPlayerDestination, 0,
+        PlayerEntity($),
+        HoveredCell($),
+        FocusPlane($),
+        ModelWorld($)
     );
 
     ECS_SYSTEM(world, PaintPrefabBrush, 0,

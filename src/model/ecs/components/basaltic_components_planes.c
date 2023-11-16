@@ -7,6 +7,28 @@ void BcPlanesImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, SpatialStorage);
     ECS_META_COMPONENT(world, CellData);
+    { // Add range to CellData members
+        ecs_entity_t e;
+        e = ecs_lookup_child(world, ecs_id(CellData), "height");
+        ecs_set(world, e, EcsMemberRanges, {.value = {INT8_MIN, INT8_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "visibility");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, 2}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "geology");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "tracks");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "groundwater");
+        ecs_set(world, e, EcsMemberRanges, {.value = {INT16_MIN, INT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "surfacewater");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "humidityPreference");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "understory");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "canopy");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
+    }
+
     ECS_META_COMPONENT(world, Plane);
     ECS_META_COMPONENT(world, HexDirection);
 

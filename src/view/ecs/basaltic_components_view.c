@@ -91,6 +91,8 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, CameraWrap);
     ECS_META_COMPONENT(world, CameraSpeed);
     ECS_META_COMPONENT(world, FocusPlane);
+    ECS_META_COMPONENT(world, FocusEntity);
+    ECS_META_COMPONENT(world, PlayerEntity);
     ECS_META_COMPONENT(world, HoveredCell);
     ECS_META_COMPONENT(world, SelectedCell);
     ECS_META_COMPONENT(world, DirtyChunkBuffer);
@@ -121,6 +123,7 @@ void BcviewImport(ecs_world_t *world) {
     // Rendering
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
+    ECS_META_COMPONENT(world, Visibility);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, SunMatrix);
     ECS_COMPONENT_DEFINE(world, ModelMatrix);
@@ -178,6 +181,8 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_add(world, WrapInstanceOffsets);
 
     ecs_singleton_set(world, FocusPlane, {0});
+    ecs_singleton_set(world, FocusEntity, {0});
+    ecs_singleton_set(world, PlayerEntity, {0});
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
 
@@ -190,5 +195,6 @@ void BcviewImport(ecs_world_t *world) {
     // Global uniforms
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
+    ecs_singleton_add(world, Visibility);
     ecs_singleton_add(world, Clock);
 }

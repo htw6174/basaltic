@@ -29,9 +29,12 @@ void BcActorsImport(ecs_world_t *world) {
     ecs_add_id(world, FollowerOf, EcsExclusive);
 
     ECS_TAG_DEFINE(world, Individual);
-
     ECS_META_COMPONENT(world, Group);
+
+    ECS_META_COMPONENT(world, MapVision);
+
     ECS_META_COMPONENT(world, GrowthRate);
+
 
     ECS_COMPONENT_DEFINE(world, CreationTime);
     ecs_primitive(world, {.entity = ecs_id(CreationTime), .kind = EcsU64});

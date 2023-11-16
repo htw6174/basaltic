@@ -73,7 +73,8 @@ void shiftTerrainInLine(htw_ChunkMap *cm, htw_geo_GridCoord start, htw_geo_GridC
         float limitFactor = 1.0 / (limiter + 1.0);
         // Always round away from 0 so that the strengthPool always decreases
         s32 expendedStrength = strength > 0 ? ceil(usableStrength * limitFactor) : floor(usableStrength * limitFactor);
-        cell->height += expendedStrength;
+        s32 unclampedHeight = expendedStrength + cell->height;
+        cell->height = CLAMP(unclampedHeight, INT8_MIN, INT8_MAX);
         // only subtract as much strength as was used
         strengthPool -= abs(expendedStrength);
         i++;

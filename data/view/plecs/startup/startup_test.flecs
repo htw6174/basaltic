@@ -20,7 +20,7 @@ bcview {
     }
 
     MousePreferences :- MousePreferences {
-        sensitivity: 50.0,
+        sensitivity: 200.0,
         verticalSensitivity: 1.0,
         scrollSensitivity: 5.0,
         invertX: false,

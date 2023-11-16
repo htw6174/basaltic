@@ -37,6 +37,11 @@ ECS_STRUCT(Group, {
     u32 count;
 });
 
+// Provide map visibility up to [range] cells away from actor; [range] + 1 cells will be half-visible
+ECS_STRUCT(MapVision, {
+    u32 range;
+});
+
 ECS_STRUCT(GrowthRate, {
     u32 stepsRequired;
     u32 progress;

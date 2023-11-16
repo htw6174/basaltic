@@ -69,7 +69,7 @@ int bitfieldExtract(in int value, in int offset, in int bits) {
     int mask = (1 << bits) - 1;
     value = value & mask;
     int sign_bit = value >> (bits - 1);
-    int high = -1^mask;
+    int high = ~mask;
     // if sign bit is 1, set all high bits to 1
     int sign_high = high * sign_bit;
     value = value | sign_high;
@@ -82,9 +82,9 @@ float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
     ivec4 cdr = terrainFetch(cellCoord + ivec2(offsets.z, offsets.w));
 
-    int h1 = bitfieldExtract(cd.r, 0, 16);
-    int h2 = bitfieldExtract(cdl.r, 0, 16);
-    int h3 = bitfieldExtract(cdr.r, 0, 16);
+    int h1 = bitfieldExtract(cd.r, 0, 8);
+    int h2 = bitfieldExtract(cdl.r, 0, 8);
+    int h3 = bitfieldExtract(cdr.r, 0, 8);
 
     // create sharp cliffs
     // warp barycentric space along one axis if slope in that direction is high enough

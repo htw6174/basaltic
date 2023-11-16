@@ -259,6 +259,13 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 if (igSliderFloat("RenderScale", rs, 0.05, 1.0, "%.2f", 0)) {
                     ecs_modified(viewWorld, VideoSettings, RenderScale);
                 }
+                // Visibility override
+                Visibility *vis = ecs_singleton_get_mut(viewWorld, Visibility);
+                s32 override = vis->override;
+                if (igSliderInt("Visibility Override", &override, 0, 2, NULL, 0)) {
+                    vis->override = override;
+                    ecs_singleton_modified(viewWorld, Visibility);
+                }
                 // Sun
                 SunLight *sun = ecs_singleton_get_mut(viewWorld, SunLight);
                 igSliderFloat("Sun Inclination", &sun->inclination, -90.0, 90.0, "%.1f", 0);
@@ -289,6 +296,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.cameraMouseBindings");
                 ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.terrainMouseBindings");
                 ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.actorMouseBindings");
+                ecs_entity_t playerBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.playerMouseBindings");
                 if (camBindGroup) {
                     bool camBindActive = igBeginTabItem("Camera", NULL, ImGuiTabItemFlags_None);
                     if (camBindActive) {
@@ -296,7 +304,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igText("Right click and drag to orbit");
                         // Sensitivity settings
                         MousePreferences *mp = ecs_singleton_get_mut(viewWorld, MousePreferences);
-                        igSliderFloat("Mouse sensitivity", &mp->sensitivity, 1.0, 400.0, "%.1f", ImGuiSliderFlags_Logarithmic);
+                        igSliderFloat("Mouse sensitivity", &mp->sensitivity, 1.0, 1000.0, "%.1f", ImGuiSliderFlags_Logarithmic);
                         igCheckbox("Flip Horizontal", &mp->invertX);
                         igCheckbox("Flip Vertical", &mp->invertY);
 
@@ -315,7 +323,17 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         // Brush settings
                         AdditiveBrush *ab = ecs_singleton_get_mut(viewWorld, AdditiveBrush);
                         BrushSize *bs = ecs_get_mut(viewWorld, ecs_id(AdditiveBrush), BrushSize);
-                        igSliderInt("Brush Strength", &ab->value, 1, 20, "%d", 0);
+                        const EcsMemberRanges *ranges = ecs_get(viewWorld, brushField, EcsMemberRanges);
+                        int min, max;
+                        if (ranges != NULL) {
+                            min = 0; //ranges->value.min;
+                            max = ranges->value.max;
+                        } else {
+                            min = 0;
+                            max = 100;
+                        }
+                        igSliderInt("Brush Strength", &ab->value, min, max, "%d",
+                                    ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
                         igSliderInt("Brush Radius", &bs->radius, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
                         // dropdown for possible BrushField targets
                         if (igBeginCombo("Data Layer", fieldName, 0)) {
@@ -376,6 +394,10 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                                 }
 
                                 if (pb->prefab) {
+                                    const char *brief = ecs_doc_get_brief(world, pb->prefab);
+                                    if (brief != NULL) {
+                                        igTextWrapped(brief);
+                                    }
                                     if (igCollapsingHeader_TreeNodeFlags("Edit Prefab", ImGuiTreeNodeFlags_None)) {
                                         // FIXME: cloning prefabs seems to crash flecs
                                         // if (igButton("Create new Prefab from this", IG_SIZE_DEFAULT)) {
@@ -398,6 +420,38 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igEndTabItem();
                     }
                     ecs_enable(viewWorld, actorBindGroup, actorBindActive);
+                }
+                if (playerBindGroup) {
+                    bool playerBindActive = igBeginTabItem("Move Player", NULL, ImGuiTabItemFlags_None);
+                    if (playerBindActive) {
+                        igText("Left click to select entities");
+                        igText("Right click to set player destination");
+                        igText("Press space to advance time and move toward destination");
+                        igText("Press c to focus camera on the player");
+
+                        // Set visibility to 'play mode'
+                        ecs_singleton_set(viewWorld, Visibility, {.override = 0});
+
+                        const PlayerEntity *player = ecs_singleton_get(viewWorld, PlayerEntity);
+                        ecs_world_t *world = worldState->ecsWorld;
+                        if (!ecs_is_valid(world, player->entity)) {
+                            // assign player entity
+                            ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){.id = ecs_id(MapVision)});
+                            while(ecs_term_next(&it)) {
+                                if (it.count > 0) {
+                                    ecs_singleton_set(viewWorld, PlayerEntity, {it.entities[0]});
+                                    ecs_iter_fini(&it);
+                                    break;
+                                }
+                            }
+                        }
+
+                        igEndTabItem();
+                    } else {
+                        // Set visibility to 'edit mode'
+                        ecs_singleton_set(viewWorld, Visibility, {.override = 2});
+                    }
+                    ecs_enable(viewWorld, playerBindGroup, playerBindActive);
                 }
 
                 igEndTabBar();

@@ -31,6 +31,7 @@ vec4 neighborPositions[6] = vec4[](
 );
 
 uniform mat4 pv;
+uniform int visibilityOverride;
 uniform mat4 m;
 
 uniform isampler2D terrain;
@@ -166,6 +167,7 @@ void main()
     //float elevation = float(cd.r);
 
     //float height =      float(bitfieldExtract(cd.r, 0, 8)); // interpolated instead of single-sampled
+    // FIXME: is this >= 2 any time height (aka low 8 bits) are negative?
     float visibility =      float(bitfieldExtractU(cd.r, 8, 8)); // Leave un-normalized
     float geology =         float(bitfieldExtractU(cd.r, 16, 16)); // TODO: figure out what to do with this
 
@@ -178,6 +180,7 @@ void main()
 
     float biotemp =         float(bitfieldExtractU(cd.a, 0, 8)) / 255.0;
 
+    visibility = max(visibility, float(visibilityOverride));
     // Drop non-visible terrain to just below sea level
     elevation = visibility == 0.0 ? -1.0 : elevation;
 

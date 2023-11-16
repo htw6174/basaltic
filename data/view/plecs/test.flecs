@@ -9,6 +9,11 @@ bcview {
     }
 
     // debug draw
+    player : DebugDrawPrefab {
+        - Color {0.6, 0.0, 0.8, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.MapVision"}
+    }
+
     carnivores : DebugDrawPrefab {
         - Color {0.7, 0.0, 0.0, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
@@ -29,13 +34,21 @@ bcview {
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
     }
 
-    elementals : DebugDrawPrefab {
-        - Color {0.7, 0.7, 0.7, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.elementals.ElementalSpirit"}
+    tectonics : DebugDrawPrefab {
+        - Color {0.7, 0.8, 0.7, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.elementals.PlateShiftStrength"}
+    }
+
+    volcanos : DebugDrawPrefab {
+        - Color {0.9, 0.5, 0.0, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)"}
     }
 
     // TEST: disable shadow pass by default
     phases.OnPassShadow :- Disabled
+
+    // TEST: default visibility override
+    //Visibility :- Visibility {override: 2}
 
     // brush tools
     AdditiveBrush {
@@ -67,6 +80,8 @@ bcview {
 
             x :- InputBinding {key: 120, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
             z :- InputBinding {key: 122, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
+
+            c :- InputBinding {key: 99, system: CameraToPlayer}
         }
 
         cameraMouseBindings {
@@ -94,6 +109,13 @@ bcview {
             spawnPrefab :- InputBinding {button: BC_MOUSE_LEFT, system: PaintPrefabBrush}
         }
         //actorMouseBindings :- Disabled
+
+        playerMouseBindings {
+            - InputBindGroup
+            selectEntity :- InputBinding {button: BC_MOUSE_LEFT, system: SelectEntity}
+            movePlayer :- InputBinding {button: BC_MOUSE_RIGHT, system: SetPlayerDestination}
+        }
+        //playerMouseBindings :- Disabled
 
         terrainMouseBindings {
             - InputBindGroup

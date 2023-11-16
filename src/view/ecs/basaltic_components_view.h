@@ -185,8 +185,19 @@ ECS_STRUCT(CameraSpeed, {
     float zoom;
 });
 
+// Currently visible plane
 ECS_STRUCT(FocusPlane, {
-    ecs_entity_t entity;
+    ecs_entity_t entity; // in model world
+});
+
+// Entity selected for inspection
+ECS_STRUCT(FocusEntity, {
+    ecs_entity_t entity; // in model world
+});
+
+// Entity controlled by player
+ECS_STRUCT(PlayerEntity, {
+    ecs_entity_t entity; // in model world
 });
 
 // TODO: consider adding a flag to this, reset every frame and only set in shader feedback if any cell is hovered
@@ -215,7 +226,7 @@ ECS_STRUCT(BrushSize, {
     s32 radius; // in cells
 });
 
-// Add specific value to cells
+// Modify cell fields up or down by value
 ECS_STRUCT(AdditiveBrush, {
     s32 value;
 });
@@ -225,7 +236,7 @@ ECS_STRUCT(SmoothBrush, {
     float strength;
 });
 
-// Set value on cells
+// Set value on cell fields
 ECS_STRUCT(ValueBrush, {
     s32 value;
 });
@@ -265,6 +276,11 @@ ECS_STRUCT(WindowSize, {
 ECS_STRUCT(Mouse, {
     float x;
     float y;
+});
+
+// Minimum visibility level, useful for switching between player and editor perspectives
+ECS_STRUCT(Visibility, {
+    u8 override;
 });
 
 typedef mat4x4 PVMatrix;

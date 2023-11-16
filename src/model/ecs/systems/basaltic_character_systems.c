@@ -13,10 +13,10 @@
 #include "bc_flecs_utils.h"
 
 // TEST: random movement behavior, pick any adjacent tile to move to
-void bc_setWandererDestinations(ecs_iter_t *it);
+void setWandererDestinations(ecs_iter_t *it);
 // TEST: check neighboring cell features, move towards lowest elevation
-void bc_setDescenderDestinations(ecs_iter_t *it);
-void bc_revealMap(ecs_iter_t *it);
+void setDescenderDestinations(ecs_iter_t *it);
+void revealMap(ecs_iter_t *it);
 
 void characterCreated(ecs_iter_t *it);
 void characterMoved(ecs_iter_t *it);
@@ -49,7 +49,7 @@ void egoBehaviorWander(ecs_iter_t *it) {
     }
 }
 
-void bc_setDescenderDestinations(ecs_iter_t *it) {
+void setDescenderDestinations(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
     ecs_entity_t tmEnt = ecs_field_id(it, 3);
@@ -73,11 +73,11 @@ void bc_setDescenderDestinations(ecs_iter_t *it) {
     }
 }
 
-void bc_revealMap(ecs_iter_t *it) {
+void revealMap(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
-    htw_ChunkMap *cm = tm->chunkMap;
+    Plane *plane = ecs_field(it, Plane, 2); // constant for each table
+    htw_ChunkMap *cm = plane->chunkMap;
+    MapVision *vis = ecs_field(it, MapVision, 3);
 
     for (int i = 0; i < it->count; i++) {
         // TODO: factor in terrain height, character size, and attributes e.g. Flying
@@ -89,11 +89,10 @@ void bc_revealMap(ecs_iter_t *it) {
         htw_geo_CubeCoord charCubeCoord = htw_geo_gridToCubeCoord(positions[i]);
         htw_geo_CubeCoord relativeCoord = {0, 0, 0};
 
-        // get number of cells to check based on character's attributes
-        u32 sightRange = 3;
-        u32 detailRange = sightRange - 1;
-        u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
+        u32 detailRange = vis[i].range;
+        u32 sightRange = detailRange + 1;
         u32 cellsInDetailRange = htw_geo_getHexArea(detailRange);
+        u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
 
         // TODO: because of the outward spiral cell iteration used here, it may be possible to keep track of cell attributes that affect visibility and apply them additively to more distant cells (would probably only make sense to do this in the same direction; would have to come up with a way to determine if a cell is 'behind' another), such as forests or high elevations blocking lower areas
         for (int c = 0; c < cellsInSightRange; c++) {
@@ -104,21 +103,21 @@ void bc_revealMap(ecs_iter_t *it) {
             htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
             CellData *cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
-            bc_TerrainVisibilityBitFlags cellVisibility = 0;
+            u8 cellVisibility = 0;
             // restrict sight by distance
             // NOTE: this only works because of the outward spiral iteration pattern. Should use cube coordinate distance instead for better reliability
             if (c < cellsInDetailRange) {
-                cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY | BC_TERRAIN_VISIBILITY_COLOR;
+                cellVisibility = 2; //BC_TERRAIN_VISIBILITY_GEOMETRY | BC_TERRAIN_VISIBILITY_COLOR;
             } else {
-                cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
+                cellVisibility = 1; //BC_TERRAIN_VISIBILITY_GEOMETRY;
             }
             // restrict sight by relative elevation
             s32 elevation = cell->height;
-            if (elevation > characterElevation + 1) { // TODO: instead of constant +1, derive from character attributes
-                cellVisibility = BC_TERRAIN_VISIBILITY_GEOMETRY;
+            if (elevation > characterElevation + 3) { // TODO: instead of constant, derive from character attributes
+                cellVisibility = 1; //BC_TERRAIN_VISIBILITY_GEOMETRY;
             }
 
-            cell->visibility |= cellVisibility;
+            cell->visibility = MAX(cell->visibility, cellVisibility);
 
             htw_geo_getNextHexSpiralCoord(&relativeCoord);
         }
@@ -462,10 +461,10 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
     );
 
-    ECS_SYSTEM(world, bc_revealMap, Resolution,
+    ECS_SYSTEM(world, revealMap, Resolution,
                [in] Position,
-               [in] (bc.planes.IsOn, _),
-               [none] bc.PlayerVision
+               [in] Plane(up(bc.planes.IsOn)),
+               [in] MapVision
     );
 
     // TODO: try out observers only for position changes
