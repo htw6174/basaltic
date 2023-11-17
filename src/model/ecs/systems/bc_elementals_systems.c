@@ -102,10 +102,12 @@ void landslideParticle(htw_ChunkMap *cm, htw_geo_GridCoord start) {
                 candidate = sample;
                 greatestDrop = drop;
             }
-            // Wipe out vegetation and add some nutrient (groundwater)
+            // Wipe out vegetation and add some nutrient (groundwater?)
             sampleCell->understory = 0;
             sampleCell->canopy = 0;
-            sampleCell->groundwater += 150;
+            s64 groundwater = sampleCell->groundwater;
+            groundwater += 150;
+            sampleCell->groundwater = MIN(groundwater, INT16_MAX);
         }
         sliding = greatestDrop > maxSlope;
         pos = candidate;

@@ -259,13 +259,6 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 if (igSliderFloat("RenderScale", rs, 0.05, 1.0, "%.2f", 0)) {
                     ecs_modified(viewWorld, VideoSettings, RenderScale);
                 }
-                // Visibility override
-                Visibility *vis = ecs_singleton_get_mut(viewWorld, Visibility);
-                s32 override = vis->override;
-                if (igSliderInt("Visibility Override", &override, 0, 2, NULL, 0)) {
-                    vis->override = override;
-                    ecs_singleton_modified(viewWorld, Visibility);
-                }
                 // Sun
                 SunLight *sun = ecs_singleton_get_mut(viewWorld, SunLight);
                 igSliderFloat("Sun Inclination", &sun->inclination, -90.0, 90.0, "%.1f", 0);
@@ -326,14 +319,15 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         const EcsMemberRanges *ranges = ecs_get(viewWorld, brushField, EcsMemberRanges);
                         int min, max;
                         if (ranges != NULL) {
+                            // NOTE: imgui sliders extents are limited to half the natural type range for whatever type they are
                             min = 0; //ranges->value.min;
-                            max = ranges->value.max;
+                            max = MIN(ranges->value.max, INT32_MAX / 2);
                         } else {
                             min = 0;
                             max = 100;
                         }
                         igSliderInt("Brush Strength", &ab->value, min, max, "%d",
-                                    ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+                                    ImGuiSliderFlags_AlwaysClamp); // | ImGuiSliderFlags_Logarithmic);
                         igSliderInt("Brush Radius", &bs->radius, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
                         // dropdown for possible BrushField targets
                         if (igBeginCombo("Data Layer", fieldName, 0)) {
@@ -568,7 +562,11 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         edited |= igInputScalar("Surface Water", ImGuiDataType_U16, &(cellData->surfacewater), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Humidity Preference", ImGuiDataType_U16, &(cellData->humidityPreference), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Understory", ImGuiDataType_U32, &(cellData->understory), &smallVegStep, &bigVegStep, NULL, 0);
+        igSameLine(0, -1);
+        igText("%%%.1f", 100.0 * (float)cellData->understory / (float)UINT32_MAX);
         edited |= igInputScalar("Canopy", ImGuiDataType_U32, &(cellData->canopy), &smallVegStep, &bigVegStep, NULL, 0);
+        igSameLine(0, -1);
+        igText("%%%.1f", 100.0 * (float)cellData->canopy / (float)UINT32_MAX);
         edited |= igSliderScalar("Visibility", ImGuiDataType_U8, &(cellData->visibility), &minVisibility, &maxVisibility, NULL, 0);
         igPopItemWidth();
 

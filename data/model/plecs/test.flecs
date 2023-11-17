@@ -30,11 +30,11 @@ Prefab PredatorPack : ActorPrefab {
     - (Ego, EgoPredator)
     - (Diet, Meat)
     - Condition {maxHealth: 30, health: 30, maxStamina: 150, stamina: 150}
-    - Group {count: 10}
+    - Group {count: 20}
     - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
     - OVERRIDE|Condition
     - OVERRIDE|Group
-    - OVERRIDE|GrowthRate
+    - OVERRIDE|bc.actors.GrowthRate
     - ActorSize {ACTOR_SIZE_AVERAGE}
     - (Description, Brief) {"Predator packs follow grazer trails and hunt when hungry"}
 }
@@ -43,11 +43,11 @@ Prefab GrazerHerd : ActorPrefab {
     - (Ego, EgoGrazer)
     - (Diet, Grasses)
     - Condition {maxHealth: 100, health: 100, maxStamina: 25, stamina: 25}
-    - Group {count: 100}
-    - bc.actors.GrowthRate {stepsRequired: 360 * 24 * 2, progress: 0}
+    - Group {count: 1000}
+    - bc.actors.GrowthRate {stepsRequired: 360 * 24, progress: 0}
     - OVERRIDE|Condition
     - OVERRIDE|Group
-    - OVERRIDE|GrowthRate
+    - OVERRIDE|bc.actors.GrowthRate
     - ActorSize {ACTOR_SIZE_LARGE}
     - (Description, Brief) {"Grazer herds look for plentiful, undisturbed grasslands"}
 }
@@ -152,6 +152,11 @@ cliffs_spawner {
 
 volcano_spawner {
     - Spawner{prefab: VolcanoSpirit, count: 10, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+grazer_spawner {
+    - Spawner{prefab: GrazerHerd, count: 200, oneShot: true}
     - (IsOn, Overworld)
 }
 

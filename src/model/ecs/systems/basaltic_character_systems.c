@@ -212,8 +212,7 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
         u32 availableHere = currentCell->understory;
 
         // if there is enough here, stay put and feed. Otherwise, find best nearby cell
-        // TODO: first check for and move directly away from predators
-        u32 tolerance = 10;
+        u32 tolerance = UINT32_MAX / 10; // If at least 10% grass, don't bother looking anywhere else
         if (availableHere >= tolerance) {
             ecs_add_pair(it->world, it->entities[i], Action, ActionFeed);
         } else {
@@ -221,11 +220,10 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
             u32 sightRange = 2;
             u32 cellsInSightRange = htw_geo_getHexArea(sightRange);
             // track best candidate
-            s32 bestScore = INT32_MIN;
+            float bestScore = FLT_MIN;
             CellData *cell = currentCell;
             htw_geo_CubeCoord bestDirection = {0, 0, 0};
             for (int c = 0; c < cellsInSightRange; c++) {
-                htw_geo_getNextHexSpiralCoord(&relativeCoord);
                 // Result coordinate is not confined to chunkmap, but converting to chunk and cell will also wrap input coords
                 htw_geo_CubeCoord worldCubeCoord = htw_geo_addCubeCoords(charCubeCoord, relativeCoord);
                 htw_geo_GridCoord worldCoord = htw_geo_cubeToGridCoord(worldCubeCoord);
@@ -233,36 +231,52 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
                 htw_geo_gridCoordinateToChunkAndCellIndex(cm, worldCoord, &chunkIndex, &cellIndex);
                 cell = bc_getCellByIndex(cm, chunkIndex, cellIndex);
 
-                s32 score = 0;
+                float score = 0;
 
                 // exclude cells that can't be moved to
                 s32 heightDiff = abs(currentCell->height - cell->height);
-                bool canMoveToCell = heightDiff < 5 && cell->height >= 0;
+                bool canMoveToCell = heightDiff < 4 && cell->height >= 0;
                 if (!canMoveToCell) {
+                    htw_geo_getNextHexSpiralCoord(&relativeCoord);
                     continue;
                 }
 
-                score -= (heightDiff * heightDiff) * 10;
-                score += cell->understory;
-                score += cell->canopy / 10;
-                score += cell->surfacewater / 10;
-                // TODO: add small random score to break ties?
-                score += htw_randInt(10);
-                //score += xxh_hash2d(it->entities[i], worldCoord.x, worldCoord.y) % 10;
+                const float tracksWeight = -5.0;
+                const float grassWeight = 20.0;
+                const float treeWeight = 1.0;
+                const float waterWeight = 5.0;
+
+                // Be sure to normalize these first, then work in percentages
+                score += ((float)cell->tracks / UINT16_MAX) * tracksWeight;
+                score += ((float)cell->understory / (float)UINT32_MAX) * grassWeight;
+                score += -((float)cell->canopy / (float)UINT32_MAX) * treeWeight + (1.0 / 10.0); // positive from 0 to 10% of maximum, then drop off to negative
+                score += ((float)cell->surfacewater / UINT16_MAX) * waterWeight;
+                // TEST: add small random score to break ties and add variety? // TODO: need at least some way to force stacked groups appart, tend to overcollect in one place
+                //score += htw_randInt(10);
+                score += (float)xxh_hash2d(it->entities[i], worldCoord.x, worldCoord.y) / (float)UINT32_MAX;
 
                 if (score > bestScore) {
                     bestScore = score;
                     bestDirection = relativeCoord;
                 }
+
+                htw_geo_getNextHexSpiralCoord(&relativeCoord);
             }
 
-            // Apply best direction found
-            destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
-            ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
+            // Current cell is also scored. If best cell is current cell, then stay and feed
+            // NOTE: possible that there is no grass here at all, in which case this action shouldn't be choosen. However, tracks accumulation should prevent this from happening for more than a couple hours in a row
+            if (htw_geo_isEqualCubeCoords(bestDirection, (htw_geo_CubeCoord){0, 0, 0})) {
+                ecs_add_pair(it->world, it->entities[i], Action, ActionFeed);
+            } else {
+                // Apply best direction found
+                destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
+                ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
+            }
         }
     }
 }
 
+// FIXME: should use same scoring system grazers use
 void egoBehaviorPredator(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
@@ -314,12 +328,30 @@ void executeMove(ecs_iter_t *it) {
     ecs_entity_t planeEnt = ecs_pair_second(it->world, planePair);
     const Plane *p = ecs_get(it->world, planeEnt, Plane);
 
-    for (int i = 0; i < it->count; i++) {
-        u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
-        // TODO: move towards destination by maximum single turn move distance
-        plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
-        // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-        positions[i] = destinations[i];
+    if (ecs_field_is_set(it, 4)) {
+        Group *groups = ecs_field(it, Group, 4);
+
+        for (int i = 0; i < it->count; i++) {
+            u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
+            // TODO: move along each cell in path, leaving tracks on each
+            CellData *cell = htw_geo_getCell(p->chunkMap, positions[i]);
+            s64 tracks = cell->tracks;
+            tracks += groups[i].count;
+            cell->tracks = MIN(tracks, UINT16_MAX);
+
+            // TODO: move towards destination by maximum single turn move distance
+            plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
+            // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
+            positions[i] = destinations[i];
+        }
+    } else {
+        for (int i = 0; i < it->count; i++) {
+            u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
+            // TODO: move towards destination by maximum single turn move distance
+            plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
+            // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
+            positions[i] = destinations[i];
+        }
     }
 }
 
@@ -335,9 +367,14 @@ void executeFeed(ecs_iter_t *it) {
         Group *groups = ecs_field(it, Group, 5);
         for (int i = 0; i < it->count; i++) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
-            s32 required = groups[i].count; // TODO: multiply by size?
-            s32 consumed = MIN(cell->understory, required);
-            cell->understory -= consumed;
+            s64 understory = cell->understory;
+            s64 tracks = cell->tracks;
+            s64 required = groups[i].count * 4096; // TODO: multiply by size?; TODO: this number is a hacky way to represent expected consumption with 32-bit veg range
+            s64 consumed = MIN(understory, required);
+            understory -= consumed;
+            tracks += groups[i].count; // * size^2?
+            cell->understory = MAX(0, understory);
+            cell->tracks = MIN(tracks, UINT16_MAX);
             // Restore up to half of max each meal TODO best rounding method?
             s32 restored = roundf( ((float)conditions[i].maxStamina / 2) * ((float)consumed / required) );
             conditions[i].stamina = MIN(conditions[i].stamina + restored, conditions[i].maxStamina);
@@ -424,7 +461,7 @@ void tickGrowth(ecs_iter_t *it) {
     Group *groups = ecs_field(it, Group, 2);
 
     for (int i = 0; i < it->count; i++) {
-        growthRates[i].progress += groups[i].count / 2;
+        growthRates[i].progress += groups[i].count * (24 / 2); // Once per hour for every 2 in the group
         if (growthRates[i].progress >= growthRates[i].stepsRequired) {
             growthRates[i].progress = 0;
             groups[i].count += 1;
@@ -521,6 +558,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [out] Position,
                [in] Destination,
                [in] (bc.planes.IsOn, _),
+               [in] ?Group,
                [none] (bc.actors.Action, bc.actors.Action.ActionMove)
     );
     // movement actions must be synchronious TODO: revisit this; could be enough to have a cleanup step to enforce the 1 root per cell rule

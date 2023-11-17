@@ -210,8 +210,8 @@ s32 plane_GetCellTemperature(const Plane *plane, htw_geo_GridCoord pos) {
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos) {
     CellData *cell = htw_geo_getCell(plane->chunkMap, pos);
     // % of max coverage
-    float understoryCoverage = (float)cell->understory / 255.0;
-    float canopyCoverage = (float)cell->canopy / 255.0;
+    float understoryCoverage = (float)cell->understory / (float)UINT32_MAX;
+    float canopyCoverage = (float)cell->canopy / (float)UINT32_MAX;
     // 5% at 0% canopy, maxes out at 100% at 95% canopy
     float shrubRatio = fmaxf(canopyCoverage + 0.05, 1.0);
     // decreasing benefit of high understory coverage as canopy takes over

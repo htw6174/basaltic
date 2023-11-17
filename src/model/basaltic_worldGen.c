@@ -94,9 +94,8 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
                 cell->groundwater = rainNoise * INT16_MAX;
                 cell->surfacewater = rainNoise * UINT16_MAX;
                 cell->humidityPreference = rainNoise * UINT16_MAX;
-                // Just use the u16 range for now, may want more detail later
-                cell->understory = nutrientNoise * UINT16_MAX;
-                cell->canopy = nutrientNoise * UINT16_MAX / 16;
+                cell->understory = nutrientNoise * (float)UINT32_MAX / 16;
+                cell->canopy = nutrientNoise * (float)UINT32_MAX / 128;
             }
         }
     }

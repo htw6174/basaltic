@@ -904,8 +904,8 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
                             ((u32)cell->visibility << 8) |
                             ((u32)cell->geology << 16);
             // Things on the surface
-            u32 gChannel =  ((u32)cell->understory >> 8) |
-                            ((u32)(cell->canopy >> 8) << 8) |
+            u32 gChannel =  ((u32)cell->understory >> 24) |
+                            ((u32)(cell->canopy >> 24) << 8) |
                             ((u32)(cell->tracks >> 8) << 16) |
                             0; // unused 8 bits, may use for roads
             // Water features
