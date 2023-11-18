@@ -41,7 +41,10 @@ layout(location = 0) in vec4 in_chunkPosition; // NOTE: this has a 1.0 w compone
 layout(location = 1) in vec2 in_rootCoord;
 // per-vertex
 layout(location = 2) in vec2 in_position;
-layout(location = 3) in float in_neighborWeight; // integral part is index into sampleOffsets, fractional part is weight from left to right sample
+// Used to find the uv coords of nearest cells to sample. Integral part is index into sampleOffsets, fractional part is weight from left to right sample
+layout(location = 3) in float in_neighborWeight;
+// position of vertex with respect to nearest cells. x: 'home' cell for vertex, y: 'left-hand' cell, z: 'right-hand' cell
+// will always be in the corner nearest 'home', so barycentric.x >= barycentric.y, and barycentric.x >= barycentric.z
 layout(location = 4) in vec3 in_barycentric;
 layout(location = 5) in vec2 in_localCoord; // For compatability, this is an s16 normalized to a float. Multiply by 2e16 to restore.
 
@@ -96,17 +99,12 @@ uint bitfieldExtractU(in int value, in int offset, in int bits) {
     return uint(value);
 }
 
+float interpolate_flat(float here, float left, float right, vec3 barycentric) {
+    return (here * barycentric.x) + (left * barycentric.y) + (right * barycentric.z);
+}
+
 // costs ~3ms. Can eliminate one of the terrainFetch calls
-float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
-    ivec4 cd = terrainFetch(cellCoord);
-    ivec4 offsets = sampleOffsets[neighborhood];
-    ivec4 cdl = terrainFetch(cellCoord + ivec2(offsets.x, offsets.y));
-    ivec4 cdr = terrainFetch(cellCoord + ivec2(offsets.z, offsets.w));
-
-    int h1 = bitfieldExtract(cd.r, 0, 8);
-    int h2 = bitfieldExtract(cdl.r, 0, 8);
-    int h3 = bitfieldExtract(cdr.r, 0, 8);
-
+float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborhood) {
     // create sharp cliffs
     // warp barycentric space along one axis if slope in that direction is high enough
     int slopeLeft = h2 - h1;
@@ -154,26 +152,43 @@ float interpolate_height(vec3 barycentric, ivec2 cellCoord, int neighborhood) {
     return elev1;
 }
 
+float extract_interpolate(int pack, int pack_left, int pack_right, vec3 barycentric, int offset, int bits) {
+    float here = float(bitfieldExtractU(pack, offset, bits));
+    float left = float(bitfieldExtractU(pack_left, offset, bits));
+    float right = float(bitfieldExtractU(pack_right, offset, bits));
+    return interpolate_flat(here, left, right, barycentric);
+}
+
+float extract_normalize_interpolate(int pack, int pack_left, int pack_right, vec3 barycentric, int offset, int bits) {
+    float here = float(bitfieldExtractU(pack, offset, bits)) / 255.0;
+    float left = float(bitfieldExtractU(pack_left, offset, bits)) / 255.0;
+    float right = float(bitfieldExtractU(pack_right, offset, bits)) / 255.0;
+    return interpolate_flat(here, left, right, barycentric);
+}
+
 void main()
 {
     // unpack terrain data
     inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); // scale normalized s16 back to full range. see also: unpackSnorm2x16
-    ivec4 cd = terrainFetch(inout_cellCoord);
 
     // get neighboring cell data
     int neighborhood = int(floor(in_neighborWeight));
+    ivec4 offsets = sampleOffsets[neighborhood];
 
-    float elevation = interpolate_height(in_barycentric, inout_cellCoord, neighborhood);
-    //float elevation = float(cd.r);
+    ivec4 cd = terrainFetch(inout_cellCoord);
+    ivec4 cdl = terrainFetch(inout_cellCoord + ivec2(offsets.x, offsets.y));
+    ivec4 cdr = terrainFetch(inout_cellCoord + ivec2(offsets.z, offsets.w));
 
-    //float height =      float(bitfieldExtract(cd.r, 0, 8)); // interpolated instead of single-sampled
-    // FIXME: is this >= 2 any time height (aka low 8 bits) are negative?
-    float visibility =      float(bitfieldExtractU(cd.r, 8, 8)); // Leave un-normalized
-    float geology =         float(bitfieldExtractU(cd.r, 16, 16)); // TODO: figure out what to do with this
+    int h1 = bitfieldExtract(cd.r, 0, 8);
+    int h2 = bitfieldExtract(cdl.r, 0, 8);
+    int h3 = bitfieldExtract(cdr.r, 0, 8);
+    float elevation =       interpolate_height(h1, h2, h3, in_barycentric, neighborhood);
+    float visibility =      extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 8, 8); // Leave un-normalized
+    float geology =         extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 16, 16); // TODO: figure out what to do with this
 
-    float understory =      float(bitfieldExtractU(cd.g, 0, 8)) / 255.0;
-    float canopy =          float(bitfieldExtractU(cd.g, 8, 8)) / 255.0;
-    float tracks =          float(bitfieldExtractU(cd.g, 16, 8)) / 255.0;
+    float understory =      extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 0, 8);
+    float canopy =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 8, 8);
+    float tracks =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 16, 8);
 
     float humidityPref =    float(bitfieldExtractU(cd.b, 0, 8)) / 255.0;
     float surfacewater =    float(bitfieldExtractU(cd.b, 8, 8)) / 255.0;
@@ -183,9 +198,6 @@ void main()
     visibility = max(visibility, float(visibilityOverride));
     // Drop non-visible terrain to just below sea level
     elevation = visibility == 0.0 ? -1.0 : elevation;
-
-    //uint visibilityBits = bitfieldExtract(cellData.visibility, 0, 8);
-    //visibilityBits = visibilityBits | WorldInfo.visibilityOverrideBits;
 
     vec3 unscaledPosition = vec3(in_position, elevation);
     //vec4 localPosition = vec4(unscaledPosition * WorldInfo.gridToWorld, 1.0);

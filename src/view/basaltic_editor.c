@@ -320,10 +320,10 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         int min, max;
                         if (ranges != NULL) {
                             // NOTE: imgui sliders extents are limited to half the natural type range for whatever type they are
-                            min = 0; //ranges->value.min;
+                            min = 1; //ranges->value.min;
                             max = MIN(ranges->value.max, INT32_MAX / 2);
                         } else {
-                            min = 0;
+                            min = 1;
                             max = 100;
                         }
                         igSliderInt("Brush Strength", &ab->value, min, max, "%d",

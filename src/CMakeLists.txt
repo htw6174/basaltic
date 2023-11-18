@@ -62,9 +62,12 @@ target_link_libraries(cimgui ${IMGUI_LIBRARIES} ${IMGUI_SDL_LIBRARY})
 if (EMSCRIPTEN)
     # generate an html file that can be started with emrun (default for emscripten toolchain is .js)
     #set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    # TODO: only add --emrun on debug builds
+    # TODO: find out if `-sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=1gb` is really needed, shouldn't use more than a half gig or so?
+    # - Even on large maps, debug builds seem to stay under 200 MB
     set(HTW_STATIC YES)
     target_compile_options(basaltic_engine PUBLIC "-pthread")
-    set_target_properties(basaltic_engine PROPERTIES LINK_FLAGS "-sUSE_SDL=2 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=1gb -sEXPORTED_RUNTIME_METHODS=cwrap -sMODULARIZE=1 -sEXPORT_NAME=\"createMyBasalticModule\" -pthread -sPTHREAD_POOL_SIZE=2 -sSTACK_SIZE=1mb --preload-file ${DATA_DIR}@data --emrun")
+    set_target_properties(basaltic_engine PROPERTIES LINK_FLAGS "-sUSE_SDL=2 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3 -sINITIAL_MEMORY=256mb -sEXPORTED_RUNTIME_METHODS=cwrap -sMODULARIZE=1 -sEXPORT_NAME=\"createMyBasalticModule\" -pthread -sPTHREAD_POOL_SIZE=2 -sSTACK_SIZE=1mb --preload-file ${DATA_DIR}@data --emrun")
 endif (EMSCRIPTEN)
 add_subdirectory(${LIBS}/htw-libs ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(model)

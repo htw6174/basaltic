@@ -36,7 +36,7 @@ Prefab PredatorPack : ActorPrefab {
     - OVERRIDE|Group
     - OVERRIDE|bc.actors.GrowthRate
     - ActorSize {ACTOR_SIZE_AVERAGE}
-    - (Description, Brief) {"Predator packs follow grazer trails and hunt when hungry"}
+    - (Description, Brief) {"(Not implemented) Predator packs follow grazer trails and hunt when hungry"}
 }
 
 Prefab GrazerHerd : ActorPrefab {
@@ -156,7 +156,7 @@ volcano_spawner {
 }
 
 grazer_spawner {
-    - Spawner{prefab: GrazerHerd, count: 200, oneShot: true}
+    - Spawner{prefab: GrazerHerd, count: 400, oneShot: true}
     - (IsOn, Overworld)
 }
 

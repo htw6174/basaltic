@@ -11,6 +11,7 @@
 #include "htw_geomap.h"
 #include "flecs.h"
 #include "bc_flecs_utils.h"
+#include <float.h>
 
 // TEST: random movement behavior, pick any adjacent tile to move to
 void setWandererDestinations(ecs_iter_t *it);
