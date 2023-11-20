@@ -47,7 +47,8 @@ else(WIN32)#Unix
        list(APPEND IMGUI_LIBRARIES GL)
 endif(WIN32)
 
-#target_compile_definitions(cimgui PRIVATE RELEASE O2 CIMGUI_USE_OPENGL3 CIMGUI_USE_SDL2)
+# FIXME: is it OK to enable release mode and optimizations for specific targets?
+#target_compile_definitions(cimgui PRIVATE RELEASE O2)
 target_compile_definitions(cimgui PRIVATE CIMGUI_USE_OPENGL3 CIMGUI_USE_SDL2)
 if (EMSCRIPTEN)
     target_compile_definitions(cimgui PRIVATE IMGUI_IMPL_OPENGL_LOADER_ES3)
