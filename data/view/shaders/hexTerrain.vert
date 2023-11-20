@@ -186,6 +186,7 @@ void main()
     float visibility =      extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 8, 8); // Leave un-normalized
     float geology =         extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 16, 16); // TODO: figure out what to do with this
 
+    // TODO: should use a method that remaps the barycentric coord to expand the center area
     float understory =      extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 0, 8);
     float canopy =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 8, 8);
     float tracks =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 16, 8);

@@ -14,7 +14,7 @@ find_package(OpenGL REQUIRED)
 
 # TODO: any way to avoid including model/ecs explicitly?
 target_include_directories(basaltic_view PRIVATE ${LIBS} ${LIBS}/htw-libs/include ${LIBS}/cimgui ${LIBS}/sokol ../model ../model/ecs ${SDL2_INCLUDE_DIRS})
-target_link_libraries(basaltic_view PRIVATE htw htw_geomap SDL2::SDL2)
+target_link_libraries(basaltic_view PRIVATE htw SDL2::SDL2)
 
 if (EMSCRIPTEN)
     # TODO: figure out why this is required here
