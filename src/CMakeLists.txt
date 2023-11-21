@@ -16,8 +16,9 @@ if (EMSCRIPTEN)
     # TODO: only add --emrun on debug builds
     # TODO: find out if `-sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=1gb` is really needed, shouldn't use more than a half gig or so?
     # - Even on large maps, debug builds seem to stay under 200 MB
+    # the -sSAFE_HEAP=1 option or maybe -sASSERTIONS=2 options causing errors because the js eventhandler event doesn't have a 'detail' field?
     target_compile_options(basaltic_engine PUBLIC "-pthread")
-    set_target_properties(basaltic_engine PROPERTIES LINK_FLAGS "-sUSE_SDL=2 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3 -sINITIAL_MEMORY=256mb -sEXPORTED_RUNTIME_METHODS=cwrap -sMODULARIZE=1 -sEXPORT_NAME=\"createMyBasalticModule\" -pthread -sPTHREAD_POOL_SIZE=2 -sSTACK_SIZE=1mb --preload-file ${DATA_DIR}@data --emrun")
+    set_target_properties(basaltic_engine PROPERTIES LINK_FLAGS "-sUSE_SDL=2 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3 -sINITIAL_MEMORY=256mb -sEXPORTED_RUNTIME_METHODS=cwrap -sMODULARIZE=1 -sEXPORT_NAME=\"createMyBasalticModule\" -pthread -sPTHREAD_POOL_SIZE=2 -sSTACK_SIZE=1mb --preload-file ${DATA_DIR}@data --emrun -g -sASSERTIONS=1 -sSAFE_HEAP=1")
 else (EMSCRIPTEN)
 
 endif (EMSCRIPTEN)

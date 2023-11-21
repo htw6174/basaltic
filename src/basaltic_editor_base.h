@@ -6,8 +6,6 @@
 #include "basaltic_super.h"
 #include "basaltic_window.h"
 
-static const u32 bc_frameHistoryLength = 300;
-
 typedef struct {
     bool isActive;
     bool showDemoWindow;

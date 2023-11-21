@@ -1458,31 +1458,12 @@ bool entityButton(ecs_world_t *world, ecs_entity_t e) {
 
 
 void possessEntity(ecs_world_t *world, ecs_entity_t target) {
-    // TODO: rethink this to work with Ego system
-    // Way of doing this that doesn't rely on storing a reference to the 'active character' in uistate: use filters and systems
-    // When switching control, first remove PlayerControlled tag from all entities. Then add the tag to target entity
+    // TODO: ensure only one entity has mapvision at a time
+    // TODO: focus camera on target
+    // TODO: set PlayerEntity singleton in view world
     if (ecs_is_valid(world, target)) {
-        ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){.id = ecs_pair(Ego, EcsAny)});
-        ecs_filter_t *pcFilter = ecs_filter(world, {
-            .terms = {
-                {ecs_pair(Ego, EcsAny)}
-            }
-        });
-        ecs_iter_t fit = ecs_filter_iter(world, pcFilter);
-        ecs_defer_begin(world);
-        while (ecs_filter_next(&fit)) {
-            for (int i = 0; i < fit.count; i++) {
-                ecs_remove_pair(world, fit.entities[i], Ego, 0);
-            }
-        }
-        ecs_set_pair(world, target, Ego, 0); // TODO: can't have a relationship where the target is 0; should create some kind of 'blank' ego for non-ai controlled characters
-        ecs_remove_pair(world, target, Ego, 0);
-        ecs_add(world, target, PlayerVision);
-        ecs_defer_end(world);
-
-        // TODO: do this outside possessEntity
-        //htw_geo_GridCoord coord = *ecs_get(world, target, bc_GridPosition);
-        //bc_focusCameraOnCell(ui, coord);
+        ecs_add_pair(world, target, Ego, EgoNone);
+        ecs_set(world, target, MapVision, {.range = 3});
     }
 }
 

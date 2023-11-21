@@ -30,7 +30,7 @@ bc_EditorEngineContext bc_initEditor(bool isActiveAtStart, bc_WindowContext *wc)
     bc_EditorEngineContext newEditor = {
         .isActive = isActiveAtStart,
         .showDemoWindow = false,
-        .frameTimes = calloc(bc_frameHistoryLength, sizeof(float))
+        .frameTimes = calloc(BC_FRAME_HISTORY_LENGTH, sizeof(float))
     };
 
     return newEditor;
@@ -97,22 +97,22 @@ void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_Sup
     igEnd();
 
     if (igBegin("Performance", NULL, 0)) {
-        u64 frameIndex = (wc->frame - 1) % bc_frameHistoryLength; // Need to get info for previous frame because current frame time hasn't been recorded yet
+        u64 frameIndex = (wc->frame - 1) % BC_FRAME_HISTORY_LENGTH; // Need to get info for previous frame because current frame time hasn't been recorded yet
         // Graph for cpu times
         // Different from true fps, because that may be limited by vsync. Instead, this represents the time it took to prepare a frame, represents max fps if not waiting on the gpu
         {
             float sumOfTimes = 0.0;
             float maxDuration = 0.0;
-            for (int i = 0; i < bc_frameHistoryLength; i++) {
+            for (int i = 0; i < BC_FRAME_HISTORY_LENGTH; i++) {
                 float ms = ((float)superInfo->frameCPUTimes[i] / wc->performanceFrequency) * 1000.0;
                 eec->frameTimes[i] = ms;
                 maxDuration = fmaxf(maxDuration, ms);
                 sumOfTimes += superInfo->frameCPUTimes[i];
             }
-            float avgTime = ((float)sumOfTimes / bc_frameHistoryLength) / wc->performanceFrequency;
+            float avgTime = ((float)sumOfTimes / BC_FRAME_HISTORY_LENGTH) / wc->performanceFrequency;
             char overlay[32];
             sprintf(overlay, "avg: %.1fms", avgTime * 1000.0);
-            igPlotLines_FloatPtr("CPU time (ms)", eec->frameTimes, bc_frameHistoryLength, frameIndex, overlay, 0.0, maxDuration, (ImVec2){0, 0}, sizeof(float));
+            igPlotLines_FloatPtr("CPU time (ms)", eec->frameTimes, BC_FRAME_HISTORY_LENGTH, frameIndex, overlay, 0.0, maxDuration, (ImVec2){0, 0}, sizeof(float));
 
             igValue_Float("Avg potential fps", 1.0 / avgTime, "%.1f");
         }
@@ -120,16 +120,16 @@ void bc_drawBaseEditor(bc_EditorEngineContext *eec, bc_WindowContext *wc, bc_Sup
         {
             float sumOfTimes = 0.0;
             float maxDuration = 0.0;
-            for (int i = 0; i < bc_frameHistoryLength; i++) {
+            for (int i = 0; i < BC_FRAME_HISTORY_LENGTH; i++) {
                 float ms = ((float)superInfo->frameTotalTimes[i] / wc->performanceFrequency) * 1000.0;
                 eec->frameTimes[i] = ms;
                 maxDuration = fmaxf(maxDuration, ms);
                 sumOfTimes += superInfo->frameTotalTimes[i];
             }
-            float avgTime = ((float)sumOfTimes / bc_frameHistoryLength) / wc->performanceFrequency;
+            float avgTime = ((float)sumOfTimes / BC_FRAME_HISTORY_LENGTH) / wc->performanceFrequency;
             char overlay[32];
             sprintf(overlay, "avg: %.1fms", avgTime * 1000.0);
-            igPlotLines_FloatPtr("Frame time (ms)", eec->frameTimes, bc_frameHistoryLength, frameIndex, overlay, 0.0, maxDuration, (ImVec2){0, 0}, sizeof(float));
+            igPlotLines_FloatPtr("Frame time (ms)", eec->frameTimes, BC_FRAME_HISTORY_LENGTH, frameIndex, overlay, 0.0, maxDuration, (ImVec2){0, 0}, sizeof(float));
 
             igValue_Float("Avg fps", 1.0 / avgTime, "%.1f");
         }

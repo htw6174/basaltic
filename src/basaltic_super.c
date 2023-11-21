@@ -12,7 +12,6 @@
 #include "basaltic_editor_base.h"
 #include "bc_sdl_utils.h"
 
-static bc_SuperInfo *superInfo = NULL;
 
 typedef struct {
     bc_EngineSettings *engineConfig;
@@ -34,6 +33,8 @@ typedef struct {
 static SuperContext superContext;
 static bc_WindowContext windowContext;
 static bc_EditorEngineContext editorEngineContext;
+
+static bc_SuperInfo superInfo;
 
 static bool viewHasReceivedModel;
 static u64 lastFrameStart;
@@ -94,7 +95,7 @@ static void mainLoop(void) {
 
     bc_beginEditor();
     if (editorEngineContext.isActive) {
-        bc_drawBaseEditor(&editorEngineContext, wc, superInfo, superContext.engineConfig);
+        bc_drawBaseEditor(&editorEngineContext, wc, &superInfo, superContext.engineConfig);
         bc_view_drawEditor(superContext.superInterface, superContext.inputBuffer);
     } else {
         bc_view_drawGUI(superContext.superInterface);
@@ -137,9 +138,9 @@ static void mainLoop(void) {
     // frame timings
     u64 frameEnd = SDL_GetPerformanceCounter();
     u64 duration = frameEnd - frameStart;
-    u64 frameMod = wc->frame % bc_frameHistoryLength;
-    superInfo->frameCPUTimes[frameMod] = duration;
-    superInfo->frameTotalTimes[frameMod] = wc->lastFrameDuration;
+    u64 frameMod = wc->frame % BC_FRAME_HISTORY_LENGTH;
+    superInfo.frameCPUTimes[frameMod] = duration; // FIXME: wasm release segfaults here? Because??? somehow this is corrupting the stack? TODO: try statically allocating superInfo?
+    superInfo.frameTotalTimes[frameMod] = wc->lastFrameDuration;
     wc->frame++;
 
     // no need to delay with vsync enabled
@@ -175,9 +176,6 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         .inputBuffer = bc_createCommandBuffer(bc_commandBufferMaxCommandCount, bc_commandBufferMaxArenaSize),
     };
 
-    superInfo = calloc(1, sizeof(superInfo));
-    superInfo->frameCPUTimes = calloc(bc_frameHistoryLength, sizeof(superInfo->frameCPUTimes[0]));
-    superInfo->frameTotalTimes = calloc(bc_frameHistoryLength, sizeof(superInfo->frameTotalTimes[0]));
     // TODO: track logic thread timing in module code
     //superInfo->tickDurations = calloc(bc_frameHistoryLength, sizeof(superInfo->tickDurations[0]));
     //superInfo->worldStepHistory = calloc(bc_frameHistoryLength, sizeof(superInfo->worldStepHistory[0]));
@@ -252,6 +250,8 @@ bc_EngineSettings *loadEngineConfig(char *path) {
 void startModel(SuperContext *sc) {
     u32 tickInterval = 1000 / sc->engineConfig->tickRateLimit;
     sc->isModelDataReady = false;
+
+    printf("Starting model on new thread...\n");
 
     // NOTE: remember to put anything being passed to another thread in heap memory
     // TODO: need to free this after thread is finished with it
