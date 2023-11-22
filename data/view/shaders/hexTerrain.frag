@@ -1,10 +1,8 @@
 #version 300 es
 precision mediump float;
 
-// toggle for a more mobile-friendly version of this shader, saves ~3ms on laptop
-//#define LIGHTWEIGHT
-
 #define PI 3.14159
+#define TAU 6.28318530718
 
 //#include "uniforms.h"
 
@@ -119,6 +117,27 @@ float fbm(vec2 x, float H) {
 	return t;
 }
 
+// Based on https://www.shadertoy.com/view/MdlXz8 by David Hoskins, original by joltz0r
+// FIXME: works pretty well, but with current settings (iters 3, only first 2 of final adjustments) tracks don't show up at all below 1/2 track coverage
+#define CAUSTIC_ITERS 3
+float caustic(vec2 uv, float time) {
+	vec2 p = mod(uv*TAU, TAU)-250.0;
+	vec2 i = vec2(p);
+	float c = 1.0;
+	float inten = 0.005;
+
+	for (int n = 0; n < CAUSTIC_ITERS; n++)
+	{
+		float t = time * (1.0 - (3.5 / float(n+1)));
+		i = p + vec2(cos(t - i.x) + sin(t + i.y), sin(t - i.y) + cos(t + i.x));
+		c += 1.0/length(vec2(p.x / (sin(i.x+t)/inten),p.y / (cos(i.y+t)/inten)));
+	}
+	c /= float(CAUSTIC_ITERS);
+	c = 1.17-pow(c, 1.4);
+	//c = pow(abs(c), 8.0);
+	return c;
+}
+
 void main()
 {
 	out_id = inout_cellCoord;
@@ -166,7 +185,7 @@ void main()
 		mix(dirt_cold_wet, dirt_hot_wet, biotemp),
 		humidityPref
 	);
-	//vec3 grassColor = vec3(mix(0.7, 0.2, biotemp), humidityPref + 0.2, humidityPref * 0.33);
+	vec3 trackColor = dirtColor * 1.1;
 	vec3 grassColor = mix(
 		mix(grass_cold_dry, grass_hot_dry, biotemp),
 		mix(grass_cold_wet, grass_hot_wet, biotemp),
@@ -195,7 +214,8 @@ void main()
 	float treeThreshold = hashThreshold;
 #endif
 
-	vec3 groundColor = understory < grassThreshold ? dirtColor : grassColor;
+	// grass cover
+	vec3 biomeColor = understory > grassThreshold ? grassColor : dirtColor;
 
 	// TODO: remove some vegetation based on tracks
 
@@ -211,11 +231,17 @@ void main()
 	float noiseMidFreq = noise21sharp(inout_pos.xy * noiseFreq);
 	float noiseHighFreq = noise21sharp(inout_pos.xy * noiseFreq * 10.0);
 
-	// TODO: Make snowline softer
-	float snowLine = step(noiseMidFreq * 0.25 + 0.25, biotemp);
-	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
+	// snow
+	float snowReduceCoverage = noiseMidFreq * 0.25 - 0.25;
+	const float biotempFreezing = 0.5;
+	biomeColor = biotemp - snowReduceCoverage < biotempFreezing ? snowColor : biomeColor;
 
-	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
+	// tracks
+	float trackSample = caustic(inout_pos.xy, inout_pos.z);
+	biomeColor = tracks > trackSample ? trackColor : biomeColor;
+
+	// trees
+	biomeColor = canopy > treeThreshold ? treeColor : biomeColor;
 
 	// TODO: try out fbm for a different effect
 	//float noiseMidFreq = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
