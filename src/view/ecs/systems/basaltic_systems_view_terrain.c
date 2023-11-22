@@ -217,7 +217,7 @@ Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
 void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
-void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex);
+void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *dataTexture, u32 chunkIndex);
 
 void InitTerrainInstances(ecs_iter_t *it);
 void UpdateTerrainInstances(ecs_iter_t *it);
@@ -863,11 +863,11 @@ void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTextur
         htw_geo_getChunkRootPosition(chunkMap, loadedChunks[c], &chunkX, &chunkY);
         terrain->chunkPositions[c] = (vec3){{chunkX, chunkY, 0.0}};
         // TODO: only update chunk if freshly visible or has pending updates
-        updateDataTextureChunk(plane, dataTexture, loadedChunks[c]);
+        updateDataTextureChunk(plane, 0, dataTexture, loadedChunks[c]);
     }
 }
 
-void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkIndex) {
+void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *dataTexture, u32 chunkIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
     htw_ChunkMap *chunkMap = plane->chunkMap;
@@ -892,10 +892,10 @@ void updateDataTextureChunk(Plane *plane, DataTexture *dataTexture, u32 chunkInd
              * - humidity provence
              * - understory coverage
              * - canopy coverage
-             * - biotemperature
+             * - temperature
              */
             s32 biotemp = plane_GetCellBiotemperature(plane, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
-            u8 tempIndex = remap_int(biotemp, -3000, 3000, 0, UINT8_MAX);
+            u8 tempIndex = remap_int(biotemp + temperatureModifier, -3000, 3000, 0, UINT8_MAX);
 
             // Cast to u32 before shifting so that sign bits stay with the packed value
             // Continuous values compressed to 8-bit range
@@ -933,7 +933,7 @@ void InitTerrainBuffers(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], QueryDesc, {
-            .expr = "[in] bc.planes.Plane"
+            .expr = "[in] bc.planes.Plane, [in] ?bc.planes.Season"
         });
 
         u32 visibilityRadius = rd[i].radius;
@@ -1090,14 +1090,29 @@ void UpdateTerrainDataTexture(ecs_iter_t *it) {
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
         while (ecs_query_next(&mit)) {
             Plane *planes = ecs_field(&mit, Plane, 1);
-            for (int m = 0; m < mit.count; m++) {
-                htw_ChunkMap *cm = planes[m].chunkMap;
-                DataTexture dt = dataTextures[i];
-                for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
-                    updateDataTextureChunk(&planes[m], &dt, c);
-                }
+            // optional seasons
+            if (ecs_field_is_set(&mit, 2)) {
+                Season *seasons = ecs_field(&mit, Season, 2);
 
-                sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
+                for (int m = 0; m < mit.count; m++) {
+                    htw_ChunkMap *cm = planes[m].chunkMap;
+                    DataTexture dt = dataTextures[i];
+                    for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
+                        updateDataTextureChunk(&planes[m], seasons[i].temperatureModifier, &dt, c);
+                    }
+
+                    sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
+                }
+            } else {
+                for (int m = 0; m < mit.count; m++) {
+                    htw_ChunkMap *cm = planes[m].chunkMap;
+                    DataTexture dt = dataTextures[i];
+                    for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
+                        updateDataTextureChunk(&planes[m], 0, &dt, c);
+                    }
+
+                    sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
+                }
             }
         }
     }
@@ -1115,10 +1130,11 @@ void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
             ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
             while (ecs_query_next(&mit)) {
                 Plane *planes = ecs_field(&mit, Plane, 1);
+                // TODO: optional season
                 for (int m = 0; m < mit.count; m++) {
                     DataTexture dt = dataTextures[i];
                     for (int c = 0; c < (dirty[i].count); c++) {
-                        updateDataTextureChunk(&planes[m], &dt, dirty[i].chunks[c]);
+                        updateDataTextureChunk(&planes[m], 0, &dt, dirty[i].chunks[c]);
                     }
                     sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
                 }

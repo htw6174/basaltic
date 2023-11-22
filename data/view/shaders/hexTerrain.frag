@@ -126,6 +126,7 @@ void main()
 	// compute normal from position deriviatives
 	// NOTE: frag shader derivative normals always give 'flat' shading
 	//vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	//vN = flatNormal;
 	bool isCliff = (inout_normal.z < sin(PI / 3.75));
 	//vec3 vN = isCliff ? flatNormal : inout_normal; // if flat shaded cliff edeges are desired, else:
 	vec3 vN = inout_normal;
@@ -196,11 +197,6 @@ void main()
 
 	vec3 groundColor = understory < grassThreshold ? dirtColor : grassColor;
 
-	float snowLine = step(0.15, biotemp);
-	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
-
-	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
-
 	// TODO: remove some vegetation based on tracks
 
 	// For simple rock color grading, start with slightly boosted red&blue then adjust +/- 0.05
@@ -214,6 +210,12 @@ void main()
 	float noiseLowFreq = noise21sharp(inout_pos.xy * noiseFreq * 0.01);
 	float noiseMidFreq = noise21sharp(inout_pos.xy * noiseFreq);
 	float noiseHighFreq = noise21sharp(inout_pos.xy * noiseFreq * 10.0);
+
+	// TODO: Make snowline softer
+	float snowLine = step(noiseMidFreq * 0.25 + 0.25, biotemp);
+	vec3 biomeColor = mix(snowColor, groundColor, snowLine);
+
+	biomeColor = canopy < treeThreshold ? biomeColor : treeColor;
 
 	// TODO: try out fbm for a different effect
 	//float noiseMidFreq = inout_pos.z + (fbm(inout_pos.xy * 20.0, 1.0) * 0.1);
@@ -270,9 +272,8 @@ void main()
 	float grayscale = (albedo.r + albedo.g + albedo.b) / 6.0;
 	albedo = mix(vec3(grayscale), albedo, visible);
 
-	// TEST: color per tile with obvious faces
+	// TEST: color per tile
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
-	//vN = flatNormal;
 
 	//out_color = vec4(vec3(inout_data2.x), fadeout);
 	out_color = vec4(albedo, fadeout);

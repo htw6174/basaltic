@@ -11,6 +11,12 @@ using flecs.doc
 const PI = 3.141592
 const TAU = 6.283185
 
+// Overworld setup
+Overworld {
+    // +/- 10c over a year
+    - Season {temperatureRange: 1000, cycleLength: 24 * 360}
+}
+
 Prefab ActorPrefab {
     - OVERRIDE|Position
     - OVERRIDE|Destination

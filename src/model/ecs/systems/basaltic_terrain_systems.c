@@ -9,32 +9,35 @@
 
 #define MAX_DROUGHT_TOLERANCE (1<<13)
 
-void chunkDailyUpdate(Plane *plane, u64 step, size_t chunkIndex);
+void chunkDailyUpdate(Plane *plane, s32 temperatureModifier, size_t chunkIndex);
 
-void TerrainHourlyStep(ecs_iter_t *it) {
-    // TODO: are there any terrain updates that need to be make hourly (per-step)? If not, just make day/week/month/year step systems
+void TickSeasons(ecs_iter_t *it) {
+    Season *seasons = ecs_field(it, Season, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        seasons[i].cycleProgress = (seasons[i].cycleProgress + 1) % seasons[i].cycleLength;
+        seasons[i].temperatureModifier =
+            sinf( ((float)seasons[i].cycleProgress * PI) / seasons[i].cycleLength ) * seasons[i].temperatureRange;
+    }
 }
 
 void TerrainDailyStep(ecs_iter_t *it) {
     Plane *planes = ecs_field(it, Plane, 1);
-    u64 step = *ecs_singleton_get(it->world, Step);
+    Season *seasons = ecs_field(it, Season, 2);
 
     for (int i = 0; i < it->count; i++) {
         htw_ChunkMap *cm = planes[i].chunkMap;
         for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
             for (int x = 0; x < cm->chunkCountX; x++, c++) {
-                chunkDailyUpdate(&planes[i], step, c);
+                chunkDailyUpdate(&planes[i], seasons[i].temperatureModifier, c);
             }
         }
     }
 }
 
-void chunkDailyUpdate(Plane *plane, u64 step, size_t chunkIndex) {
+void chunkDailyUpdate(Plane *plane, s32 temperatureModifier, size_t chunkIndex) {
     htw_ChunkMap *cm = plane->chunkMap;
     CellData *base = cm->chunks[chunkIndex].cellData;
-
-    float seasonCycle = sinf( ((float)step * PI) / (24 * 360) ); // step 0 is first month of year, in this calendar beginning of spring. Full cycle every 360 days
-    float relativeTemp = seasonCycle * 1000.0; // in centacelsius, +/- 10 deg
 
     for (int c = 0; c < cm->cellsPerChunk; c++) {
         CellData *cell = &base[c];
@@ -46,8 +49,8 @@ void chunkDailyUpdate(Plane *plane, u64 step, size_t chunkIndex) {
         }
 
         s32 biotemp = plane_GetCellBiotemperature(plane, cellCoord);
-        float realTemp = (float)biotemp + relativeTemp;
-        bool isGrowingSeason = realTemp > 0.0 && realTemp < 3000.0;
+        s32 realTemp = biotemp + temperatureModifier;
+        bool isGrowingSeason = realTemp > 0 && realTemp < 3000; // between 0 and 30 c; possibly too wide
 
         // Expand celldata fields to avoid overflows
         s64 tracks = cell->tracks;
@@ -134,7 +137,13 @@ void BcSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcPhases);
     ECS_IMPORT(world, BcPlanes);
 
-    ECS_SYSTEM(world, TerrainDailyStep, AdvanceStep, Plane);
+    ECS_SYSTEM(world, TickSeasons, AdvanceStep, [inout] Season);
+
+    ECS_SYSTEM(world, TerrainDailyStep, AdvanceStep,
+        [inout] Plane,
+        [in] Season
+    );
     ecs_set_tick_source(world, TerrainDailyStep, TickDay);
+
     ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, bc.planes.CellRoot);
 }

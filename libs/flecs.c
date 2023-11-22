@@ -28742,9 +28742,6 @@ int ecs_meta_from_desc(
     ecs_type_kind_t kind,
     const char *desc)
 {
-    // TEST: print out description
-    printf("Meta desc for %s, kind %d: at %lx, %s\n", ecs_get_name(world, component), kind, (uintptr_t)desc, desc);
-
     switch(kind) {
     case EcsStructType:
         if (meta_parse_struct(world, component, desc)) {

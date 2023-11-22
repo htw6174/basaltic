@@ -73,6 +73,15 @@ vec3 remapBarycentric(vec3 barycentric, float yFactor, float zFactor, float inse
     return vec3(barycentric.x + xDelta, yRemapped, zRemapped);
 }
 
+vec3 expandBarycentric(vec3 barycentric, float threshold) {
+    // if barycentric.x > threshold
+    float x = step(threshold, barycentric.x);
+    float diff = barycentric.x - x;
+    float y = barycentric.y - (diff * 0.5);
+    float z = barycentric.z - (diff * 0.5);
+    return vec3(x, y, z);
+}
+
 ivec4 terrainFetch(ivec2 coord) {
     // texelFetch is undefined on out of bounds access. Must manually wrap first
     ivec2 wrap = textureSize(terrain, 0);
@@ -103,6 +112,11 @@ float interpolate_flat(float here, float left, float right, vec3 barycentric) {
     return (here * barycentric.x) + (left * barycentric.y) + (right * barycentric.z);
 }
 
+float interpolate_expand(float here, float left, float right, vec3 barycentric, float threshold) {
+    barycentric = expandBarycentric(barycentric, 0.5);
+    return (here * barycentric.x) + (left * barycentric.y) + (right * barycentric.z);
+}
+
 // costs ~3ms. Can eliminate one of the terrainFetch calls
 float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborhood) {
     // create sharp cliffs
@@ -116,13 +130,13 @@ float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborh
 
     // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
-    const float planck = 0.001;
-    // Right-hand rule for cross product results - index finger, towards cdr
+    const float planck = 0.0001;
+    // Right-hand rule for cross product results - index finger, towards cdr along line parallel to cd -> cdr
     vec3 bary1 = vec3(barycentric.x - planck, barycentric.y, barycentric.z + planck);
-    // middle finger, towards cdl
+    // middle finger, towards cdl along line parallel to cd -> cdl
     vec3 bary2 = vec3(barycentric.x - planck, barycentric.y + planck, barycentric.z);
 
-    // must remap after adding planck for accurate slope
+    // must remap after adding planck for correct slope
     barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
     bary1 = remapBarycentric(bary1, remapLeft, remapRight, slopeFactor);
     bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
@@ -138,15 +152,15 @@ float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborh
 
     // get sample positions as cartesian coordinates
     // in the special case of an equilateral triangle, this is easy to find. cartesian distance == (barycentric distance * grid scale)
-    // still need to rotate vectors according to sample cell's direction; == -(neighborhood - 2) * [60 deg, 30 deg]
+    // still need to rotate vectors according to sample cell's direction; == -(neighborhood - [1, 2]) * 60 degrees
     // More general formula : https://www.iue.tuwien.ac.at/phd/nentchev/node26.html#eq:lambda_representation_2D_xy
-    float rot1 = (3.14159 / 3.0) * -float(neighborhood - 1);
-    float rot2 = (3.14159 / 3.0) * -float(neighborhood - 2);
+    float rot1 = -float(neighborhood - 1) * radians(60.0);
+    float rot2 = -float(neighborhood - 2) * radians(60.0);
     // Get distance from vertex
     vec3 tangent = vec3(cos(rot1) * planck, sin(rot1) * planck, (elev2 - elev1) * 0.1); // TODO: provide terrain scale as uniform, multiply in
     vec3 bitangent = vec3(cos(rot2) * planck, sin(rot2) * planck, (elev3 - elev1) * 0.1);
 
-    // approximate vertex normal from cross product - thumb
+    // approximate vertex normal from cross product
     inout_normal = normalize(cross(tangent, bitangent));
 
     return elev1;
@@ -166,10 +180,23 @@ float extract_normalize_interpolate(int pack, int pack_left, int pack_right, vec
     return interpolate_flat(here, left, right, barycentric);
 }
 
+float extract_normalize_interpolate_expand(int pack, int pack_left, int pack_right, vec3 barycentric, float radius, int offset, int bits) {
+    // TODO: move outside, make more configurable, rename param
+    radius = max(0.0, radius * 2.0 - 1.0);
+    float here = float(bitfieldExtractU(pack, offset, bits)) / 255.0;
+    float left = float(bitfieldExtractU(pack_left, offset, bits)) / 255.0;
+    float right = float(bitfieldExtractU(pack_right, offset, bits)) / 255.0;
+    float interpolated = interpolate_flat(here, left, right, barycentric);
+    return mix(here, interpolated, radius);
+}
+
 void main()
 {
     // unpack terrain data
     inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); // scale normalized s16 back to full range. see also: unpackSnorm2x16
+
+    // 0.75 at center of edge, 1.0 at corners
+    inout_radius = (1.0 - in_barycentric.x) * 1.5;
 
     // get neighboring cell data
     int neighborhood = int(floor(in_neighborWeight));
@@ -186,10 +213,9 @@ void main()
     float visibility =      extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 8, 8); // Leave un-normalized
     float geology =         extract_interpolate(cd.r, cdl.r, cdr.r, in_barycentric, 16, 16); // TODO: figure out what to do with this
 
-    // TODO: should use a method that remaps the barycentric coord to expand the center area
-    float understory =      extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 0, 8);
-    float canopy =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 8, 8);
-    float tracks =          extract_normalize_interpolate(cd.g, cdl.g, cdr.g, in_barycentric, 16, 8);
+    float understory =      extract_normalize_interpolate_expand(cd.g, cdl.g, cdr.g, in_barycentric, inout_radius, 0, 8);
+    float canopy =          extract_normalize_interpolate_expand(cd.g, cdl.g, cdr.g, in_barycentric, inout_radius, 8, 8);
+    float tracks =          extract_normalize_interpolate_expand(cd.g, cdl.g, cdr.g, in_barycentric, inout_radius, 16, 8);
 
     float humidityPref =    float(bitfieldExtractU(cd.b, 0, 8)) / 255.0;
     float surfacewater =    float(bitfieldExtractU(cd.b, 8, 8)) / 255.0;
@@ -209,8 +235,6 @@ void main()
     inout_pos = worldPosition.xyz; // NB: Output before applying camera transform
 
     gl_Position = pv * worldPosition;
-
-    inout_radius = (1.0 - in_barycentric.x) * 1.5;
 
     inout_data1 = vec4(visibility, geology, understory, canopy);
     inout_data2 = vec4(tracks, humidityPref, surfacewater, biotemp);

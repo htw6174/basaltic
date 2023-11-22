@@ -50,6 +50,14 @@ ECS_STRUCT(Plane, {
     htw_ChunkMap *chunkMap;
 });
 
+// temperature modifer is 0 at start, middle, and end of season cycle, first rising to +range then descending to -range
+ECS_STRUCT(Season, {
+    s32 temperatureRange; // in centicelsius
+    s32 temperatureModifier; // in centicelsius
+    u32 cycleLength; // in hours
+    u32 cycleProgress; // in hours
+});
+
 ECS_ENUM(HexDirection, {
     HEX_DIR_NORTH_EAST, // 0, 1
     HEX_DIR_EAST, // 1, 0
@@ -78,6 +86,13 @@ void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Po
 
 CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
 
+/**
+ * @brief Represents mean annual temperature at a cell on the plane, determined by distance to the plane origin and cell height. Approximate range from -30c to +30c
+ *
+ * @param plane p_plane:...
+ * @param pos p_pos:...
+ * @return Biotemperature in centicelsius (degrees celsius * 100)
+ */
 s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
 
