@@ -935,7 +935,7 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     if (defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
     if (node == *focus) flags |= ImGuiTreeNodeFlags_Selected;
 
-    bool drawChildren = false;
+    bool hasChildren = false;
     ecs_iter_t children;
     // Attempting to search children for some Flecs builtins (., $) will cause an error, and others have no reason to display normally (_, *). Ignored list here is the same as the set checked in flecs_get_builtin
     if (node == EcsThis || node == EcsAny || node == EcsWildcard || node == EcsVariable) {
@@ -946,8 +946,8 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
             .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
         });
         // Display as a leaf if no children
-        if (ecs_iter_is_true(&children)) {
-            drawChildren = true;
+        if (ecs_term_next(&children)) {
+            hasChildren = true;
         } else {
             flags |= ImGuiTreeNodeFlags_Leaf;
         }
@@ -984,20 +984,20 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         igEndDragDropTarget();
     }
 
-    if (expandNode && drawChildren) {
-        // Re-aquire iterator, because ecs_iter_is_true invalidates it
-        children = ecs_term_iter(world, &(ecs_term_t){
-            .id = ecs_childof(node),
-            .flags = EcsTermMatchDisabled
-        });
-        while (ecs_term_next(&children)) {
-            for (int i = 0; i < children.count; i++) {
-                count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
-            }
-        }
-    }
+    // expandNode ? treePop
+    // hasChildren
+
     if (expandNode) {
+        if (hasChildren) {
+            do {
+                for (int i = 0; i < children.count; i++) {
+                    count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
+                }
+            } while (ecs_term_next(&children));
+        }
         igTreePop();
+    } else if (hasChildren) {
+        ecs_iter_fini(&children);
     }
     return count;
 }

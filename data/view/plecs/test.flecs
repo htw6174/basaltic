@@ -44,6 +44,11 @@ bcview {
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)"}
     }
 
+    storms : DebugDrawPrefab {
+        - Color {0.5, 0.5, 0.8, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)"}
+    }
+
     // TEST: disable shadow pass by default
     phases.OnPassShadow :- Disabled
 

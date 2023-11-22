@@ -124,10 +124,23 @@ Prefab VolcanoSpirit {
     - (Ego, EgoVolcanoSpirit)
     - OVERRIDE|Position
     - OVERRIDE|Elevation
+    - OVERRIDE|SpiritPower
     - (RandomizeInt, SpiritLifetime.matureSteps) {min: 500, max: 2500, mean: 1500, distribution: RAND_DISTRIBUTION_NORMAL}
-    - SpiritPower {maxValue: 2e16}
+    - SpiritPower {maxValue: 65535}
     - (IsOn, Overworld)
     - (Description, Brief) {"Volcanos raise the land around them, destroying vegetation while active but covering the area in nutrient-rich ash"}
+}
+
+Prefab StormSpirit {
+    - ElementalSpirit
+    - (Ego, EgoStormSpirit)
+    - OVERRIDE|Position
+    - OVERRIDE|Destination
+    - OVERRIDE|Elevation
+    - OVERRIDE|SpiritPower
+    - SpiritPower {maxValue: 65535}
+    - (IsOn, Overworld)
+    - (Description, Brief) {"Storm spirits move with the wind, gathering energy from warm bodies of water and releasing it as rain"}
 }
 
 
@@ -158,6 +171,11 @@ cliffs_spawner {
 
 volcano_spawner {
     - Spawner{prefab: VolcanoSpirit, count: 10, oneShot: true}
+    - (IsOn, Overworld)
+}
+
+storm_spawner {
+    - Spawner{prefab: StormSpirit, count: 20, oneShot: true}
     - (IsOn, Overworld)
 }
 

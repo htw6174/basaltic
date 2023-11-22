@@ -117,8 +117,9 @@ float fbm(vec2 x, float H) {
 	return t;
 }
 
+// Caustics effect which tiles every 1 uv
 // Based on https://www.shadertoy.com/view/MdlXz8 by David Hoskins, original by joltz0r
-// FIXME: works pretty well, but with current settings (iters 3, only first 2 of final adjustments) tracks don't show up at all below 1/2 track coverage
+// FIXME: works pretty well, but with current settings (iters 3, only first 2 of final adjustments) tracks hardly show up at all below 1/2 track coverage
 #define CAUSTIC_ITERS 3
 float caustic(vec2 uv, float time) {
 	vec2 p = mod(uv*TAU, TAU)-250.0;
