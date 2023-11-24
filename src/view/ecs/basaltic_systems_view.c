@@ -168,6 +168,13 @@ static sg_pipeline_desc lightingPipelineDescription = {
     .label = "lighting-pipeline",
 };
 
+static sg_pass_action transparentPassAction = {
+    .colors = {
+        [0] = {.load_action = SG_LOADACTION_LOAD, .clear_value = COLOR_CLEAR},
+    },
+    .depth.load_action = SG_LOADACTION_LOAD
+};
+
 static sg_shader_desc finalShaderDescription = {
     .fs.images = {
         [0] = {
@@ -415,6 +422,28 @@ void RefreshRenderPasses(ecs_iter_t *it) {
         ecs_set_ptr(it->world, it->entities[i], RenderPass, &new_rp);
         ecs_set_ptr(it->world, it->entities[i], RenderTarget, &new_rt);
     }
+}
+
+// TEST: single-use system to make a transparent pass with the lighting pass's color attachment and gbuffer's depth attachment
+void RefreshTransparentPass(ecs_iter_t *it) {
+    // This only triggers when the lighting render target is set, on the lighting pass entity, but requires the transparent pass entity to have component set. For this reason, ignore fields and just get constant source components here
+    const RenderTarget *gBufferTarget = ecs_get(it->world, GBufferPass, RenderTarget);
+    const RenderTarget *lightingTarget = ecs_get(it->world, LightingPass, RenderTarget);
+    RenderPass *transparentPass = ecs_get_mut(it->world, TransparentPass, RenderPass);
+
+    if (transparentPass != NULL) {
+        sg_destroy_pass(transparentPass->pass);
+    }
+
+    // Color from lighting, depth from gbuffer
+    *transparentPass = (RenderPass){
+        .pass = sg_make_pass(&(sg_pass_desc){
+            .color_attachments[0].image = lightingTarget->images[0],
+            .depth_stencil_attachment.image = gBufferTarget->depth_stencil
+        }),
+        .action = transparentPassAction
+    };
+    ecs_modified(it->world, TransparentPass, RenderPass);
 }
 
 void BeginRenderPass(ecs_iter_t *it) {
@@ -728,6 +757,10 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [in] RenderPassDescription
     );
 
+    ECS_OBSERVER(world, RefreshTransparentPass, EcsOnSet,
+        [in] RenderTarget(LightingPass)
+    );
+
     // FIXME: disabling observers does nothing?
     //ecs_enable(world, RefreshRenderPasses, false);
     //ecs_add_id(world, RefreshRenderPasses, EcsDisabled);
@@ -760,6 +793,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_SYSTEM_ALIAS(world, EndGBufferPass, EndRenderPass, EndPassGBuffer,
         [none] RenderPass(GBufferPass)
     );
+
     ECS_SYSTEM_ALIAS(world, BeginLightingPass, BeginRenderPass, BeginPassLighting,
         [in] RenderPass(LightingPass)
     );
@@ -780,6 +814,14 @@ void BcviewSystemsImport(ecs_world_t *world) {
 
     ECS_SYSTEM_ALIAS(world, EndLightingPass, EndRenderPass, EndPassLighting,
         [none] RenderPass(LightingPass)
+    );
+
+    ECS_SYSTEM_ALIAS(world, BeginTransparentPass, BeginRenderPass, BeginPassTransparent,
+        [in] RenderPass(TransparentPass)
+    );
+
+    ECS_SYSTEM_ALIAS(world, EndTransparentPass, EndRenderPass, EndPassTransparent,
+        [none] RenderPass(TransparentPass)
     );
 
 
@@ -855,8 +897,16 @@ void BcviewSystemsImport(ecs_world_t *world) {
     );
 
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
-    ECS_SYSTEM(world, DrawInstances, OnPassGBuffer,
+    ECS_SYSTEM_ALIAS(world, DrawInstancesGBuffer, DrawInstances, OnPassGBuffer,
         [in] Pipeline(up(bcview.GBufferPass)), // NOTE: the source specifier "up(GBufferPass)" gets component from the entity which is target of GBufferPass relationship for $this
+        [in] InstanceBuffer,
+        [in] Elements,
+        [in] PVMatrix($),
+        [in] WrapInstanceOffsets($)
+    );
+
+    ECS_SYSTEM_ALIAS(world, DrawInstancesTransparent, DrawInstances, OnPassTransparent,
+        [in] Pipeline(up(bcview.TransparentPass)),
         [in] InstanceBuffer,
         [in] Elements,
         [in] PVMatrix($),
@@ -905,6 +955,17 @@ void BcviewSystemsImport(ecs_world_t *world) {
         },
         .filter = SG_FILTER_NEAREST
     });
+
+    // ecs_set(world, TransparentPass, RenderPassDescription, {
+    //     .action = transparentPassAction,
+    //     .width = 800,
+    //     .height = 600,
+    //     .colorFormats = {
+    //         SG_PIXELFORMAT_RGBA8
+    //     },
+    //     .depthFormat = SG_PIXELFORMAT_DEPTH,
+    //     .filter = SG_FILTER_LINEAR
+    // });
 
     // Lighting and final pass pipeline setup
     // UV quad for drawing from a render target to another render target or the screen

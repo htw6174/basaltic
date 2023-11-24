@@ -16,6 +16,14 @@ typedef struct {
     float scale;
 } DebugInstanceData;
 
+typedef struct {
+    vec3 start;
+    vec3 end;
+    vec4 color;
+    float scale;
+    float speed;
+} ArrowInstanceData;
+
 static sg_shader_desc debugShadowShaderDescription = {
     .vs.uniform_blocks[0] = {
         .size = sizeof(PVMatrix),
@@ -92,11 +100,40 @@ static sg_pipeline_desc debugPipelineDescription = {
         .write_enabled = true
     },
     .cull_mode = SG_CULLMODE_BACK,
-    .color_count = 3,
+    .color_count = 1,
     .colors = {
-        [0].pixel_format = SG_PIXELFORMAT_RGBA8,
-        [1].pixel_format = SG_PIXELFORMAT_RGBA16F,
-        [2].pixel_format = SG_PIXELFORMAT_RG16SI,
+        [0] = {
+            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .blend = {
+                .enabled = true,
+                .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA
+            }
+        }
+    }
+};
+
+static sg_pipeline_desc debugArrowPipelineDescription = {
+    .shader = {0},
+    .layout = {
+        .buffers[0].step_func = SG_VERTEXSTEP_PER_INSTANCE,
+        .attrs = {
+            [0].format = SG_VERTEXFORMAT_FLOAT3,
+            [1].format = SG_VERTEXFORMAT_FLOAT3,
+            [2].format = SG_VERTEXFORMAT_FLOAT4,
+            [3].format = SG_VERTEXFORMAT_FLOAT,
+            [4].format = SG_VERTEXFORMAT_FLOAT,
+        }
+    },
+    .depth = {
+        .pixel_format = SG_PIXELFORMAT_DEPTH,
+        .compare = SG_COMPAREFUNC_LESS_EQUAL,
+        .write_enabled = true
+    },
+    .cull_mode = SG_CULLMODE_NONE,
+    .color_count = 1,
+    .colors = {
+        [0] = {.pixel_format = SG_PIXELFORMAT_RGBA8, .blend.enabled = true}
     }
 };
 
@@ -203,7 +240,7 @@ void DrawRenderTargetPreviews(ecs_iter_t *it) {
         sg_apply_pipeline(pipelines[i].pipeline);
         sg_apply_bindings(&bind);
 
-        sg_apply_viewport(0, 0, 512, 512, false);
+        //sg_apply_viewport(0, 0, 512, 512, false);
         sg_draw(0, 4, 1);
     }
 }
@@ -246,8 +283,8 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set_pair(world, debugShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_default.frag"});
     ecs_set(world, debugShadowPipeline, PipelineDescription, {.shader_desc = &debugShadowShaderDescription, .pipeline_desc = &debugShadowPipelineDescription});
 
-    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugGBufferPipeline");
-    ecs_add_pair(world, debugPipeline, EcsChildOf, GBufferPass);
+    ecs_entity_t debugPipeline = ecs_set_name(world, 0, "DebugTransparentPipeline");
+    ecs_add_pair(world, debugPipeline, EcsChildOf, TransparentPass);
     ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});

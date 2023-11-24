@@ -15,6 +15,10 @@ extern ECS_TAG_DECLARE(BeginPassLighting);
 extern ECS_TAG_DECLARE(OnPassLighting);
 extern ECS_TAG_DECLARE(EndPassLighting);
 
+extern ECS_TAG_DECLARE(BeginPassTransparent);
+extern ECS_TAG_DECLARE(OnPassTransparent);
+extern ECS_TAG_DECLARE(EndPassTransparent);
+
 extern ECS_TAG_DECLARE(OnPassFinal);
 
 extern ECS_TAG_DECLARE(OnModelChanged);

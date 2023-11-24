@@ -12,6 +12,10 @@ ECS_TAG_DECLARE(BeginPassLighting);
 ECS_TAG_DECLARE(OnPassLighting);
 ECS_TAG_DECLARE(EndPassLighting);
 
+ECS_TAG_DECLARE(BeginPassTransparent);
+ECS_TAG_DECLARE(OnPassTransparent);
+ECS_TAG_DECLARE(EndPassTransparent);
+
 ECS_TAG_DECLARE(OnPassFinal);
 
 ECS_TAG_DECLARE(OnModelChanged);
@@ -30,7 +34,7 @@ ecs_entity_t createPassPhases(ecs_world_t *world, ecs_entity_t dependsOn, ecs_en
     ecs_add_pair(world, d2, EcsDependsOn, d1);
     ecs_add_pair(world, d3, EcsDependsOn, d2);
 
-    // Ensure phase tag is added
+    // Ensure phase tag is added to args
     ecs_add_id(world, beginPhase, EcsPhase);
     ecs_add_id(world, onPhase, EcsPhase);
     ecs_add_id(world, endPhase, EcsPhase);
@@ -62,6 +66,10 @@ void BcviewPhasesImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, OnPassLighting);
     ECS_TAG_DEFINE(world, EndPassLighting);
 
+    ECS_TAG_DEFINE(world, BeginPassTransparent);
+    ECS_TAG_DEFINE(world, OnPassTransparent);
+    ECS_TAG_DEFINE(world, EndPassTransparent);
+
     ECS_TAG_DEFINE(world, OnPassFinal);
 
     ECS_TAG_DEFINE(world, OnModelChanged);
@@ -69,15 +77,12 @@ void BcviewPhasesImport(ecs_world_t *world) {
     ecs_entity_t dummyPhase = createPassPhases(world, EcsOnUpdate, BeginPassShadow, OnPassShadow, EndPassShadow);
     dummyPhase = createPassPhases(world, dummyPhase, BeginPassGBuffer, OnPassGBuffer, EndPassGBuffer);
     dummyPhase = createPassPhases(world, dummyPhase, BeginPassLighting, OnPassLighting, EndPassLighting);
+    dummyPhase = createPassPhases(world, dummyPhase, BeginPassTransparent, OnPassTransparent, EndPassTransparent);
 
     ecs_add_id(world, OnPassFinal, EcsPhase);
     ecs_add_pair(world, OnPassFinal, EcsDependsOn, dummyPhase);
 
     // We don't want the default pipeline to run this phase, so don't add the EcsPhase tag
-    //ecs_add_id(world, OnModelChanged, EcsPhase);
-
-    //ECS_ENTITY_DEFINE(world, ModelChangedPipeline);
-
     ModelChangedPipeline = ecs_pipeline(world, {
         .query.filter.terms = {
             { .id = EcsSystem }, // Mandatory, must always match systems

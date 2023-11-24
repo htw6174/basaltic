@@ -186,7 +186,7 @@ void main()
 		mix(dirt_cold_wet, dirt_hot_wet, biotemp),
 		humidityPref
 	);
-	vec3 trackColor = dirtColor * 1.1;
+	//vec3 trackColor = dirtColor * 1.1;
 	vec3 grassColor = mix(
 		mix(grass_cold_dry, grass_hot_dry, biotemp),
 		mix(grass_cold_wet, grass_hot_wet, biotemp),
@@ -239,7 +239,7 @@ void main()
 
 	// tracks
 	float trackSample = caustic(inout_pos.xy, inout_pos.z);
-	biomeColor = tracks > trackSample ? trackColor : biomeColor;
+	biomeColor = tracks > trackSample ? biomeColor * 0.8 : biomeColor;
 
 	// trees
 	biomeColor = canopy > treeThreshold ? treeColor : biomeColor;

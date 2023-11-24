@@ -314,6 +314,7 @@ ECS_STRUCT(SunLight, {
 BC_DECL ECS_TAG_DECLARE(ShadowPass);
 BC_DECL ECS_TAG_DECLARE(GBufferPass);
 BC_DECL ECS_TAG_DECLARE(LightingPass);
+BC_DECL ECS_TAG_DECLARE(TransparentPass);
 BC_DECL ECS_TAG_DECLARE(FinalPass);
 
 // Add to an entity to automatically add and setup a RenderPass and RenderTarget

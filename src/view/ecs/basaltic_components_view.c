@@ -137,6 +137,7 @@ void BcviewImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, ShadowPass);
     ECS_TAG_DEFINE(world, GBufferPass);
     ECS_TAG_DEFINE(world, LightingPass);
+    ECS_TAG_DEFINE(world, TransparentPass);
     ECS_TAG_DEFINE(world, FinalPass);
 
     ecs_add_id(world, ShadowPass, EcsTraversable);
@@ -147,6 +148,9 @@ void BcviewImport(ecs_world_t *world) {
 
     ecs_add_id(world, LightingPass, EcsTraversable);
     ecs_add_id(world, LightingPass, EcsOneOf);
+
+    ecs_add_id(world, TransparentPass, EcsTraversable);
+    ecs_add_id(world, TransparentPass, EcsOneOf);
 
     ecs_add_id(world, FinalPass, EcsTraversable);
     ecs_add_id(world, FinalPass, EcsOneOf);

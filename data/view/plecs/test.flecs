@@ -2,7 +2,7 @@
 bcview {
     Prefab DebugDrawPrefab {
         - OVERRIDE|(ShadowPass, DebugShadowPipeline)
-        - OVERRIDE|(GBufferPass, DebugGBufferPipeline)
+        - OVERRIDE|(TransparentPass, DebugTransparentPipeline)
         - Color {1.0, 0.0, 1.0, 1.0}
         - InstanceBuffer
         - DebugRender
