@@ -138,7 +138,9 @@ Prefab StormSpirit {
     - OVERRIDE|Destination
     - OVERRIDE|Elevation
     - OVERRIDE|SpiritPower
+    - OVERRIDE|StormCloud
     - SpiritPower {maxValue: 65535}
+    - StormCloud {radius: 3, maxDuration: 100}
     - (IsOn, Overworld)
     - (Description, Brief) {"Storm spirits move with the wind, gathering energy from warm bodies of water and releasing it as rain"}
 }
@@ -175,7 +177,7 @@ volcano_spawner {
 }
 
 storm_spawner {
-    - Spawner{prefab: StormSpirit, count: 20, oneShot: true}
+    - Spawner{prefab: StormSpirit, count: 40, oneShot: true}
     - (IsOn, Overworld)
 }
 

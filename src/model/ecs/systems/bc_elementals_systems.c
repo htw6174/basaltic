@@ -153,6 +153,91 @@ void EgoBehaviorVolcano(ecs_iter_t *it) {
     }
 }
 
+void EgoBehaviorStorm(ecs_iter_t *it) {
+    Position *pos = ecs_field(it, Position, 1);
+    Destination *dest = ecs_field(it, Destination, 2);
+
+    for (int i = 0; i < it->count; i++) {
+        u32 hash = xxh_hash2d(it->entities[i], pos[i].x, pos[i].y);
+        s32 wind = (hash % 3) - 1; // TODO weight towards 0
+        HexDirection dir = MOD(HEX_DIR_EAST + wind, HEX_DIR_COUNT);
+        dest[i] = POSITION_IN_DIRECTION(pos[i], dir);
+        ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
+    }
+}
+
+void PrepStorm(ecs_iter_t *it) {
+    Position *positions = ecs_field(it, Position, 1);
+    Destination *destinations = ecs_field(it, Destination, 2);
+    SpiritPower *spiritPowers = ecs_field(it, SpiritPower, 3);
+    StormCloud *stormClouds = ecs_field(it, StormCloud, 4);
+    // constant sources
+    Plane *plane = ecs_field(it, Plane, 5);
+    htw_ChunkMap *cm = plane->chunkMap;
+    Season *season = ecs_field(it, Season, 6);
+
+    for (int i = 0; i < it->count; i++) {
+        Position pos = positions[i];
+        SpiritPower *sp = &spiritPowers[i];
+        StormCloud *storm = &stormClouds[i];
+        CellData *cell = htw_geo_getCell(cm, pos);
+        CellData *destCell = htw_geo_getCell(cm, destinations[i]);
+        // get temperature in centicelsius TODO: factor in
+        s32 temp = plane_GetCellBiotemperature(plane, pos) + season->temperatureModifier;
+        // Get slope between current and destination cell, only matters if destination isn't over the ocean
+        s32 slope = destCell->height < 0 ? 0 : destCell->height - cell->height;
+        if (cell->height < 0) {
+            // over ocean
+            sp->value = MIN(sp->value + 1000, sp->maxValue);
+        } else {
+            // over land
+        }
+
+        if (storm->isStorming) {
+            // apply rain
+            u32 area = htw_geo_getHexArea(storm->radius);
+            htw_geo_CubeCoord cubeCoord = {0, 0, 0};
+            for (int i = 0; i < area; i++) {
+                htw_geo_GridCoord gridCoord = htw_geo_cubeToGridCoord(cubeCoord);
+                htw_geo_GridCoord worldCoord = htw_geo_addGridCoords(pos, gridCoord);
+                CellData *c = htw_geo_getCell(cm, worldCoord);
+                // give 1% spirit power to cell as surfacewater
+                s64 surfacewater = c->surfacewater;
+                s32 rainfall = MAX(1, sp->value * 0.01);
+                surfacewater += rainfall * 24;
+                sp->value -= rainfall;
+                c->surfacewater = MIN(surfacewater, UINT16_MAX);
+
+                htw_geo_getNextHexSpiralCoord(&cubeCoord);
+            }
+
+            // determine if storm should end
+            s32 dc = storm->maxDuration - storm->currentDuration;
+            s32 roll = htw_rtd(1, storm->maxDuration, NULL);
+            if (roll >= dc || sp->value <= 0) {
+                storm->isStorming = false;
+                storm->currentDuration = 0;
+            } else {
+                storm->currentDuration += 1;
+            }
+        } else {
+            // determine if storm should start
+            s32 dc = storm->maxDuration - storm->currentDuration;
+            // 5% increased chance per unit of slope
+            dc -= slope * storm->maxDuration * 0.05;
+            // 20% increased chance if at max power
+            dc += sp->value >= sp->maxValue ? 20 : 0;
+            s32 roll = htw_rtd(1, storm->maxDuration, NULL);
+            if (roll >= dc) {
+                storm->isStorming = true;
+                storm->currentDuration = 0;
+            } else {
+                storm->currentDuration += 1;
+            }
+        }
+    }
+}
+
 void ExecuteShiftPlates(ecs_iter_t *it) {
     int f = 0;
     Position *positions = ecs_field(it, Position, ++f);
@@ -249,7 +334,6 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcActors);
     ECS_IMPORT(world, BcElementals);
 
-    // 2 different ego behaviors to alternate between moving and shifting plates; better way to do this?
     ECS_SYSTEM(world, EgoBehaviorTectonic, Planning,
         [in] Position,
         [inout] AngleRadians,
@@ -260,6 +344,21 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
     ECS_SYSTEM(world, EgoBehaviorVolcano, Planning,
         [inout] SpiritPower,
         [none] (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)
+    );
+
+    ECS_SYSTEM(world, EgoBehaviorStorm, Planning,
+        [in] Position,
+        [out] Destination,
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)
+    );
+
+    ECS_SYSTEM(world, PrepStorm, Prep,
+        [in] Position,
+        [in] Destination,
+        [inout] SpiritPower,
+        [inout] StormCloud,
+        [in] Plane(up(bc.planes.IsOn)),
+        [in] Season(up(bc.planes.IsOn))
     );
 
     ECS_SYSTEM(world, ExecuteShiftPlates, Execution,

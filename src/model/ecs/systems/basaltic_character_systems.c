@@ -343,7 +343,7 @@ void executeMove(ecs_iter_t *it) {
             // TODO: move towards destination by maximum single turn move distance
             plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
             // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-            positions[i] = destinations[i];
+            positions[i] = htw_geo_wrapGridCoordOnChunkMap(p->chunkMap, destinations[i]);
         }
     } else {
         for (int i = 0; i < it->count; i++) {
@@ -351,7 +351,7 @@ void executeMove(ecs_iter_t *it) {
             // TODO: move towards destination by maximum single turn move distance
             plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
             // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-            positions[i] = destinations[i];
+            positions[i] = htw_geo_wrapGridCoordOnChunkMap(p->chunkMap, destinations[i]);
         }
     }
 }

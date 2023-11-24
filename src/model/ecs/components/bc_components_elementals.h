@@ -41,6 +41,13 @@ ECS_STRUCT(PlateShiftStrength, {
     float falloff;
 });
 
+ECS_STRUCT(StormCloud, {
+    bool isStorming;
+    u32 radius; // in tiles
+    u32 maxDuration;
+    u32 currentDuration;
+});
+
 typedef float AngleRadians;
 BC_DECL ECS_COMPONENT_DECLARE(AngleRadians);
 
