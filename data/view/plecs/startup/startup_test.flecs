@@ -1,8 +1,5 @@
 bcview {
 
-    // Component properties
-    InstanceBuffer :- AlwaysOverride
-
     // Camera
     Camera :- Camera {
         origin: {0, 0, 0},

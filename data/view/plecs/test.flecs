@@ -1,14 +1,30 @@
 
 bcview {
+    // Terrain
+    systems.terrain.TerrainDraw :- (InstanceBuffer, TerrainChunkInstanceData)
+
     Prefab DebugDrawPrefab {
         - OVERRIDE|(ShadowPass, DebugShadowPipeline)
         - OVERRIDE|(TransparentPass, DebugTransparentPipeline)
+        - Elements {24}
         - Color {1.0, 0.0, 1.0, 1.0}
-        - InstanceBuffer
+        - (InstanceBuffer, DebugInstanceData)
+        - DebugRender
+    }
+    Prefab DebugArrowPrefab {
+        - OVERRIDE|(TransparentPass, DebugArrowPipeline)
+        - Elements {6}
+        - Color {1.0, 0.0, 1.0, 1.0}
+        - (InstanceBuffer, ArrowInstanceData)
         - DebugRender
     }
 
     // debug draw
+    destinationArrows : DebugArrowPrefab {
+        - Color {0.3, 0.3, 1.0, 1.0}
+        - QueryDesc {expr: "Position, Destination, Plane(up(bc.planes.IsOn)), (bc.actors.Action, bc.actors.Action.ActionMove)"}
+    }
+
     player : DebugDrawPrefab {
         - Color {0.6, 0.0, 0.8, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.MapVision"}

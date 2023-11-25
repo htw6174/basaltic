@@ -21,11 +21,6 @@ typedef struct {
     s16 localY;
 } hexmapVertexData;
 
-typedef struct {
-    vec4 position;
-    vec2 rootCoord;
-} chunkInstanceData;
-
 // Compressed version of bc_CellData used for rendering
 // TODO: deprecated, only go back to this if video memory starts to become an issue
 typedef struct {
@@ -219,7 +214,6 @@ void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTextur
 
 void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *dataTexture, u32 chunkIndex);
 
-void InitTerrainInstances(ecs_iter_t *it);
 void UpdateTerrainInstances(ecs_iter_t *it);
 
 void InitTerrainDataTexture(ecs_iter_t *it);
@@ -980,24 +974,6 @@ void UpdateHexTerrainBuffers(ecs_iter_t *it) {
     }
 }
 
-void InitTerrainInstances(ecs_iter_t *it) {
-    size_t instanceDataSize = sizeof(chunkInstanceData) * 64 * 64; // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
-
-    for (int i = 0; i < it->count; i++) {
-        // TODO: Make component destructor to free memory
-        chunkInstanceData *instanceData = malloc(instanceDataSize);
-
-        sg_buffer_desc vbd = {
-            .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .usage = SG_USAGE_DYNAMIC,
-            .size = instanceDataSize
-        };
-        sg_buffer instanceBuffer = sg_make_buffer(&vbd);
-
-        ecs_set(it->world, it->entities[i], InstanceBuffer, {.buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
-    }
-}
-
 void UpdateTerrainInstances(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 1);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
@@ -1005,7 +981,10 @@ void UpdateTerrainInstances(ecs_iter_t *it) {
     ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
 
     for (int i = 0; i < it->count; i++) {
-        chunkInstanceData *instanceData = instanceBuffers[i].data;
+        TerrainChunkInstanceData *instanceData = instanceBuffers[i].data;
+        if (instanceData == NULL) {
+            continue;
+        }
         u32 instanceCount = 0;
 
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
@@ -1017,7 +996,7 @@ void UpdateTerrainInstances(ecs_iter_t *it) {
                     float x, y;
                     htw_geo_getChunkRootPosition(cm, c, &x, &y);
                     htw_geo_GridCoord rootCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, 0);
-                    instanceData[instanceCount] = (chunkInstanceData){
+                    instanceData[instanceCount] = (TerrainChunkInstanceData){
                         .position = {{x, y, 0.0, 1.0}},
                         .rootCoord = {{rootCoord.x, rootCoord.y}}
                     };
@@ -1280,14 +1259,9 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
         [none] bcview.TerrainRender,
     );
 
-    ECS_OBSERVER(world, InitTerrainInstances, EcsOnAdd,
-               [out] InstanceBuffer,
-               [none] bcview.TerrainRender,
-    );
-
     ECS_SYSTEM(world, UpdateTerrainInstances, OnModelChanged,
                [in] ModelQuery,
-               [out] InstanceBuffer,
+               [out] (InstanceBuffer, TerrainChunkInstanceData),
                [in] ModelWorld($),
                [none] bcview.TerrainRender,
     );
@@ -1328,7 +1302,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, DrawHexTerrainShadows, OnPassShadow,
                [in] Pipeline(up(bcview.ShadowPass)),
-               [in] InstanceBuffer,
+               [in] (InstanceBuffer, TerrainChunkInstanceData),
                [in] Mesh,
                [in] DataTexture,
                [in] SunMatrix($),
@@ -1339,7 +1313,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, DrawPipelineHexTerrain, OnPassGBuffer,
                [in] Pipeline(up(bcview.GBufferPass)),
-               [in] InstanceBuffer,
+               [in] (InstanceBuffer, TerrainChunkInstanceData),
                [in] Mesh,
                [in] DataTexture,
                [in] RingBuffer,
@@ -1358,8 +1332,6 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [out] HoveredCell($),
                [none] bcview.TerrainRender,
     );
-
-    sg_reset_state_cache();
 
     // Pipeline, only need to create one per type
     ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "Terrain Pipeline");
@@ -1400,8 +1372,14 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_add_pair(world, terrainDraw, ShadowPass, terrainShadowPipeline);
     ecs_add(world, terrainDraw, TerrainRender);
     ecs_add(world, terrainDraw, TerrainBuffer);
-    ecs_add(world, terrainDraw, InstanceBuffer);
+    // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
+    //ecs_add_pair(world, terrainDraw, ecs_id(InstanceBuffer), ecs_id(TerrainChunkInstanceData));
     ecs_add(world, terrainDraw, QueryDesc);
     ecs_set_id(world, terrainDraw, ecs_id(Mesh), sizeof(mesh), &mesh);
     ecs_set_id(world, terrainDraw, ecs_id(RingBuffer), sizeof(pixelPackRingBuf), &pixelPackRingBuf);
 }
+
+
+
+
+

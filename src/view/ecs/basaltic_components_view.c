@@ -169,6 +169,10 @@ void BcviewImport(ecs_world_t *world) {
 
     ECS_COMPONENT_DEFINE(world, WrapInstanceOffsets);
     ECS_META_COMPONENT(world, InstanceBuffer);
+    ecs_add_id(world, ecs_id(InstanceBuffer), EcsAlwaysOverride);
+    ECS_META_COMPONENT(world, TerrainChunkInstanceData);
+    ECS_META_COMPONENT(world, DebugInstanceData);
+    ECS_META_COMPONENT(world, ArrowInstanceData);
     ECS_COMPONENT_DEFINE(world, Mesh);
     ECS_META_COMPONENT(world, Elements);
 

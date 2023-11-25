@@ -43,6 +43,9 @@ typedef struct {
     // TODO: light colors
 } LightingUniformsFS0;
 
+// TODO: should make instance buffers arbitrarially resizable
+const size_t MAX_INSTANCE_COUNT = 1024;
+
 #define COLOR_CLEAR {0.0f, 0.0f, 0.0f, 0.0f}
 
 static sg_pass_action shadowPassAction = {
@@ -570,6 +573,37 @@ void DestroyModelQueries(ecs_iter_t *it) {
     }
 }
 
+void InitInstanceBuffers(ecs_iter_t *it) {
+    InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 1);
+    ecs_entity_t instanceBufferTarget = ecs_pair_second(it->world, ecs_field_id(it, 1));
+    const EcsComponent *instanceComponent = ecs_get(it->world, instanceBufferTarget, EcsComponent);
+    if (instanceComponent == NULL) {
+        ecs_err("Cannot create buffer for InstanceBuffer target %s which is not a component", ecs_get_name(it->world, instanceBufferTarget));
+        return;
+    }
+    size_t instanceDataSize = instanceComponent->size * MAX_INSTANCE_COUNT;
+
+    for (int i = 0; i < it->count; i++) {
+        // TODO: Make component destructor to free memory
+        void *instanceData = malloc(instanceDataSize);
+
+        sg_buffer_desc vbd = {
+            .type = SG_BUFFERTYPE_VERTEXBUFFER,
+            .usage = SG_USAGE_DYNAMIC,
+            .size = instanceDataSize
+        };
+        sg_buffer instanceBuffer = sg_make_buffer(&vbd);
+
+        ibs[i] = (InstanceBuffer){
+            .maxInstances = MAX_INSTANCE_COUNT,
+            .instances = 0,
+            .buffer = instanceBuffer,
+            .size = instanceDataSize,
+            .data = instanceData
+        };
+    }
+}
+
 void DrawInstanceShadows(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
@@ -578,6 +612,9 @@ void DrawInstanceShadows(ecs_iter_t *it) {
     WrapInstanceOffsets *wraps = ecs_field(it, WrapInstanceOffsets, 5);
 
     for (int i = 0; i < it->count; i++) {
+        if (ibs[i].data == NULL) {
+            continue;
+        }
         sg_bindings bind = {
             .vertex_buffers[0] = ibs[0].buffer
         };
@@ -594,17 +631,23 @@ void DrawInstances(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     InstanceBuffer *ibs = ecs_field(it, InstanceBuffer, 2);
     Elements *eles = ecs_field(it, Elements, 3);
+    // constant sources
     PVMatrix *pvs = ecs_field(it, PVMatrix, 4);
     WrapInstanceOffsets *wraps = ecs_field(it, WrapInstanceOffsets, 5);
+    Clock *programClock = ecs_field(it, Clock, 6);
 
     for (int i = 0; i < it->count; i++) {
+        if (ibs[i].data == NULL) {
+            continue;
+        }
         sg_bindings bind = {
-            .vertex_buffers[0] = ibs[0].buffer
+            .vertex_buffers[0] = ibs[i].buffer
         };
 
         sg_apply_pipeline(pipelines[i].pipeline);
         sg_apply_bindings(&bind);
         sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(pvs[i]));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(*programClock));
 
         bc_drawWrapInstances(0, eles[i].count, ibs[i].instances, 1, (vec3){{0.0, 0.0, 0.0}}, wraps[i].offsets);
     }
@@ -887,9 +930,15 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [none] ModelWorld($)
     );
 
+    // NOTE: the * wildcard works here, while the _ (any) wildcard will never match without another term present (why?)
+    ECS_OBSERVER(world, InitInstanceBuffers, EcsOnAdd,
+        [inout] (InstanceBuffer, *)
+    );
+
+    // TODO: could easily make this an alias of the base DrawInstances callback, just need to remove the SunMatrix as a separate component, instead make component of a sun singleton
     ECS_SYSTEM(world, DrawInstanceShadows, OnPassShadow,
         [in] Pipeline(up(bcview.ShadowPass)),
-        [in] InstanceBuffer,
+        [in] (InstanceBuffer, _),
         [in] Elements,
         [in] SunMatrix($),
         [in] WrapInstanceOffsets($),
@@ -899,18 +948,20 @@ void BcviewSystemsImport(ecs_world_t *world) {
     // TODO: experiment with GroupBy to cluster draws with the same pipeline and/or bindings
     ECS_SYSTEM_ALIAS(world, DrawInstancesGBuffer, DrawInstances, OnPassGBuffer,
         [in] Pipeline(up(bcview.GBufferPass)), // NOTE: the source specifier "up(GBufferPass)" gets component from the entity which is target of GBufferPass relationship for $this
-        [in] InstanceBuffer,
+        [in] (InstanceBuffer, _),
         [in] Elements,
         [in] PVMatrix($),
-        [in] WrapInstanceOffsets($)
+        [in] WrapInstanceOffsets($),
+        [in] Clock($)
     );
 
     ECS_SYSTEM_ALIAS(world, DrawInstancesTransparent, DrawInstances, OnPassTransparent,
         [in] Pipeline(up(bcview.TransparentPass)),
-        [in] InstanceBuffer,
+        [in] (InstanceBuffer, _),
         [in] Elements,
         [in] PVMatrix($),
-        [in] WrapInstanceOffsets($)
+        [in] WrapInstanceOffsets($),
+        [in] Clock($)
     );
 
     // TODO: on load or on store?

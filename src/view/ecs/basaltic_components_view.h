@@ -378,6 +378,26 @@ ECS_STRUCT(InstanceBuffer, {
     sg_buffer buffer;
 });
 
+// *InstanceData: Used to define data layout for shaders, and what is expected when filling InstanceBuffers. InstanceBuffers should always be associated with a specific type of instance data by making it the target of a pair e.g. (InstanceBuffer, DebugInstanceData)
+ECS_STRUCT(TerrainChunkInstanceData, {
+    vec4 position;
+    vec2 rootCoord;
+});
+
+ECS_STRUCT(DebugInstanceData, {
+    vec4 position;
+    Color color;
+    float scale;
+});
+
+ECS_STRUCT(ArrowInstanceData, {
+    vec3 start;
+    vec3 end;
+    Color color;
+    float width;
+    float speed;
+});
+
 /** Immutable buffers */
 ECS_STRUCT(Mesh, {
     sg_buffer vertexBuffers[SG_MAX_VERTEX_BUFFERS - 1]; // 0th vertex buffer reserved for instance buffer

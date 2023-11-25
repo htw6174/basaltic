@@ -7,23 +7,6 @@
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
 
-const size_t DEBUG_INSTANCE_COUNT = 1024;
-
-// TODO: make a more general instance data struct. This style of instanced rendering will be used for most draw queries. Can add to this slightly for more versatility (single axis rotation etc.), and add consistancy to the fields required for filling instance buffers (Position, (IsOn _))
-typedef struct {
-    vec4 position;
-    vec4 color;
-    float scale;
-} DebugInstanceData;
-
-typedef struct {
-    vec3 start;
-    vec3 end;
-    vec4 color;
-    float scale;
-    float speed;
-} ArrowInstanceData;
-
 static sg_shader_desc debugShadowShaderDescription = {
     .vs.uniform_blocks[0] = {
         .size = sizeof(PVMatrix),
@@ -80,6 +63,14 @@ static sg_shader_desc debugShaderDescription = {
             [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
         }
     },
+    // Global uniforms
+    .fs.uniform_blocks[0] = {
+        .size = sizeof(float),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "time", .type = SG_UNIFORMTYPE_FLOAT}
+        }
+    },
     .vs.source = NULL,
     .fs.source = NULL
 };
@@ -133,7 +124,14 @@ static sg_pipeline_desc debugArrowPipelineDescription = {
     .cull_mode = SG_CULLMODE_NONE,
     .color_count = 1,
     .colors = {
-        [0] = {.pixel_format = SG_PIXELFORMAT_RGBA8, .blend.enabled = true}
+        [0] = {
+            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .blend = {
+                .enabled = true,
+                .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA
+            }
+        }
     }
 };
 
@@ -165,38 +163,20 @@ static sg_pipeline_desc debugRTPipelineDescription = {
     .label = "debug-RT-pipeline",
 };
 
-// TODO: can generalize this by requiring instance size and count
-void InitDebugBuffers(ecs_iter_t *it) {
-    size_t instanceDataSize = sizeof(DebugInstanceData) * DEBUG_INSTANCE_COUNT;
-
-    for (int i = 0; i < it->count; i++) {
-        // TODO: Make component destructor to free memory
-        DebugInstanceData *instanceData = malloc(instanceDataSize);
-
-        sg_buffer_desc vbd = {
-            .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .usage = SG_USAGE_DYNAMIC,
-            .size = instanceDataSize
-        };
-        sg_buffer instanceBuffer = sg_make_buffer(&vbd);
-
-        ecs_set(it->world, it->entities[i], InstanceBuffer, {.maxInstances = DEBUG_INSTANCE_COUNT, .instances = 0, .buffer = instanceBuffer, .size = instanceDataSize, .data = instanceData});
-        ecs_set(it->world, it->entities[i], Elements, {24});
-    }
-
-}
-
 void UpdateDebugBuffers(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 1);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
     // Optional term, may be null
     Color *colors = ecs_field(it, Color, 3);
-
-    const vec3 *scale = ecs_singleton_get(it->world, Scale);
-    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+    // constant source
+    const vec3 *scale = ecs_field(it, Scale, 4);
+    ecs_world_t *modelWorld = ecs_field(it, ModelWorld, 5)->world;
 
     for (int i = 0; i < it->count; i++) {
         DebugInstanceData *instanceData = instanceBuffers[i].data;
+        if (instanceData == NULL) {
+            continue;
+        }
         u32 instanceCount = 0;
 
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
@@ -214,6 +194,50 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
                     .position = {.xyz = vec3MultiplyVector((vec3){{posX, posY, elevation}}, *scale), .__w = 1.0},
                     .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
                     .scale = 1.0
+                };
+                instanceCount++;
+            }
+        }
+        instanceBuffers[i].instances = instanceCount;
+        sg_update_buffer(instanceBuffers[i].buffer, &(sg_range){.ptr = instanceData, .size = instanceBuffers[i].size});
+    }
+}
+
+void UpdateArrowBuffers(ecs_iter_t *it) {
+    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
+    // Optional term, may be null
+    Color *colors = ecs_field(it, Color, 3);
+    // constant source
+    const vec3 *scale = ecs_field(it, Scale, 4);
+    ecs_world_t *modelWorld = ecs_field(it, ModelWorld, 5)->world;
+
+    for (int i = 0; i < it->count; i++) {
+        ArrowInstanceData *instanceData = instanceBuffers[i].data;
+        if (instanceData == NULL) {
+            continue;
+        }
+        u32 instanceCount = 0;
+
+        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
+        while (ecs_query_next(&mit)) {
+            Position *positions = ecs_field(&mit, Position, 1);
+            Position *destinations = ecs_field(&mit, Destination, 2);
+            // constant source
+            Plane *plane = ecs_field(&mit, Plane, 3);
+            htw_ChunkMap *cm = plane->chunkMap;
+            for (int m = 0; m < mit.count && instanceCount < instanceBuffers[i].maxInstances; m++) {
+                CellData *posCell = htw_geo_getCell(cm, positions[m]);
+                CellData *destCell = htw_geo_getCell(cm, destinations[m]);
+                float startX, startY, endX, endY;
+                htw_geo_getHexCellPositionSkewed(positions[m], &startX, &startY);
+                htw_geo_getHexCellPositionSkewed(destinations[m], &endX, &endY);
+                instanceData[instanceCount] = (ArrowInstanceData){
+                    .start = vec3MultiplyVector((vec3){{startX, startY, posCell->height + 1}}, *scale),
+                    .end = vec3MultiplyVector((vec3){{endX, endY, destCell->height + 1}}, *scale),
+                    .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
+                    .width = 0.2,
+                    .speed = 1.0
                 };
                 instanceCount++;
             }
@@ -251,15 +275,18 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
 
-    ECS_OBSERVER(world, InitDebugBuffers, EcsOnAdd,
-        [out] InstanceBuffer,
-        [out] ?Elements,
+    ECS_SYSTEM(world, UpdateDebugBuffers, OnModelChanged,
+        [in] ModelQuery,
+        [inout] (InstanceBuffer, DebugInstanceData),
+        [in] ?Color,
+        [in] Scale($),
+        [in] ModelWorld($),
         [none] bcview.DebugRender
     );
 
-    ECS_SYSTEM(world, UpdateDebugBuffers, OnModelChanged,
+    ECS_SYSTEM(world, UpdateArrowBuffers, OnModelChanged,
         [in] ModelQuery,
-        [inout] InstanceBuffer,
+        [inout] (InstanceBuffer, ArrowInstanceData),
         [in] ?Color,
         [in] Scale($),
         [in] ModelWorld($),
@@ -288,6 +315,12 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set_pair(world, debugPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debug.vert"});
     ecs_set_pair(world, debugPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug.frag"});
     ecs_set(world, debugPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugPipelineDescription});
+
+    ecs_entity_t debugArrowPipeline = ecs_set_name(world, 0, "DebugArrowPipeline");
+    ecs_add_pair(world, debugArrowPipeline, EcsChildOf, TransparentPass);
+    ecs_set_pair(world, debugArrowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/debugArrow.vert"});
+    ecs_set_pair(world, debugArrowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debugArrow.frag"});
+    ecs_set(world, debugArrowPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugArrowPipelineDescription});
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
     ecs_add_pair(world, debugRTPipeline, EcsChildOf, LightingPass);
