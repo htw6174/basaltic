@@ -6,6 +6,17 @@ void BcPlanesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcPlanes);
 
     ECS_META_COMPONENT(world, SpatialStorage);
+
+    ECS_COMPONENT_DEFINE(world, CellWaterways);
+    ecs_struct(world, {
+        .entity = ecs_id(CellWaterways),
+        .members = {
+            { .name = "opaque", .type = ecs_id(ecs_u32_t) }
+        }
+    });
+
+    ECS_META_COMPONENT(world, RiverSegment);
+
     ECS_META_COMPONENT(world, CellData);
     { // Add range to CellData members
         ecs_entity_t e;
@@ -23,14 +34,18 @@ void BcPlanesImport(ecs_world_t *world) {
         ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
         e = ecs_lookup_child(world, ecs_id(CellData), "humidityPreference");
         ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
+        e = ecs_lookup_child(world, ecs_id(CellData), "waterways");
+        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
         e = ecs_lookup_child(world, ecs_id(CellData), "understory");
         ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
         e = ecs_lookup_child(world, ecs_id(CellData), "canopy");
         ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
     }
 
-    ECS_META_COMPONENT(world, Plane);
+    ECS_META_COMPONENT(world, ClimateType);
     ECS_META_COMPONENT(world, Season);
+    ECS_META_COMPONENT(world, Climate);
+    ECS_META_COMPONENT(world, Plane);
 
     ECS_META_COMPONENT(world, HexDirection);
 
@@ -181,11 +196,42 @@ CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellInde
     return &cell[cellIndex];
 }
 
+s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos) {
+    if (climate == NULL) {
+        return 2000; // Neutral ambient temperature if climate is undefined
+    }
+    s32 biotemp;
+    switch(climate->type) {
+        case CLIMATE_TYPE_UNIFORM:
+            biotemp = climate->equatorBiotemp;
+            break;
+        case CLIMATE_TYPE_RADIAL:
+            biotemp = htw_geo_circularGradientByGridCoord(
+                plane->chunkMap,
+                pos,
+                (htw_geo_GridCoord){0, 0},
+                climate->poleBiotemp,
+                climate->equatorBiotemp,
+                plane->chunkMap->mapHeight * 0.57735 // = outer radius of equilateral triangle = edge / sqrt(3)
+            );
+            break;
+        case CLIMATE_TYPE_BANDS:
+            // TODO
+        default:
+            ecs_err("Unhandled Climate Type: %u", climate->type);
+            biotemp = 2000;
+            break;
+    }
+
+    s32 elevation = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
+    return biotemp + climate->season.temperatureModifier + (abs(elevation) * climate->tempChangePerElevationStep);
+}
+
 s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
     // "Temperatures in the atmosphere decrease with height at an average rate of 6.5 °C per kilometer"; height steps are 100m
     const s32 centicelsiusPerHeightUnit = -65;
     s32 latitudeTemp = htw_geo_circularGradientByGridCoord(
-        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -2000, 4000, plane->chunkMap->mapHeight * 0.67);
+        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -2000, 4000, plane->chunkMap->mapHeight * 0.57735);
     s32 altitude = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
     return latitudeTemp + (abs(altitude) * centicelsiusPerHeightUnit);
 }

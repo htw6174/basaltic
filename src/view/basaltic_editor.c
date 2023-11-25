@@ -530,6 +530,7 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
 
 bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity) {
     const Plane *p = ecs_get(world, plane, Plane);
+    const Climate *climate = ecs_get(world, plane, Climate);
     htw_ChunkMap *cm = p->chunkMap;
     bool edited = false;
 
@@ -558,23 +559,35 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         edited |= igInputScalar("Height", ImGuiDataType_S8, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
         edited |= igInputScalar("Geology", ImGuiDataType_U16, &(cellData->geology), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Tracks", ImGuiDataType_U16, &(cellData->tracks), &smallWaterStep, &bigWaterStep, NULL, 0);
+        igSameLine(0, -1);
+        igText("%.1f%%", 100.0 * (float)cellData->tracks / (float)UINT16_MAX);
         edited |= igInputScalar("Groundwater", ImGuiDataType_S16, &(cellData->groundwater), &smallWaterStep, &bigWaterStep, NULL, 0);
+        igSameLine(0, -1);
+        if (cellData->groundwater < 0) {
+            igText("days without water: %d", cellData->groundwater / -24);
+        } else {
+            igText("%.1f%%", 100.0 * (float)cellData->groundwater / (float)INT16_MAX);
+        }
         edited |= igInputScalar("Surface Water", ImGuiDataType_U16, &(cellData->surfacewater), &smallWaterStep, &bigWaterStep, NULL, 0);
+        igSameLine(0, -1);
+        igText("%.1f%%", 100.0 * (float)cellData->surfacewater / (float)UINT16_MAX);
         edited |= igInputScalar("Humidity Preference", ImGuiDataType_U16, &(cellData->humidityPreference), &smallWaterStep, &bigWaterStep, NULL, 0);
+        igSameLine(0, -1);
+        igText("%.1f%%", 100.0 * (float)cellData->humidityPreference / (float)UINT16_MAX);
         edited |= igInputScalar("Understory", ImGuiDataType_U32, &(cellData->understory), &smallVegStep, &bigVegStep, NULL, 0);
         igSameLine(0, -1);
-        igText("%%%.1f", 100.0 * (float)cellData->understory / (float)UINT32_MAX);
+        igText("%.1f%%", 100.0 * (float)cellData->understory / (float)UINT32_MAX);
         edited |= igInputScalar("Canopy", ImGuiDataType_U32, &(cellData->canopy), &smallVegStep, &bigVegStep, NULL, 0);
         igSameLine(0, -1);
-        igText("%%%.1f", 100.0 * (float)cellData->canopy / (float)UINT32_MAX);
+        igText("%.1f%%", 100.0 * (float)cellData->canopy / (float)UINT32_MAX);
         edited |= igSliderScalar("Visibility", ImGuiDataType_U8, &(cellData->visibility), &minVisibility, &maxVisibility, NULL, 0);
         igPopItemWidth();
 
         igText("Derived Cell Info:");
         s32 altitudeMeters = cellData->height * 100;
         igText("Altitude: %im", altitudeMeters);
-        float biotemp = (float)plane_GetCellBiotemperature(p, coord) / 100.0;
-        igText("Biotemperature: %.2f °C", biotemp);
+        float temp = (float)plane_GetCellTemperature(p, climate, coord) / 100.0; // convert to celsius
+        igText("Temperature: %.2f °C / %.2f °F", temp, temp * (9.0 / 5.0) + 32.0);
     }
 
     if (igCollapsingHeader_TreeNodeFlags("Cell Entities", ImGuiTreeNodeFlags_DefaultOpen)) {

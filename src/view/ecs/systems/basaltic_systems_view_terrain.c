@@ -212,7 +212,7 @@ Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
 void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
-void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *dataTexture, u32 chunkIndex);
+void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTexture, u32 chunkIndex);
 
 void UpdateTerrainInstances(ecs_iter_t *it);
 
@@ -861,7 +861,7 @@ void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTextur
     }
 }
 
-void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *dataTexture, u32 chunkIndex) {
+void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTexture, u32 chunkIndex) {
     const u32 width = bc_chunkSize;
     const u32 height = bc_chunkSize;
     htw_ChunkMap *chunkMap = plane->chunkMap;
@@ -888,8 +888,8 @@ void updateDataTextureChunk(Plane *plane, s32 temperatureModifier, DataTexture *
              * - canopy coverage
              * - temperature
              */
-            s32 biotemp = plane_GetCellBiotemperature(plane, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
-            u8 tempIndex = remap_int(biotemp + temperatureModifier, -3000, 3000, 0, UINT8_MAX);
+            s32 temp = plane_GetCellTemperature(plane, climate, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
+            u8 tempIndex = remap_int(temp, -3000, 3000, 0, UINT8_MAX);
 
             // Cast to u32 before shifting so that sign bits stay with the packed value
             // Continuous values compressed to 8-bit range
@@ -927,7 +927,7 @@ void InitTerrainBuffers(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         ecs_set(it->world, it->entities[i], QueryDesc, {
-            .expr = "[in] bc.planes.Plane, [in] ?bc.planes.Season"
+            .expr = "[in] bc.planes.Plane, [in] ?bc.planes.Climate"
         });
 
         u32 visibilityRadius = rd[i].radius;
@@ -1069,15 +1069,15 @@ void UpdateTerrainDataTexture(ecs_iter_t *it) {
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
         while (ecs_query_next(&mit)) {
             Plane *planes = ecs_field(&mit, Plane, 1);
-            // optional seasons
+            // optional climate
             if (ecs_field_is_set(&mit, 2)) {
-                Season *seasons = ecs_field(&mit, Season, 2);
+                Climate *climates = ecs_field(&mit, Climate, 2);
 
                 for (int m = 0; m < mit.count; m++) {
                     htw_ChunkMap *cm = planes[m].chunkMap;
                     DataTexture dt = dataTextures[i];
                     for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
-                        updateDataTextureChunk(&planes[m], seasons[i].temperatureModifier, &dt, c);
+                        updateDataTextureChunk(&planes[m], &climates[m], &dt, c);
                     }
 
                     sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
@@ -1087,7 +1087,7 @@ void UpdateTerrainDataTexture(ecs_iter_t *it) {
                     htw_ChunkMap *cm = planes[m].chunkMap;
                     DataTexture dt = dataTextures[i];
                     for (int c = 0; c < (cm->chunkCountX * cm->chunkCountY); c++) {
-                        updateDataTextureChunk(&planes[m], 0, &dt, c);
+                        updateDataTextureChunk(&planes[m], NULL, &dt, c);
                     }
 
                     sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
@@ -1113,7 +1113,7 @@ void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
                 for (int m = 0; m < mit.count; m++) {
                     DataTexture dt = dataTextures[i];
                     for (int c = 0; c < (dirty[i].count); c++) {
-                        updateDataTextureChunk(&planes[m], 0, &dt, dirty[i].chunks[c]);
+                        updateDataTextureChunk(&planes[m], NULL, &dt, dirty[i].chunks[c]);
                     }
                     sg_update_image(dt.image, &(sg_image_data){.subimage[0][0] = {dt.data, dt.size}});
                 }

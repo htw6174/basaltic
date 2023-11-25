@@ -33,6 +33,38 @@ ECS_STRUCT(SpatialStorage, {
     khash_t(WorldMap) *hashMap;
 });
 
+typedef struct {
+    // 0 = no river segment
+    unsigned
+    riverSizeNE : 3,
+    riverSizeE  : 3,
+    riverSizeSE : 3,
+    riverSizeSW : 3,
+    riverSizeW  : 3,
+    riverSizeNW : 3;
+
+    // 0 = clockwise around cell, 1 = counter-clockwise around cell
+    bool
+    riverDirNE  : 1,
+    riverDirE   : 1,
+    riverDirSE  : 1,
+    riverDirSW  : 1,
+    riverDirW   : 1,
+    riverDirNW  : 1;
+
+    // last 6 bits unused, may be used for on-cell lakes in future
+    // could use a few to store type of waterway, e.g. lake, swamp, estuary
+    unsigned : 6;
+} CellWaterways;
+
+BC_DECL ECS_COMPONENT_DECLARE(CellWaterways);
+
+// Expanded, inspectable form of river segment data usually packed into CellWaterways
+ECS_STRUCT(RiverSegment, {
+    u8 size; // range [0, 7]
+    bool direction; // 0 = clockwise around cell, 1 = counter-clockwise around cell TODO make an enum for this?
+});
+
 // Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though
 ECS_STRUCT(CellData, {
     s8 height; // Each height step represents 100m of elevation change
@@ -42,12 +74,18 @@ ECS_STRUCT(CellData, {
     s16 groundwater; // If > 0: Units currently undefined, base decrease of 1/hour; if <= 0: Represents number of hours without groundwater, always decreases by 1/hour
     u16 surfacewater; // Converts into groundwater and evaporates over time, rate based on geology and vegetation
     u16 humidityPreference; // Type of vegetation growing here; the higher this is, the less time water can be unavailable before vegetation starts dying off. Moves toward average water availability over time
+    CellWaterways waterways;
     u32 understory; // Units currently undefined; biomass of grasses, shrubs, etc.
     u32 canopy; // Units currently undefined; biomass of trees
 });
 
-ECS_STRUCT(Plane, {
-    htw_ChunkMap *chunkMap;
+ECS_ENUM(ClimateType, {
+    // Uses equator temp everywhere
+    CLIMATE_TYPE_UNIFORM,
+    // Gradient from pole temp at world origin to equator temp at farthest distance from origin
+    CLIMATE_TYPE_RADIAL,
+    // Gradient from pole temp at y = 0, to equator temp at y = height / 2, to pole temp at y = height
+    CLIMATE_TYPE_BANDS
 });
 
 // temperature modifer is 0 at start, middle, and end of season cycle, first rising to +range then descending to -range
@@ -56,6 +94,20 @@ ECS_STRUCT(Season, {
     s32 temperatureModifier; // in centicelsius
     u32 cycleLength; // in hours
     u32 cycleProgress; // in hours
+});
+
+// Temperature units are in centicelsius
+ECS_STRUCT(Climate, {
+    s32 poleBiotemp;
+    s32 equatorBiotemp;
+    // If negative, gets colder farther from sea level (height = 0)
+    s32 tempChangePerElevationStep;
+    ClimateType type;
+    Season season;
+});
+
+ECS_STRUCT(Plane, {
+    htw_ChunkMap *chunkMap;
 });
 
 ECS_ENUM(HexDirection, {
@@ -86,6 +138,9 @@ void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Po
 
 CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
 
+
+s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos);
+
 /**
  * @brief Represents mean annual temperature at a cell on the plane, determined by distance to the plane origin and cell height. Approximate range from -30c to +30c
  *
@@ -93,7 +148,7 @@ CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellInde
  * @param pos p_pos:...
  * @return Biotemperature in centicelsius (degrees celsius * 100)
  */
-s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
+//s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
 
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

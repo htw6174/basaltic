@@ -229,6 +229,10 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
         return;
     }
     const EcsPrimitive *prim = ecs_get(it->world, member->type, EcsPrimitive);
+    if (!prim) {
+        ecs_err("Target of BrushField is not a primitive type and cannot be painted with AdditiveBrush");
+        return;
+    }
 
     ptrdiff_t offset = member->offset;
 

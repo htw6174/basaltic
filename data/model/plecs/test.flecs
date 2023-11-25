@@ -13,8 +13,14 @@ const TAU = 6.283185
 
 // Overworld setup
 Overworld {
-    // +/- 10c over a year
-    - Season {temperatureRange: 1000, cycleLength: 24 * 360}
+    - Climate {
+        poleBiotemp: 4000,
+        equatorBiotemp: -2000,
+        tempChangePerElevationStep: -65,
+        type: CLIMATE_TYPE_RADIAL,
+        // +/- 10c over a year
+        season: {temperatureRange: 1000, cycleLength: 24 * 360}
+    }
 }
 
 Prefab ActorPrefab {

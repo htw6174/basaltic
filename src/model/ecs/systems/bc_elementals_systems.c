@@ -174,7 +174,7 @@ void PrepStorm(ecs_iter_t *it) {
     // constant sources
     Plane *plane = ecs_field(it, Plane, 5);
     htw_ChunkMap *cm = plane->chunkMap;
-    Season *season = ecs_field(it, Season, 6);
+    Climate *climate = ecs_field(it, Climate, 6);
 
     for (int i = 0; i < it->count; i++) {
         Position pos = positions[i];
@@ -183,7 +183,7 @@ void PrepStorm(ecs_iter_t *it) {
         CellData *cell = htw_geo_getCell(cm, pos);
         CellData *destCell = htw_geo_getCell(cm, destinations[i]);
         // get temperature in centicelsius TODO: factor in
-        s32 temp = plane_GetCellBiotemperature(plane, pos) + season->temperatureModifier;
+        s32 temp = plane_GetCellTemperature(plane, climate, pos);
         // Get slope between current and destination cell, only matters if destination isn't over the ocean
         s32 slope = destCell->height < 0 ? 0 : destCell->height - cell->height;
         if (cell->height < 0) {
@@ -358,7 +358,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
         [inout] SpiritPower,
         [inout] StormCloud,
         [in] Plane(up(bc.planes.IsOn)),
-        [in] Season(up(bc.planes.IsOn))
+        [in] Climate(up(bc.planes.IsOn))
     );
 
     ECS_SYSTEM(world, ExecuteShiftPlates, Execution,
