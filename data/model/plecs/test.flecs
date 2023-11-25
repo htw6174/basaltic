@@ -14,12 +14,13 @@ const TAU = 6.283185
 // Overworld setup
 Overworld {
     - Climate {
+        // hot in center of map with a frozen ring enclosing the world
         poleBiotemp: 4000,
-        equatorBiotemp: -2000,
+        equatorBiotemp: -1500,
         tempChangePerElevationStep: -65,
         type: CLIMATE_TYPE_RADIAL,
-        // +/- 10c over a year
-        season: {temperatureRange: 1000, cycleLength: 24 * 360}
+        // 40c range over a year
+        season: {temperatureRange: 2000, cycleLength: 24 * 360}
     }
 }
 
@@ -146,7 +147,7 @@ Prefab StormSpirit {
     - OVERRIDE|SpiritPower
     - OVERRIDE|StormCloud
     - SpiritPower {maxValue: 65535}
-    - StormCloud {radius: 3, maxDuration: 100}
+    - StormCloud {radius: 5, maxDuration: 100}
     - (IsOn, Overworld)
     - (Description, Brief) {"Storm spirits move with the wind, gathering energy from warm bodies of water and releasing it as rain"}
 }

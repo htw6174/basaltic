@@ -44,8 +44,8 @@ ECS_STRUCT(PlateShiftStrength, {
 ECS_STRUCT(StormCloud, {
     bool isStorming;
     u32 radius; // in tiles
-    u32 maxDuration;
-    u32 currentDuration;
+    s32 maxDuration;
+    s32 currentDuration;
 });
 
 typedef float AngleRadians;

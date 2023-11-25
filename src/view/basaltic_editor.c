@@ -353,6 +353,21 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                     }
                     ecs_enable(viewWorld, terrainBindGroup, terrainBindActive);
                 }
+                // Doesn't change bindings, just shows an inspector for river segments on selected tile
+                if (igBeginTabItem("Edit Rivers", NULL, ImGuiTabItemFlags_None)) {
+                    const SelectedCell *selected = ecs_singleton_get(viewWorld, SelectedCell);
+                    const FocusPlane *fp = ecs_singleton_get(viewWorld, FocusPlane);
+                    const Plane *plane = ecs_get(worldState->ecsWorld, fp->entity, Plane);
+                    CellData *cell = htw_geo_getCell(plane->chunkMap, (htw_geo_GridCoord){selected->x, selected->y});
+                    CellWaterways ww = cell->waterways;
+                    RiverSegment rs = {.size = ww.riverSizeE, .direction = ww.riverDirE};
+                    igSliderInt("East", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Flip Direction", &rs.direction);
+                    ww.riverSizeE = rs.size;
+                    ww.riverDirE = rs.direction;
+
+                    igEndTabItem();
+                }
                 if (actorBindGroup) {
                     bool actorBindActive = igBeginTabItem("Create Actors", NULL, ImGuiTabItemFlags_None);
                     if (actorBindActive) {

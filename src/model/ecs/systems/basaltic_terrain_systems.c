@@ -18,7 +18,7 @@ void TickSeasons(ecs_iter_t *it) {
         Season *season = &climates[i].season;
         season->cycleProgress = (season->cycleProgress + 1) % season->cycleLength;
         season->temperatureModifier =
-            sinf( ((float)season->cycleProgress * PI) / season->cycleLength ) * season->temperatureRange;
+            sinf( ((float)season->cycleProgress * TAU) / season->cycleLength ) * season->temperatureRange;
     }
 }
 

@@ -195,7 +195,9 @@ void PrepStorm(ecs_iter_t *it) {
 
         if (storm->isStorming) {
             // apply rain
-            u32 area = htw_geo_getHexArea(storm->radius);
+            // less accumulated energy = smaller storm area
+            u32 radius = ((float)(storm->radius * sp->value) / sp->maxValue) + 1;
+            u32 area = htw_geo_getHexArea(radius);
             htw_geo_CubeCoord cubeCoord = {0, 0, 0};
             for (int i = 0; i < area; i++) {
                 htw_geo_GridCoord gridCoord = htw_geo_cubeToGridCoord(cubeCoord);
@@ -213,6 +215,8 @@ void PrepStorm(ecs_iter_t *it) {
 
             // determine if storm should end
             s32 dc = storm->maxDuration - storm->currentDuration;
+            // 5% increased difficulty per unit of slope
+            dc += slope * storm->maxDuration * 0.05;
             s32 roll = htw_rtd(1, storm->maxDuration, NULL);
             if (roll >= dc || sp->value <= 0) {
                 storm->isStorming = false;
@@ -223,10 +227,12 @@ void PrepStorm(ecs_iter_t *it) {
         } else {
             // determine if storm should start
             s32 dc = storm->maxDuration - storm->currentDuration;
-            // 5% increased chance per unit of slope
+            // 5% decreased difficulty per unit of slope
             dc -= slope * storm->maxDuration * 0.05;
-            // 20% increased chance if at max power
-            dc += sp->value >= sp->maxValue ? 20 : 0;
+            // 50% increased difficulty if below max power
+            // up to 100% increased difficulty depending on available power
+            dc += ((float)(storm->maxDuration * sp->value) / sp->maxValue);
+            //dc += sp->value < sp->maxValue ? storm->maxDuration * 0.5 : 0;
             s32 roll = htw_rtd(1, storm->maxDuration, NULL);
             if (roll >= dc) {
                 storm->isStorming = true;

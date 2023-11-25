@@ -61,7 +61,7 @@ BC_DECL ECS_COMPONENT_DECLARE(CellWaterways);
 
 // Expanded, inspectable form of river segment data usually packed into CellWaterways
 ECS_STRUCT(RiverSegment, {
-    u8 size; // range [0, 7]
+    s32 size; // range [0, 7]
     bool direction; // 0 = clockwise around cell, 1 = counter-clockwise around cell TODO make an enum for this?
 });
 

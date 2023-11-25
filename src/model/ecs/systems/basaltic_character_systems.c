@@ -370,7 +370,7 @@ void executeFeed(ecs_iter_t *it) {
             CellData *cell = htw_geo_getCell(cm, positions[i]);
             s64 understory = cell->understory;
             s64 tracks = cell->tracks;
-            s64 required = groups[i].count * 4096; // TODO: multiply by size?; TODO: this number is a hacky way to represent expected consumption with 32-bit veg range
+            s64 required = groups[i].count * 4096 * 5; // TODO: multiply by size?; TODO: this number is a hacky way to represent expected consumption with 32-bit veg range
             s64 consumed = MIN(understory, required);
             understory -= consumed;
             tracks += groups[i].count; // * size^2?
