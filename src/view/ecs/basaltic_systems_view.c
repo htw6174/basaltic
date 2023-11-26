@@ -44,7 +44,7 @@ typedef struct {
 } LightingUniformsFS0;
 
 // TODO: should make instance buffers arbitrarially resizable
-const size_t MAX_INSTANCE_COUNT = 1024;
+const s32 MIN_INSTANCE_COUNT = 1024;
 
 #define COLOR_CLEAR {0.0f, 0.0f, 0.0f, 0.0f}
 
@@ -581,9 +581,11 @@ void InitInstanceBuffers(ecs_iter_t *it) {
         ecs_err("Cannot create buffer for InstanceBuffer target %s which is not a component", ecs_get_name(it->world, instanceBufferTarget));
         return;
     }
-    size_t instanceDataSize = instanceComponent->size * MAX_INSTANCE_COUNT;
 
     for (int i = 0; i < it->count; i++) {
+        s32 maxInstances = MAX(MIN_INSTANCE_COUNT, ibs[i].maxInstances);
+        size_t instanceDataSize = instanceComponent->size * maxInstances;
+
         // TODO: Make component destructor to free memory
         void *instanceData = malloc(instanceDataSize);
 
@@ -595,7 +597,7 @@ void InitInstanceBuffers(ecs_iter_t *it) {
         sg_buffer instanceBuffer = sg_make_buffer(&vbd);
 
         ibs[i] = (InstanceBuffer){
-            .maxInstances = MAX_INSTANCE_COUNT,
+            .maxInstances = maxInstances,
             .instances = 0,
             .buffer = instanceBuffer,
             .size = instanceDataSize,
@@ -741,6 +743,13 @@ void CycleRingBuffers(ecs_iter_t *it) {
         rbs[i].readableBuffer = rbs[i]._buffers[rbs[i]._head];
         rbs[i]._head  = (rbs[i]._head + 1) % RING_BUFFER_LENGTH;
     }
+}
+
+// Backup to periodically update view with model data if changes didn't cuase renderOutdated to be set
+void ExtraModelRefresh(ecs_iter_t *it) {
+    ModelWorld *mw = ecs_field(it, ModelWorld, 1);
+
+    mw->renderOutdated = true;
 }
 
 void BcviewSystemsImport(ecs_world_t *world) {
@@ -891,7 +900,6 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] !Pipeline,
     );
 
-    // TODO: allow setting a limited update rate for this system
     ECS_SYSTEM(world, ReloadPipelines, EcsOnUpdate,
         [inout] (ResourceFile, bcview.VertexShaderSource),
         [inout] (ResourceFile, bcview.FragmentShaderSource),
@@ -899,8 +907,14 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] Pipeline,
     );
 
+    ECS_SYSTEM(world, ExtraModelRefresh, EcsPreUpdate,
+        [out] ModelWorld($)
+    );
+
+    // Limit refresh and reload to once per second
     ecs_entity_t reloadTick = ecs_set_interval(world, 0, 1.0);
     ecs_set_tick_source(world, ReloadPipelines, reloadTick);
+    ecs_set_tick_source(world, ExtraModelRefresh, reloadTick);
 
     //ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
 

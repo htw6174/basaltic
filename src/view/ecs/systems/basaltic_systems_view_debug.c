@@ -247,6 +247,106 @@ void UpdateArrowBuffers(ecs_iter_t *it) {
     }
 }
 
+void UpdateRiverArrowBuffers(ecs_iter_t *it) {
+    InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 1);
+    // Optional term, may be null
+    Color *colors = ecs_field(it, Color, 2);
+    // constant source
+    const vec3 *scale = ecs_field(it, Scale, 3);
+    ecs_world_t *modelWorld = ecs_field(it, ModelWorld, 4)->world;
+    const FocusPlane *fp = ecs_field(it, FocusPlane, 5);
+
+    for (int i = 0; i < it->count; i++) {
+        ArrowInstanceData *instanceData = instanceBuffers[i].data;
+        if (instanceData == NULL) {
+            continue;
+        }
+        u32 instanceCount = 0;
+
+        const Plane *plane = ecs_get(modelWorld, fp->entity, Plane);
+        htw_ChunkMap *cm = plane->chunkMap;
+
+        for (int y = 0; y < cm->mapHeight; y++) {
+            for (int x = 0; x < cm->mapWidth && instanceCount < instanceBuffers[i].maxInstances - 1; x++) { // may create 2 instances
+                htw_geo_GridCoord cellCoord = {x, y};
+                CellData *cell = htw_geo_getCell(cm, cellCoord);
+                float posX, posY;
+                htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
+                vec3 cellPos = {{posX, posY, cell->height + 1}};
+                u32 ww = *(u32*)&cell->waterways; // extremely dubious
+                for (int d = 0; d < HEX_DIR_COUNT; d++) {
+                    // tricky part: can't get waterways members in an indexed fashion, instead use bitmasks
+                    u32 shift = d * 5;
+                    u32 river = ww >> shift;
+                    u32 sizeMask = (1 << 4) - 1;
+                    u32 size = river & sizeMask;
+                    u32 dirMask = 1 << 3;
+                    bool dir = (river & dirMask) > 0;
+                    u32 twinMask = 1 << 4;
+                    bool toTwin = (river & twinMask) > 0;
+
+                    if (size > 0) {
+                        s32 c1 = d;
+                        s32 c2 = (c1 + 1) % HEX_CORNER_COUNT;
+                        if (dir) {
+                            // runs in counter-clockwise direction, swap endpoints
+                            s32 temp = c1;
+                            c1 = c2;
+                            c2 = temp;
+                        }
+                        vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
+                        vec3 relEnd = {{htw_geo_hexCornerPositions[c2][0], htw_geo_hexCornerPositions[c2][1], 0.0}};
+                        const float contract = 0.67; // bring rivers toward center of cell
+                        vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
+                        vec3 end = vec3Add(cellPos, vec3Multiply(relEnd, contract));
+
+                        instanceData[instanceCount] = (ArrowInstanceData){
+                            .start = vec3MultiplyVector(start, *scale),
+                            .end = vec3MultiplyVector(end, *scale),
+                            .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
+                            .width = 0.05,
+                            .speed = 1.0
+                        };
+                        instanceCount++;
+                    }
+                    if (toTwin) {
+                        // get neighboring cell
+                        htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
+                        CellData *neighbor = htw_geo_getCell(cm, neighborCoord);
+                        float posX2, posY2;
+                        htw_geo_getHexCellPositionSkewed(neighborCoord, &posX2, &posY2);
+                        vec3 neighborPos = {{posX2, posY2, neighbor->height + 1}};
+
+                        // end of segment
+                        s32 c1 = (d + 1) % HEX_CORNER_COUNT;
+                        // Opposite corner from start
+                        s32 cTwin = (d + HEX_CORNER_COUNT / 2) % HEX_CORNER_COUNT;
+
+                        vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
+                        vec3 relEnd = {{htw_geo_hexCornerPositions[cTwin][0], htw_geo_hexCornerPositions[cTwin][1], 0.0}};
+                        const float contract = 0.67; // bring rivers toward center of cell
+                        vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
+                        vec3 end = vec3Add(neighborPos, vec3Multiply(relEnd, contract));
+
+                        // TODO: swap start and end depending on relative slope. What to do it slope is 0?
+
+                        instanceData[instanceCount] = (ArrowInstanceData){
+                            .start = vec3MultiplyVector(start, *scale),
+                            .end = vec3MultiplyVector(end, *scale),
+                            .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
+                            .width = 0.05,
+                            .speed = 1.0
+                        };
+                        instanceCount++;
+                    }
+                }
+            }
+        }
+        instanceBuffers[i].instances = instanceCount;
+        sg_update_buffer(instanceBuffers[i].buffer, &(sg_range){.ptr = instanceData, .size = instanceBuffers[i].size});
+    }
+}
+
 void DrawRenderTargetPreviews(ecs_iter_t *it) {
     Pipeline *pipelines = ecs_field(it, Pipeline, 1);
     Mesh *meshes = ecs_field(it, Mesh, 2);
@@ -291,6 +391,16 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
         [in] Scale($),
         [in] ModelWorld($),
         [none] bcview.DebugRender
+    );
+
+    ECS_SYSTEM(world, UpdateRiverArrowBuffers, OnModelChanged,
+        [inout] (InstanceBuffer, ArrowInstanceData),
+        [in] ?Color,
+        [in] Scale($),
+        [in] ModelWorld($),
+        [in] FocusPlane($),
+        [none] bcview.DebugRender,
+        [none] bcview.TerrainRender
     );
 
     ECS_SYSTEM(world, DrawRenderTargetPreviews, OnPassLighting,

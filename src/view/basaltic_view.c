@@ -108,7 +108,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_Comma
 
 void bc_view_onModelStart(bc_ModelData *md) {
     model = md;
-    ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world->ecsWorld, .lastRenderedStep = 0, .renderOutdated = false});
+    ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world->ecsWorld, .lastRenderedStep = 0, .renderOutdated = true});
     ecs_singleton_set(vc.ecsWorld, FocusPlane, {model->world->centralPlane});
 
     // TEST: ensure that import order hasn't caused mismatched component IDs
@@ -117,8 +117,6 @@ void bc_view_onModelStart(bc_ModelData *md) {
     assert(modelPlaneId == viewPlaneId);
 
     bc_setCameraWrapLimits(vc.ecsWorld);
-
-    ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
 
     bc_editorOnModelStart();
 }

@@ -360,11 +360,129 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                     const Plane *plane = ecs_get(worldState->ecsWorld, fp->entity, Plane);
                     CellData *cell = htw_geo_getCell(plane->chunkMap, (htw_geo_GridCoord){selected->x, selected->y});
                     CellWaterways ww = cell->waterways;
-                    RiverSegment rs = {.size = ww.riverSizeE, .direction = ww.riverDirE};
-                    igSliderInt("East", &rs.size, 0, 7, NULL, 0);
-                    igCheckbox("Flip Direction", &rs.direction);
+                    const char *dirs[6] = {"North West", "North East", "West", "East", "South West", "South East"};
+                    int d = 0;
+                    RiverSegment rs;
+
+                    // layout
+                    ImVec2 region;
+                    igGetContentRegionAvail(&region);
+                    float width = region.x * 0.35;
+                    float indent = region.x * 0.1;
+                    igPushItemWidth(width);
+
+                    // Doing this the dumb way so I can lay out the interface in a way that makes sense
+
+
+                    igIndent(indent);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeNW;
+                    rs.connectToTwin = ww.riverToTwinNW;
+                    rs.direction = ww.riverDirNW;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
+                    ww.riverSizeNW = rs.size;
+                    ww.riverToTwinNW = rs.connectToTwin;
+                    ww.riverDirNW = rs.direction;
+
+                    igSameLine(0, -1);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeNE;
+                    rs.connectToTwin = ww.riverToTwinNE;
+                    rs.direction = ww.riverDirNE;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
+                    ww.riverSizeNE = rs.size;
+                    ww.riverToTwinNE = rs.connectToTwin;
+                    ww.riverDirNE = rs.direction;
+
+                    igUnindent(indent);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeW;
+                    rs.connectToTwin = ww.riverToTwinW;
+                    rs.direction = ww.riverDirW;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
+                    ww.riverSizeW = rs.size;
+                    ww.riverToTwinW = rs.connectToTwin;
+                    ww.riverDirW = rs.direction;
+
+                    igSameLine(0, indent * 2);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeE;
+                    rs.connectToTwin = ww.riverToTwinE;
+                    rs.direction = ww.riverDirE;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
                     ww.riverSizeE = rs.size;
+                    ww.riverToTwinE = rs.connectToTwin;
                     ww.riverDirE = rs.direction;
+
+                    igIndent(indent);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeSW;
+                    rs.connectToTwin = ww.riverToTwinSW;
+                    rs.direction = ww.riverDirSW;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
+                    ww.riverSizeSW = rs.size;
+                    ww.riverToTwinSW = rs.connectToTwin;
+                    ww.riverDirSW = rs.direction;
+
+                    igSameLine(0, -1);
+
+                    igPushID_Str(dirs[d++]);
+                    igBeginGroup();
+                    rs.size = ww.riverSizeSE;
+                    rs.connectToTwin = ww.riverToTwinSE;
+                    rs.direction = ww.riverDirSE;
+                    igSliderInt("##", &rs.size, 0, 7, NULL, 0);
+                    igCheckbox("Twin", &rs.connectToTwin);
+                    igSameLine(0, -1);
+                    igCheckbox("CCW?", &rs.direction);
+                    igEndGroup();
+                    igPopID();
+                    ww.riverSizeSE = rs.size;
+                    ww.riverToTwinSE = rs.connectToTwin;
+                    ww.riverDirSE = rs.direction;
+
+                    igUnindent(indent);
+
+
+
+                    igPopItemWidth();
+
+                    cell->waterways = ww;
 
                     igEndTabItem();
                 }

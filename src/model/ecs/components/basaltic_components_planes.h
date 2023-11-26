@@ -35,26 +35,30 @@ ECS_STRUCT(SpatialStorage, {
 
 typedef struct {
     // 0 = no river segment
-    unsigned
-    riverSizeNE : 3,
-    riverSizeE  : 3,
-    riverSizeSE : 3,
-    riverSizeSW : 3,
-    riverSizeW  : 3,
-    riverSizeNW : 3;
-
+    unsigned riverSizeNE : 3;
     // 0 = clockwise around cell, 1 = counter-clockwise around cell
-    bool
-    riverDirNE  : 1,
-    riverDirE   : 1,
-    riverDirSE  : 1,
-    riverDirSW  : 1,
-    riverDirW   : 1,
-    riverDirNW  : 1;
+    bool riverDirNE      : 1;
+    // 0 = no connection, 1 = end of segment connects to start of twin (with clockwise direction)
+    bool riverToTwinNE   : 1;
+    unsigned riverSizeE  : 3;
+    bool riverDirE       : 1;
+    bool riverToTwinE    : 1;
+    unsigned riverSizeSE : 3;
+    bool riverDirSE      : 1;
+    bool riverToTwinSE   : 1;
+    unsigned riverSizeSW : 3;
+    bool riverDirSW      : 1;
+    bool riverToTwinSW   : 1;
+    unsigned riverSizeW  : 3;
+    bool riverDirW       : 1;
+    bool riverToTwinW    : 1;
+    unsigned riverSizeNW : 3;
+    bool riverDirNW      : 1;
+    bool riverToTwinNW   : 1;
 
-    // last 6 bits unused, may be used for on-cell lakes in future
+    // last 2 bits unused, may be used for on-cell lakes in future
     // could use a few to store type of waterway, e.g. lake, swamp, estuary
-    unsigned : 6;
+    unsigned : 2;
 } CellWaterways;
 
 BC_DECL ECS_COMPONENT_DECLARE(CellWaterways);
@@ -63,6 +67,7 @@ BC_DECL ECS_COMPONENT_DECLARE(CellWaterways);
 ECS_STRUCT(RiverSegment, {
     s32 size; // range [0, 7]
     bool direction; // 0 = clockwise around cell, 1 = counter-clockwise around cell TODO make an enum for this?
+    bool connectToTwin;
 });
 
 // Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though

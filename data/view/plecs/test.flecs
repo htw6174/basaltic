@@ -11,18 +11,25 @@ bcview {
         - (InstanceBuffer, DebugInstanceData)
         - DebugRender
     }
+
     Prefab DebugArrowPrefab {
         - OVERRIDE|(TransparentPass, DebugArrowPipeline)
         - Elements {6}
         - Color {1.0, 0.0, 1.0, 1.0}
-        - (InstanceBuffer, ArrowInstanceData)
+        // NOTE: overriding maxInstances only works when set on a prefab; otherwise, the OnAdd observer won't pick up on the initial value before allocating space for the buffer. TODO: should separate buffer declaration and storage into separate components
+        - (InstanceBuffer, ArrowInstanceData) {maxInstances: 65536}
         - DebugRender
     }
 
     // debug draw
     destinationArrows : DebugArrowPrefab {
-        - Color {0.3, 0.3, 1.0, 1.0}
+        - Color {0.9, 0.9, 0.9, 1.0}
         - QueryDesc {expr: "Position, Destination, Plane(up(bc.planes.IsOn)), (bc.actors.Action, bc.actors.Action.ActionMove)"}
+    }
+
+    riverArrows : DebugArrowPrefab {
+        - Color {0.3, 0.3, 1.0, 1.0}
+        - TerrainRender
     }
 
     player : DebugDrawPrefab {
