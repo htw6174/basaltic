@@ -313,6 +313,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         const char *fieldName = getEntityLabel(viewWorld, brushField);
                         igText("Left click and drag to increase %s", fieldName);
                         igText("Right click and drag to decrease %s", fieldName);
+                        igText("Middle mouse and drag to set exact %s value", fieldName);
                         // Brush settings
                         AdditiveBrush *ab = ecs_singleton_get_mut(viewWorld, AdditiveBrush);
                         BrushSize *bs = ecs_get_mut(viewWorld, ecs_id(AdditiveBrush), BrushSize);
@@ -346,6 +347,10 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                             }
                             igEndCombo();
                         }
+
+                        // TEST: Just copy the same values to the value brush instead of having separate settings
+                        ecs_singleton_set(viewWorld, ValueBrush, {ab->value});
+                        ecs_set(viewWorld, ecs_id(ValueBrush), BrushSize, {bs->radius});
 
                         ecs_singleton_modified(viewWorld, AdditiveBrush);
                         ecs_modified(viewWorld, ecs_id(AdditiveBrush), BrushSize);

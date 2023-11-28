@@ -4,6 +4,8 @@ precision mediump float;
 #define PI 3.14159
 #define TAU 6.28318530718
 
+//#define DRAW_BORDERS
+
 //#include "uniforms.h"
 
 uniform float time;
@@ -145,9 +147,9 @@ void main()
 
 	// compute normal from position deriviatives
 	// NOTE: frag shader derivative normals always give 'flat' shading
-	//vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
-	//vN = flatNormal;
-	bool isCliff = (inout_normal.z < sin(PI / 3.75));
+	vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
+	//vec3 vN = flatNormal;
+	bool isCliff = (flatNormal.z < sin(PI / 3.75));
 	//vec3 vN = isCliff ? flatNormal : inout_normal; // if flat shaded cliff edeges are desired, else:
 	vec3 vN = inout_normal;
 
@@ -301,6 +303,10 @@ void main()
 
 	// TEST: color per tile
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
+
+#ifdef DRAW_BORDERS
+	albedo *= inout_radius > 0.95 ? 0.5 : 1.0;
+#endif
 
 	//out_color = vec4(vec3(inout_data2.x), fadeout);
 	out_color = vec4(albedo, fadeout);

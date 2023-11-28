@@ -86,6 +86,13 @@ bcview {
         - (BrushField, bc.planes.CellData.height)
     }
 
+    ValueBrush {
+        - Tool
+        - ValueBrush {value: 1}
+        - BrushSize {radius: 1}
+        - (BrushField, bc.planes.CellData.height)
+    }
+
     PrefabBrush {
         - Tool
         - PrefabBrush {prefab: 0}
@@ -151,6 +158,8 @@ bcview {
             raiseOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
             lower :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, system: PaintAdditiveBrush}
             lowerOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
+            value :- InputBinding {button: BC_MOUSE_MIDDLE, system: PaintValueBrush}
+            valueOnMove :- InputBinding {button: BC_MOUSE_MIDDLE, motion: BC_MOTION_TILE, system: PaintValueBrush}
         }
         //terrainMouseBindings :- Disabled
     }

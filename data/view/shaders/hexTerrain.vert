@@ -37,7 +37,7 @@ uniform mat4 m;
 uniform isampler2D terrain;
 
 // per-instance
-layout(location = 0) in vec4 in_chunkPosition; // NOTE: this has a 1.0 w component built in. Remember not to add to other w components!
+layout(location = 0) in vec4 in_chunkPosition;
 layout(location = 1) in vec2 in_rootCoord;
 // per-vertex
 layout(location = 2) in vec2 in_position;
@@ -73,9 +73,54 @@ vec3 remapBarycentric(vec3 barycentric, float yFactor, float zFactor, float inse
     return vec3(barycentric.x + xDelta, yRemapped, zRemapped);
 }
 
-vec3 expandBarycentric(vec3 barycentric, float threshold) {
-    // if barycentric.x > threshold
-    float x = step(threshold, barycentric.x);
+// returns barycentric corner of lowest contributing cell
+// remember, all this is actually doing is moving a point in the "barycentric triangle" from one place to another. In this case, usually moving from the center or middle of an edge to one of the corners (or at least towards that corner)
+// - so for the simplest possible version of this, I just want to return one of 3 unit vectors
+// - to make this a smooth function, need to change behavior if slope is negative:
+//   - smooth transition from b.x = 1 at deadzone to original position at edge
+// ISSUE: low edge of smoothstep needs to be 1/2 at edge centers and 1/3 at corner points
+// - more specifically, where the edge of smoothstep between 2 corners is depends on value of 3rd corner: 0.5 at c=0, 0.33.. at c=0.33.., 0.25 at c=0.5, ... => (1-c) / 2
+// high edge of smoothstep also needs to change based on 3rd corner and deadzone.
+// - For deadzone 0.25: 0.75 at c=0, ~0.6 at c=0.25, 0.5 at c=0.5
+vec3 remapBarycentricBySlope(vec3 barycentric, float deadzone, float slopeY, float slopeZ) {
+    vec3 remapped;
+
+    float b = slopeY > 0.0 ? barycentric.y : barycentric.x; // x: 0.5 edge, 0.33 center
+    float bLowEdge = (1.0 - barycentric.z) / 2.0; // 0.5 edge, 0.33 center
+    float bHighEdge = 1.0 - (deadzone + barycentric.z / 2.0); // 0.8 edge, 0.684 center
+    b = smoothstep(bLowEdge, bHighEdge, b);// * yRange; // 0.0 edge, 0.0 center
+    b = slopeY > 0.0 ? b : 1.0 - b; // 1.0 edge, 1.0 center
+
+    float c = slopeZ > 0.0 ? barycentric.z : barycentric.x;
+    float cLowEdge = (1.0 - barycentric.y) / 2.0;
+    float cHighEdge = 1.0 - (deadzone + barycentric.y / 2.0);
+    c = smoothstep(cLowEdge, cHighEdge, c);// * zRange;
+    c = slopeZ > 0.0 ? c : 1.0 - c;
+
+    // slope going from b.y to b.z;
+    float slopeW = slopeZ - slopeY;
+    float d = slopeW > 0.0 ? barycentric.z : barycentric.y;
+    float dLowEdge = (1.0 - barycentric.x) / 2.0;
+    float dHighEdge = 1.0 - (deadzone + barycentric.x / 2.0);
+    d = smoothstep(dLowEdge, dHighEdge, d);
+    d = slopeW > 0.0 ? d : 1.0 - d;
+
+    float yRange = (1.0 - barycentric.z);
+    float zRange = (1.0 - barycentric.y);
+
+    float scaleDown = b + c > 1.0 ? 1.0 / (b + c) : 1.0;
+
+    remapped.y = b * scaleDown; // min(barycentric.y, b); // * yRange;
+    remapped.z = c * scaleDown; //min(barycentric.z, c); // * zRange;
+
+    //remapped.x = 1.0 - clamp(remapped.y + remapped.z, 0.0, 1.0); // 1 - 2 = -1
+    remapped.x = 1.0 - (remapped.y + remapped.z);
+
+    return remapped;
+}
+
+vec3 expandBarycentric(vec3 barycentric, float radius) {
+    float x = step(radius, barycentric.x);
     float diff = barycentric.x - x;
     float y = barycentric.y - (diff * 0.5);
     float z = barycentric.z - (diff * 0.5);
@@ -117,7 +162,12 @@ float interpolate_expand(float here, float left, float right, vec3 barycentric, 
     return (here * barycentric.x) + (left * barycentric.y) + (right * barycentric.z);
 }
 
-// costs ~3ms. Can eliminate one of the terrainFetch calls
+// TODO: want to change weights so that the lowest elevation cell is always favored.
+// For a cell with h1 = 0, h2 (left cell) = 1, h3 (right cell) = -1:
+// - center (barycentric.x == 1) always == h1
+// - vertex on left edge (barycentric.x == barycentric.y) == h1
+// - vertex on right edge (barycentric.x == barycentric.z) == h3
+// - vertex between center and right edge == smooth transition from h1 to h3
 float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborhood) {
     // create sharp cliffs
     // warp barycentric space along one axis if slope in that direction is high enough
@@ -125,8 +175,10 @@ float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborh
     int slopeRight = h3 - h1;
     float remapLeft = abs(slopeLeft) > 3 ? 1.0 : 0.0;
     float remapRight = abs(slopeRight) > 3 ? 1.0 : 0.0;
+    //float remapLeft = slopeLeft >= 0 ? 1.0 : 0.0;
+    //float remapRight = slopeRight >= 0 ? 1.0 : 0.0;
 
-    float slopeFactor = 0.2;
+    float deadzone = 0.22;
 
     // approximate local derivative
     // create 2 more barycentric coords by moving in both directions away from home cell
@@ -136,10 +188,15 @@ float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborh
     // middle finger, towards cdl along line parallel to cd -> cdl
     vec3 bary2 = vec3(barycentric.x - planck, barycentric.y + planck, barycentric.z);
 
+    // TEST: favor lowest cell
+    barycentric = remapBarycentricBySlope(barycentric, deadzone, float(slopeLeft), float(slopeRight));
+    bary1 = remapBarycentricBySlope(bary1, deadzone, float(slopeLeft), float(slopeRight));
+    bary2 = remapBarycentricBySlope(bary2, deadzone, float(slopeLeft), float(slopeRight));
+
     // must remap after adding planck for correct slope
-    barycentric = remapBarycentric(barycentric, remapLeft, remapRight, slopeFactor);
-    bary1 = remapBarycentric(bary1, remapLeft, remapRight, slopeFactor);
-    bary2 = remapBarycentric(bary2, remapLeft, remapRight, slopeFactor);
+    //barycentric = remapBarycentric(barycentric, remapLeft, remapRight, deadzone);
+    //bary1 = remapBarycentric(bary1, remapLeft, remapRight, deadzone);
+    //bary2 = remapBarycentric(bary2, remapLeft, remapRight, deadzone);
 
     // Use barycentric coord to interpolate samples
     // explicit conversion for GLES
@@ -196,7 +253,10 @@ void main()
     inout_cellCoord = ivec2(in_rootCoord) + ivec2(in_localCoord * 32767.0); // scale normalized s16 back to full range. see also: unpackSnorm2x16
 
     // 0.75 at center of edge, 1.0 at corners
-    inout_radius = (1.0 - in_barycentric.x) * 1.5;
+    //inout_radius = (1.0 - in_barycentric.x) * 1.5;
+
+    // 0 at center, 1.0 at corners and edges
+    inout_radius = 1.0 - (in_barycentric.x - max(in_barycentric.y, in_barycentric.z));
 
     // get neighboring cell data
     int neighborhood = int(floor(in_neighborWeight));

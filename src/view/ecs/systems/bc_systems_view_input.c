@@ -269,6 +269,59 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
     bc_redraw_model(it->world);
 }
 
+// TODO: any clean way to unify the brush systems?
+void PaintValueBrush(ecs_iter_t *it) {
+    ValueBrush *vb = ecs_field(it, ValueBrush, 1);
+    BrushSize *brushSize = ecs_field(it, BrushSize, 2);
+    ecs_entity_t brushField = ECS_PAIR_SECOND(ecs_field_id(it, 3));
+    HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 4);
+    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
+    FocusPlane *fp = ecs_field(it, FocusPlane, 5);
+    ModelWorld *mw = ecs_field(it, ModelWorld, 6);
+
+    // Get field offset and type info
+    const EcsMember *member = ecs_get(it->world, brushField, EcsMember);
+    if (!member) {
+        ecs_err("Target of BrushField has no member metadata: %s", ecs_get_name(it->world, brushField));
+        return;
+    }
+    const EcsPrimitive *prim = ecs_get(it->world, member->type, EcsPrimitive);
+    if (!prim) {
+        ecs_err("Target of BrushField is not a primitive type and cannot be painted with ValueBrush");
+        return;
+    }
+
+    ptrdiff_t offset = member->offset;
+
+    ecs_entity_t focusPlane = fp->entity;
+    ecs_world_t *modelWorld = mw->world;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+
+    u32 area = htw_geo_getHexArea(brushSize->radius);
+    htw_geo_GridCoord offsetCoord = {0, 0};
+    for (int i = 0; i < area; i++) {
+        CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
+        void *fieldPtr = ((void*)cd) + offset;
+
+        // get value from cell by offset and primkind
+        s64 value = bc_getMetaComponentMemberInt(fieldPtr, prim->kind);
+        value = vb->value;
+        bc_setMetaComponentMemberInt(fieldPtr, prim->kind, value);
+
+        htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
+        htw_geo_getNextHexSpiralCoord(&cubeOffset);
+        offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
+    }
+
+    // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
+    // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
+    // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
+    // dirty->chunks[dirty->count++] = chunk;
+    // ecs_singleton_modified(world, DirtyChunkBuffer);
+
+    bc_redraw_model(it->world);
+}
+
 void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystemsInput);
 
@@ -334,6 +387,15 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, PaintAdditiveBrush, 0,
         AdditiveBrush($),
+        BrushSize(AdditiveBrush),
+        BrushField(AdditiveBrush, _),
+        HoveredCell($),
+        FocusPlane($),
+        ModelWorld($)
+    );
+
+    ECS_SYSTEM(world, PaintValueBrush, 0,
+        ValueBrush($),
         BrushSize(AdditiveBrush),
         BrushField(AdditiveBrush, _),
         HoveredCell($),

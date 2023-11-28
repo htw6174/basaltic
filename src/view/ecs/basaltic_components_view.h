@@ -241,6 +241,11 @@ ECS_STRUCT(ValueBrush, {
     s32 value;
 });
 
+// Set value on cell fields
+ECS_STRUCT(RiverBrush, {
+    s32 value;
+});
+
 // TODO: bitmask brush?
 
 // Instantiate prefabs

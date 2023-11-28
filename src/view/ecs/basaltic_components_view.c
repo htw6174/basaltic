@@ -107,6 +107,8 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_id(world, ecs_id(SmoothBrush), Tool);
     ECS_META_COMPONENT(world, ValueBrush);
     ecs_add_id(world, ecs_id(ValueBrush), Tool);
+    ECS_META_COMPONENT(world, RiverBrush);
+    ecs_add_id(world, ecs_id(RiverBrush), Tool);
     ECS_META_COMPONENT(world, PrefabBrush);
     ecs_add_id(world, ecs_id(PrefabBrush), Tool);
 
