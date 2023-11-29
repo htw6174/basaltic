@@ -317,6 +317,72 @@ void PaintValueBrush(ecs_iter_t *it) {
     bc_redraw_model(it->world);
 }
 
+/// return: should neighbor cell connection to this one be set?
+bool createSegmentPath(CellWaterConnections *connections) {
+    // find closest existing connections on both cells
+    // TODO: should have a tool setting that controls how segments are created between connections, allow bias toward straight or curvy rivers by increasing minimum distance threshold
+    // Smallest number of segments between the new connection's lefthand (out) corner and the rightmost connection of any other edge
+    s32 minDistLeft = 3;
+    // Smallest number of segments between the new connection's righthand (in) corner and the leftmost connection of any other edge
+    s32 minDistRight = 3;
+    for (int i = 1; i < HEX_DIRECTION_COUNT; i++) {
+        bool conLeft = connections->connectionsOut[i];
+        bool conRight = connections->connectionsIn[i];
+        s32 distRight = minDistRight;
+        if (conLeft) {
+            distRight = i - 1;
+        } else if (conRight) {
+            distRight = i;
+        }
+        minDistRight = MIN(minDistRight, distRight);
+
+        s32 distLeft = minDistLeft;
+        if (conRight) {
+            distLeft = HEX_DIRECTION_COUNT - (i + 1);
+        } else if (conLeft) {
+            distLeft = HEX_DIRECTION_COUNT - i;
+        }
+        minDistLeft = MIN(minDistLeft, distLeft);
+    }
+    // create path of segments linking new connection to existing and determine what side(s) of the edge connection should be on
+    bool connectNeighbor = false;
+    if (minDistRight < 3) {
+        connectNeighbor = true;
+        for (int i = 0; i < minDistRight; i++) {
+            connections->segments[i + 1] = true;
+        }
+    }
+    if (minDistLeft < 3) {
+        connections->connectionsOut[0] = true;
+        for (int i = 0; i < minDistLeft; i++) {
+            connections->segments[HEX_DIRECTION_COUNT - (i + 1)] = true;
+        }
+    }
+    return connectNeighbor;
+}
+
+void cleanSegmentPath(CellWaterConnections *connections) {
+    // Clean only outward from edge 0 of connections
+    // to the left, all the way around:
+    for (int i = 0; i < HEX_DIRECTION_COUNT; i++) {
+        // If left end of segment has no connections and no adjoining segment, remove the segment
+        s32 iLeft = htw_geo_hexDirectionLeft(i);
+        bool hasSegmentToLeft = connections->segments[iLeft];
+        bool hasInConnection = connections->connectionsIn[iLeft];
+        bool hasOutConnection = connections->connectionsOut[i];
+        connections->segments[i] &= hasSegmentToLeft || hasInConnection || hasOutConnection;
+    }
+    // to the right, all the way around
+    for (int i = HEX_DIRECTION_COUNT - 1; i >= 0; i--) {
+        // If left end of segment has no connections and no adjoining segment, remove the segment
+        s32 iRight = htw_geo_hexDirectionRight(i);
+        bool hasSegmentToLeft = connections->segments[iRight];
+        bool hasInConnection = connections->connectionsIn[i];
+        bool hasOutConnection = connections->connectionsOut[iRight];
+        connections->segments[i] &= hasSegmentToLeft || hasInConnection || hasOutConnection;
+    }
+}
+
 void PaintRiverBrush(ecs_iter_t *it) {
     RiverBrush *rb = ecs_field(it, RiverBrush, 1);
     HoveredCell hoveredCoord = *ecs_field(it, HoveredCell, 2);
@@ -339,39 +405,31 @@ void PaintRiverBrush(ecs_iter_t *it) {
     ecs_world_t *modelWorld = mw->world;
     htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-    CellData *c1 = htw_geo_getCell(cm, prevHoveredCoord);
-    CellData *c2 = htw_geo_getCell(cm, hoveredCoord);
+    RiverConnection rc = plane_riverConnectionFromCells(cm, prevHoveredCoord, hoveredCoord);
 
-    // determine the direction from c1 to c2
-    HexDirection forward = htw_geo_relativeHexDirection(prevHoveredCoord, hoveredCoord);
-    htw_geo_GridCoord left = POSITION_IN_DIRECTION(prevHoveredCoord, htw_geo_hexDirectionLeft(forward));
-    htw_geo_GridCoord right = POSITION_IN_DIRECTION(prevHoveredCoord, htw_geo_hexDirectionRight(forward));
-
-    // get cells to left and right of movement direction for local slopes
-    CellData *cLeft = htw_geo_getCell(cm, left);
-    CellData *cRight = htw_geo_getCell(cm, right);
-
-    CellWaterways w1 = c1->waterways;
-    CellWaterways w2 = c2->waterways;
-
-    // get portion of waterway bitfield corresponding to direction
-    u32 ww = *(u32*)&w1; // extremely dubious
-    u32 twinMask = 1 << ((forward * 5) + 4);
     if (ic.axis.x > 0.0) {
-        // add river connection (set bit at twinMask true)
-        ww |= twinMask;
-        // TODO: add segments to link new connection with other connections
+        rc.downhill.connectionsOut[0] |= createSegmentPath(&rc.uphill);
+        rc.uphill.connectionsOut[0] |= createSegmentPath(&rc.downhill);
+        // if no path to existing connections, should by default add connection or random side
+        if (rc.uphill.connectionsOut[0] == false && rc.downhill.connectionsOut[0] == false) {
+            rc.uphill.connectionsOut[0] = true;
+            //rc.downhill.connectionsOut[0] = true;
+        }
+        // TODO: should have tool setting that controls if segment is created on the edge(s) being connected
+
     } else {
-        // remove river connection (set bit at twinMask false)
-        ww &= ~twinMask;
+        // remove edge connections between cells
+        // NOTE: in connections aren't applied back to the cell, but still need to set them here so that segment cleanup can see that they are removed
+        rc.uphill.connectionsOut[0] = false;
+        rc.uphill.connectionsIn[0] = false;
+        rc.downhill.connectionsOut[0] = false;
+        rc.downhill.connectionsIn[0] = false;
+        // Remove river segments that are no longer linking edge connections
+        cleanSegmentPath(&rc.uphill);
+        cleanSegmentPath(&rc.downhill);
     }
 
-    // TODO: make connection from c1 to c2
-
-    w1 = *(CellWaterways*)&ww;
-
-    c1->waterways = w1;
-    c2->waterways = w2;
+    plane_applyRiverConnection(cm, &rc);
 
     bc_redraw_model(it->world);
 }

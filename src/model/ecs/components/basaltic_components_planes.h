@@ -38,7 +38,7 @@ typedef struct {
     unsigned riverSizeNE : 3;
     // 0 = clockwise around cell, 1 = counter-clockwise around cell
     bool riverDirNE      : 1;
-    // 0 = no connection, 1 = end of segment connects to start of twin (with clockwise direction)
+    // 0 = no connection, 1 = start of this edge connects to end of twin edge (with clockwise direction)
     bool riverToTwinNE   : 1;
     unsigned riverSizeE  : 3;
     bool riverDirE       : 1;
@@ -83,6 +83,26 @@ ECS_STRUCT(CellData, {
     u32 understory; // Units currently undefined; biomass of grasses, shrubs, etc.
     u32 canopy; // Units currently undefined; biomass of trees
 });
+
+typedef struct {
+    // segments[n+1] is next of segments[n]
+    bool segments[6];
+    // stored in the reference cell
+    bool connectionsOut[6];
+    // stored in neighboring cells; changes to this are ignored by plane_applyRiverConnection
+    bool connectionsIn[6];
+} CellWaterConnections;
+
+typedef struct {
+    CellData *uphillCell;
+    CellData *downhillCell;
+    HexDirection upToDownDirection;
+    // uphill.segments[0] is twin of downhill.segments[0]
+    // uphill.connectionsOut[0] is downhill.connectionsIn[0]
+    // uphill.connectionsIn[0] is downhill.connectionsOut[0]
+    CellWaterConnections uphill;
+    CellWaterConnections downhill;
+} RiverConnection;
 
 ECS_ENUM(ClimateType, {
     // Uses equator temp everywhere
@@ -147,5 +167,11 @@ s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo
  */
 //s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
+
+/// Extracts waterway info from cells at a, b, and all of their neighbors, and stores it in an easier to manipulate format
+RiverConnection plane_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);
+
+/// Updates the river segments on both cells uesd to form the connection, and the connection edges between those cells
+void plane_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc);
 
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

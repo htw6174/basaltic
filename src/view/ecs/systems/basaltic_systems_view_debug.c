@@ -317,10 +317,10 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                         htw_geo_getHexCellPositionSkewed(neighborCoord, &posX2, &posY2);
                         vec3 neighborPos = {{posX2, posY2, neighbor->height + 1}};
 
-                        // end of segment
-                        s32 c1 = (d + 1) % HEX_CORNER_COUNT;
-                        // Opposite corner from start
-                        s32 cTwin = (d + HEX_CORNER_COUNT / 2) % HEX_CORNER_COUNT;
+                        // start of segment
+                        s32 c1 = d;
+                        // Opposite corner from end of segment
+                        s32 cTwin = (d + 4) % HEX_CORNER_COUNT;
 
                         vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
                         vec3 relEnd = {{htw_geo_hexCornerPositions[cTwin][0], htw_geo_hexCornerPositions[cTwin][1], 0.0}};
