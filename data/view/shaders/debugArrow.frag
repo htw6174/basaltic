@@ -3,8 +3,9 @@ precision mediump float;
 
 uniform float time;
 
-in vec2 inout_uv;
 in vec4 inout_color;
+in vec2 inout_uv;
+in float inout_speed;
 
 layout(location = 0) out vec4 out_color;
 
@@ -22,7 +23,7 @@ float sdEquilateralTriangle(  in vec2 p, in float r )
 void main()
 {
     vec2 uv = inout_uv;
-    uv.y -= time;
+    uv.y -= time * inout_speed;
 
     uv = fract(uv);
     uv = uv*2.0-1.0;

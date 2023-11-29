@@ -274,7 +274,7 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 vec3 cellPos = {{posX, posY, cell->height + 1}};
                 u32 ww = *(u32*)&cell->waterways; // extremely dubious
-                for (int d = 0; d < HEX_DIR_COUNT; d++) {
+                for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
                     // tricky part: can't get waterways members in an indexed fashion, instead use bitmasks
                     u32 shift = d * 5;
                     u32 river = ww >> shift;
@@ -296,7 +296,7 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                         }
                         vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
                         vec3 relEnd = {{htw_geo_hexCornerPositions[c2][0], htw_geo_hexCornerPositions[c2][1], 0.0}};
-                        const float contract = 0.67; // bring rivers toward center of cell
+                        const float contract = 0.5; // bring rivers toward center of cell
                         vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
                         vec3 end = vec3Add(cellPos, vec3Multiply(relEnd, contract));
 
@@ -324,18 +324,24 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
 
                         vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
                         vec3 relEnd = {{htw_geo_hexCornerPositions[cTwin][0], htw_geo_hexCornerPositions[cTwin][1], 0.0}};
-                        const float contract = 0.67; // bring rivers toward center of cell
+                        const float contract = 0.5; // bring rivers toward center of cell
                         vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
                         vec3 end = vec3Add(neighborPos, vec3Multiply(relEnd, contract));
 
-                        // TODO: swap start and end depending on relative slope. What to do it slope is 0?
+                        // TODO: swap start and end depending on relative slope. What to do if slope is 0?
+                        s32 slope = neighbor->height - cell->height;
+                        if (slope > 0) {
+                            vec3 temp = start;
+                            start = end;
+                            end = temp;
+                        }
 
                         instanceData[instanceCount] = (ArrowInstanceData){
                             .start = vec3MultiplyVector(start, *scale),
                             .end = vec3MultiplyVector(end, *scale),
                             .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
                             .width = 0.05,
-                            .speed = 1.0
+                            .speed = slope
                         };
                         instanceCount++;
                     }

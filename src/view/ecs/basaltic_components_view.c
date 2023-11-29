@@ -23,6 +23,11 @@ void BcviewImport(ecs_world_t *world) {
         [3] = {.name = "a", .type = ecs_id(ecs_f32_t)},
     };
 
+    ecs_member_t gridCoordMembers[2] = {
+        [0] = {.name = "x", .type = ecs_id(ecs_i32_t)},
+        [1] = {.name = "y", .type = ecs_id(ecs_i32_t)}
+    };
+
     ECS_COMPONENT_DEFINE(world, vec2);
     ecs_struct(world, {.entity = ecs_id(vec2), .members = {
         [0] = vecMembers[0],
@@ -67,6 +72,19 @@ void BcviewImport(ecs_world_t *world) {
         [3] = {.name = "height", .type = ecs_id(ecs_f32_t)}
     }});
 
+    ECS_COMPONENT_DEFINE(world, HoveredCell);
+    ecs_struct(world, {.entity = ecs_id(HoveredCell), .members = {
+        [0] = gridCoordMembers[0],
+        [1] = gridCoordMembers[1]
+    }});
+
+    ECS_COMPONENT_DEFINE(world, SelectedCell);
+    ecs_struct(world, {.entity = ecs_id(SelectedCell), .members = {
+        [0] = gridCoordMembers[0],
+        [1] = gridCoordMembers[1]
+    }});
+
+
     ECS_META_COMPONENT(world, ModelWorld);
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_META_COMPONENT(world, QueryDesc);
@@ -93,8 +111,6 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, FocusPlane);
     ECS_META_COMPONENT(world, FocusEntity);
     ECS_META_COMPONENT(world, PlayerEntity);
-    ECS_META_COMPONENT(world, HoveredCell);
-    ECS_META_COMPONENT(world, SelectedCell);
     ECS_META_COMPONENT(world, DirtyChunkBuffer);
 
     ECS_TAG_DEFINE(world, Tool);

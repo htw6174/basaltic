@@ -3,18 +3,8 @@
 #include "basaltic_components.h"
 #include <math.h>
 
-HexDirection getDirLeft(HexDirection dir);
-HexDirection getDirRight(HexDirection dir);
 /// 0 rad == HEX_DIR_NORTH_EAST, continues clockwise
 HexDirection radToHexDir(AngleRadians angle);
-
-HexDirection getDirLeft(HexDirection dir) {
-    return MOD(dir - 1, HEX_DIR_COUNT);
-}
-
-HexDirection getDirRight(HexDirection dir) {
-    return (dir + 1) % HEX_DIR_COUNT;
-}
 
 HexDirection radToHexDir(AngleRadians angle) {
     // FIXME: respect radian conventions by making 0 rad == East and continuing CCW
@@ -94,7 +84,7 @@ void landslideParticle(htw_ChunkMap *cm, htw_geo_GridCoord start) {
         CellData *cell = htw_geo_getCell(cm, pos);
         int greatestDrop = maxSlope;
         htw_geo_GridCoord candidate = pos;
-        for (int i = 0; i < HEX_DIR_COUNT; i++) {
+        for (int i = 0; i < HEX_DIRECTION_COUNT; i++) {
             htw_geo_GridCoord sample = POSITION_IN_DIRECTION(pos, i);
             CellData *sampleCell = htw_geo_getCell(cm, sample);
             int drop = cell->height - sampleCell->height;
@@ -160,7 +150,7 @@ void EgoBehaviorStorm(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
         u32 hash = xxh_hash2d(it->entities[i], pos[i].x, pos[i].y);
         s32 wind = (hash % 3) - 1; // TODO weight towards 0
-        HexDirection dir = MOD(HEX_DIR_EAST + wind, HEX_DIR_COUNT);
+        HexDirection dir = MOD(HEX_DIRECTION_EAST + wind, HEX_DIRECTION_COUNT);
         dest[i] = POSITION_IN_DIRECTION(pos[i], dir);
         ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }

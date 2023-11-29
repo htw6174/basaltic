@@ -47,7 +47,18 @@ void BcPlanesImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Climate);
     ECS_META_COMPONENT(world, Plane);
 
-    ECS_META_COMPONENT(world, HexDirection);
+    ECS_COMPONENT_DEFINE(world, HexDirection);
+    ecs_enum(world, {
+        .entity = ecs_id(HexDirection),
+        .constants = {
+            {.name = "HEX_DIRECTION_NORTH_EAST", .value = 0},
+            {.name = "HEX_DIRECTION_EAST"},
+            {.name = "HEX_DIRECTION_SOUTH_EAST"},
+            {.name = "HEX_DIRECTION_SOUTH_WEST"},
+            {.name = "HEX_DIRECTION_WEST"},
+            {.name = "HEX_DIRECTION_NORTH_WEST"},
+        }
+    });
 
     ECS_COMPONENT_DEFINE(world, Position);
     ECS_COMPONENT_DEFINE(world, Destination);

@@ -10,8 +10,9 @@ layout(location = 2) in vec4 in_color;
 layout(location = 3) in float in_width;
 layout(location = 4) in float in_speed;
 
-out vec2 inout_uv;
 out vec4 inout_color;
+out vec2 inout_uv;
+out float inout_speed;
 
 vec3 quadVerts[4] = vec3[](
     // start, clockwise from bottom-right
@@ -44,8 +45,9 @@ void main()
     vec3 pos = (right * in_width * vert.x) + (toEnd * vert.y);
     gl_Position = pv * m * vec4(in_start + pos, 1.0);
 
+    inout_color = in_color;
     inout_uv = quadUvs[quadIndicies[gl_VertexID]];
     inout_uv.y *= length(toEnd) * (1.0 / in_width);
-    inout_color = in_color;
+    inout_speed = abs(in_speed);
 }
 

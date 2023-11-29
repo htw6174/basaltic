@@ -189,14 +189,14 @@ float interpolate_height(int h1, int h2, int h3, vec3 barycentric, int neighborh
     vec3 bary2 = vec3(barycentric.x - planck, barycentric.y + planck, barycentric.z);
 
     // TEST: favor lowest cell
-    barycentric = remapBarycentricBySlope(barycentric, deadzone, float(slopeLeft), float(slopeRight));
-    bary1 = remapBarycentricBySlope(bary1, deadzone, float(slopeLeft), float(slopeRight));
-    bary2 = remapBarycentricBySlope(bary2, deadzone, float(slopeLeft), float(slopeRight));
+    //barycentric = remapBarycentricBySlope(barycentric, deadzone, float(slopeLeft), float(slopeRight));
+    //bary1 = remapBarycentricBySlope(bary1, deadzone, float(slopeLeft), float(slopeRight));
+    //bary2 = remapBarycentricBySlope(bary2, deadzone, float(slopeLeft), float(slopeRight));
 
     // must remap after adding planck for correct slope
-    //barycentric = remapBarycentric(barycentric, remapLeft, remapRight, deadzone);
-    //bary1 = remapBarycentric(bary1, remapLeft, remapRight, deadzone);
-    //bary2 = remapBarycentric(bary2, remapLeft, remapRight, deadzone);
+    barycentric = remapBarycentric(barycentric, remapLeft, remapRight, deadzone);
+    bary1 = remapBarycentric(bary1, remapLeft, remapRight, deadzone);
+    bary2 = remapBarycentric(bary2, remapLeft, remapRight, deadzone);
 
     // Use barycentric coord to interpolate samples
     // explicit conversion for GLES

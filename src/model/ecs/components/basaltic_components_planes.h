@@ -115,15 +115,7 @@ ECS_STRUCT(Plane, {
     htw_ChunkMap *chunkMap;
 });
 
-ECS_ENUM(HexDirection, {
-    HEX_DIR_NORTH_EAST, // 0, 1
-    HEX_DIR_EAST, // 1, 0
-    HEX_DIR_SOUTH_EAST, // 1, -1
-    HEX_DIR_SOUTH_WEST, // 0, -1
-    HEX_DIR_WEST, // -1, 0
-    HEX_DIR_NORTH_WEST, // -1, 1
-    HEX_DIR_COUNT // Limit for iterating over values in this enum
-});
+BC_DECL ECS_COMPONENT_DECLARE(HexDirection);
 
 typedef htw_geo_GridCoord Position, Destination;
 

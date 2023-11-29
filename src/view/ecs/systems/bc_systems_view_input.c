@@ -186,6 +186,8 @@ void SetPlayerDestination(ecs_iter_t *it) {
         ecs_set(world, player->entity, Destination, {hoveredCoord->x, hoveredCoord->y});
         ecs_add_pair(world, player->entity, Action, ActionMove);
     }
+
+    bc_redraw_model(it->world);
 }
 
 void PaintPrefabBrush(ecs_iter_t *it) {
@@ -217,8 +219,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
     AdditiveBrush *ab = ecs_field(it, AdditiveBrush, 1);
     BrushSize *brushSize = ecs_field(it, BrushSize, 2);
     ecs_entity_t brushField = ECS_PAIR_SECOND(ecs_field_id(it, 3));
-    HoveredCell *hoveredCoord = ecs_field(it, HoveredCell, 4);
-    htw_geo_GridCoord cellCoord = *(htw_geo_GridCoord*)hoveredCoord;
+    HoveredCell hoveredCoord = *ecs_field(it, HoveredCell, 4);
     FocusPlane *fp = ecs_field(it, FocusPlane, 5);
     ModelWorld *mw = ecs_field(it, ModelWorld, 6);
 
@@ -238,7 +239,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
 
     // Get axis data to multiply value by input strength
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.delta.x = 1.0};
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis.x = 1.0};
 
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
@@ -247,12 +248,12 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
     u32 area = htw_geo_getHexArea(brushSize->radius);
     htw_geo_GridCoord offsetCoord = {0, 0};
     for (int i = 0; i < area; i++) {
-        CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(cellCoord, offsetCoord));
+        CellData *cd = htw_geo_getCell(cm, htw_geo_addGridCoords(hoveredCoord, offsetCoord));
         void *fieldPtr = ((void*)cd) + offset;
 
         // get value from cell by offset and primkind
         s64 value = bc_getMetaComponentMemberInt(fieldPtr, prim->kind);
-        value += ab->value * ic.delta.x;
+        value += ab->value * ic.axis.x;
         bc_setMetaComponentMemberInt(fieldPtr, prim->kind, value);
 
         htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
@@ -313,11 +314,64 @@ void PaintValueBrush(ecs_iter_t *it) {
         offsetCoord = htw_geo_cubeToGridCoord(cubeOffset);
     }
 
-    // Mark chunk dirty so it can be rebuilt TODO: will need to to exactly once for each unique chunk modified by a brush
-    // DirtyChunkBuffer *dirty = ecs_singleton_get_mut(world, DirtyChunkBuffer);
-    // u32 chunk = htw_geo_getChunkIndexByGridCoordinates(cm, cellCoord);
-    // dirty->chunks[dirty->count++] = chunk;
-    // ecs_singleton_modified(world, DirtyChunkBuffer);
+    bc_redraw_model(it->world);
+}
+
+void PaintRiverBrush(ecs_iter_t *it) {
+    RiverBrush *rb = ecs_field(it, RiverBrush, 1);
+    HoveredCell hoveredCoord = *ecs_field(it, HoveredCell, 2);
+    FocusPlane *fp = ecs_field(it, FocusPlane, 3);
+    ModelWorld *mw = ecs_field(it, ModelWorld, 4);
+
+    // Get axis data to alter action by axis direction. + : create rivers, - : remove rivers
+    void *param = it->param;
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis.x = 1.0};
+
+    htw_geo_GridCoord relative = {-ic.delta.x, -ic.delta.y};
+    htw_geo_GridCoord prevHoveredCoord = htw_geo_addGridCoords(hoveredCoord, relative);
+    // Only continue if hovered and prevHovered are neighbors
+    s32 distance = htw_geo_hexGridDistance(hoveredCoord, prevHoveredCoord);
+    if (distance != 1) {
+        return;
+    }
+
+    ecs_entity_t focusPlane = fp->entity;
+    ecs_world_t *modelWorld = mw->world;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
+
+    CellData *c1 = htw_geo_getCell(cm, prevHoveredCoord);
+    CellData *c2 = htw_geo_getCell(cm, hoveredCoord);
+
+    // determine the direction from c1 to c2
+    HexDirection forward = htw_geo_relativeHexDirection(prevHoveredCoord, hoveredCoord);
+    htw_geo_GridCoord left = POSITION_IN_DIRECTION(prevHoveredCoord, htw_geo_hexDirectionLeft(forward));
+    htw_geo_GridCoord right = POSITION_IN_DIRECTION(prevHoveredCoord, htw_geo_hexDirectionRight(forward));
+
+    // get cells to left and right of movement direction for local slopes
+    CellData *cLeft = htw_geo_getCell(cm, left);
+    CellData *cRight = htw_geo_getCell(cm, right);
+
+    CellWaterways w1 = c1->waterways;
+    CellWaterways w2 = c2->waterways;
+
+    // get portion of waterway bitfield corresponding to direction
+    u32 ww = *(u32*)&w1; // extremely dubious
+    u32 twinMask = 1 << ((forward * 5) + 4);
+    if (ic.axis.x > 0.0) {
+        // add river connection (set bit at twinMask true)
+        ww |= twinMask;
+        // TODO: add segments to link new connection with other connections
+    } else {
+        // remove river connection (set bit at twinMask false)
+        ww &= ~twinMask;
+    }
+
+    // TODO: make connection from c1 to c2
+
+    w1 = *(CellWaterways*)&ww;
+
+    c1->waterways = w1;
+    c2->waterways = w2;
 
     bc_redraw_model(it->world);
 }
@@ -398,6 +452,13 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
         ValueBrush($),
         BrushSize(AdditiveBrush),
         BrushField(AdditiveBrush, _),
+        HoveredCell($),
+        FocusPlane($),
+        ModelWorld($)
+    );
+
+    ECS_SYSTEM(world, PaintRiverBrush, 0,
+        RiverBrush($),
         HoveredCell($),
         FocusPlane($),
         ModelWorld($)

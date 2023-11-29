@@ -144,6 +144,7 @@ ECS_STRUCT(InputBinding, {
 });
 
 typedef struct InputContext {
+    vec2 axis;
     vec2 delta;
 } InputContext;
 
@@ -200,16 +201,11 @@ ECS_STRUCT(PlayerEntity, {
     ecs_entity_t entity; // in model world
 });
 
-// TODO: consider adding a flag to this, reset every frame and only set in shader feedback if any cell is hovered
-ECS_STRUCT(HoveredCell, {
-    s32 x;
-    s32 y;
-});
+typedef htw_geo_GridCoord HoveredCell;
+BC_DECL ECS_COMPONENT_DECLARE(HoveredCell);
 
-ECS_STRUCT(SelectedCell, {
-    s32 x;
-    s32 y;
-});
+typedef htw_geo_GridCoord SelectedCell;
+BC_DECL ECS_COMPONENT_DECLARE(SelectedCell);
 
 ECS_STRUCT(DirtyChunkBuffer, {
     u32 count;

@@ -48,7 +48,7 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 
         for (int i = 0; i < it.count; i++) {
             InputBinding bind = bindings[i];
-            vec2 delta = bind.axis; // Default to binding, override with motion if set
+            vec2 delta = bind.axis; // Default to binding axis, override with motion if set
             bool match = false; // Does this event satisfy the binding requirements?
             if (bind.system == 0) {
                 continue;
@@ -104,6 +104,7 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
                 } else if (bind.motion == BC_MOTION_TILE) {
                     // userevent TILEMOTION pushed back into SDL
                     if (e->type == BC_SDL_USEREVENT_TYPE(BC_SDL_TILEMOTION)) {
+                        delta = (vec2){{e->motion.xrel, e->motion.yrel}};
                         // if button is set, must check state for matching mask
                         if (bind.button) {
                             match = SDL_BUTTON(bind.button) & e->motion.state;
@@ -118,6 +119,7 @@ void bc_processInputEvent(ecs_world_t *world, bc_CommandBuffer commandBuffer, SD
 
             if (match) {
                 InputContext ic = {
+                    .axis = bind.axis,
                     .delta = delta
                 };
                 ecs_run(world, bind.system, dT, &ic);
@@ -147,11 +149,13 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
     const HoveredCell *prevHover = ecs_get_pair_second(world, ecs_id(HoveredCell), Previous, HoveredCell);
 
     // get mouse state
-    s32 x, y, deltaX, deltaY;
+    s32 x, y, deltaX, deltaY, hoverDeltaX, hoverDeltaY;
     Uint32 mouseStateMask = SDL_GetMouseState(&x, &y);
     deltaX = x - p->x;
     deltaY = y - p->y;
-    bool hoverChanged = currentHover->x != prevHover->x || currentHover->y != prevHover->y;
+    hoverDeltaX = currentHover->x - prevHover->x;
+    hoverDeltaY = currentHover->y - prevHover->y;
+    bool hoverChanged = hoverDeltaX != 0 || hoverDeltaY != 0;
     if (hoverChanged) {
         SDL_Event tileMotionEvent = {
             .motion = {
@@ -159,7 +163,9 @@ void bc_processInputState(ecs_world_t *world, bc_CommandBuffer commandBuffer, bo
                 .timestamp = SDL_GetTicks(),
                 .state = mouseStateMask,
                 .x = currentHover->x,
-                .y = currentHover->y
+                .y = currentHover->y,
+                .xrel = hoverDeltaX,
+                .yrel = hoverDeltaY
             }
         };
         SDL_PushEvent(&tileMotionEvent);

@@ -916,7 +916,9 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ecs_set_tick_source(world, ReloadPipelines, reloadTick);
     ecs_set_tick_source(world, ExtraModelRefresh, reloadTick);
 
-    //ecs_enable(world, ReloadPipelines, false); // TODO: Should enable/disable by default based on build type
+    // TODO: Should enable/disable by default based on build type
+    //ecs_enable(world, ReloadPipelines, false);
+    ecs_enable(world, ExtraModelRefresh, false);
 
     ECS_SYSTEM(world, CreateModelQueries, EcsOnLoad,
         [in] QueryDesc,

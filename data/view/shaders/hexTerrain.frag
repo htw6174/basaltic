@@ -4,7 +4,7 @@ precision mediump float;
 #define PI 3.14159
 #define TAU 6.28318530718
 
-//#define DRAW_BORDERS
+#define DRAW_BORDERS
 
 //#include "uniforms.h"
 
@@ -149,7 +149,7 @@ void main()
 	// NOTE: frag shader derivative normals always give 'flat' shading
 	vec3 flatNormal = normalize(cross(dFdx(inout_pos), dFdy(inout_pos)));
 	//vec3 vN = flatNormal;
-	bool isCliff = (flatNormal.z < sin(PI / 3.75));
+	bool isCliff = (inout_normal.z < sin(PI / 3.5));
 	//vec3 vN = isCliff ? flatNormal : inout_normal; // if flat shaded cliff edeges are desired, else:
 	vec3 vN = inout_normal;
 
