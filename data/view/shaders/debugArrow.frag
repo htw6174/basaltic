@@ -28,7 +28,7 @@ void main()
     uv = fract(uv);
     uv = uv*2.0-1.0;
     uv.y += 0.2;
-
+    uv.y *= sign(inout_speed);
 
     float d = sdEquilateralTriangle( uv, 1.0 );
     float a = d > 0.0 ? 0.0 : 1.0;

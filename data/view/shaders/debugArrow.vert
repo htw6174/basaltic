@@ -48,6 +48,6 @@ void main()
     inout_color = in_color;
     inout_uv = quadUvs[quadIndicies[gl_VertexID]];
     inout_uv.y *= length(toEnd) * (1.0 / in_width);
-    inout_speed = abs(in_speed);
+    inout_speed = (in_speed);
 }
 

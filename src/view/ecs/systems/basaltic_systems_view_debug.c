@@ -266,82 +266,82 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
         const Plane *plane = ecs_get(modelWorld, fp->entity, Plane);
         htw_ChunkMap *cm = plane->chunkMap;
 
+        const float lineWidth = 0.1;
+
         for (int y = 0; y < cm->mapHeight; y++) {
-            for (int x = 0; x < cm->mapWidth && instanceCount < instanceBuffers[i].maxInstances - 1; x++) { // may create 2 instances
+            for (int x = 0; x < cm->mapWidth && instanceCount < instanceBuffers[i].maxInstances - 1; x++) { // may create 2 instances so need to stop just short of max
                 htw_geo_GridCoord cellCoord = {x, y};
                 CellData *cell = htw_geo_getCell(cm, cellCoord);
+                s32 hSelf = cell->height;
+                CellWaterConnections connections = plane_extractCellWaterways(cm, cellCoord);
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
+                // world space position
                 vec3 cellPos = {{posX, posY, cell->height + 1}};
-                u32 ww = *(u32*)&cell->waterways; // extremely dubious
                 for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
-                    // tricky part: can't get waterways members in an indexed fashion, instead use bitmasks
-                    u32 shift = d * 5;
-                    u32 river = ww >> shift;
-                    u32 sizeMask = (1 << 4) - 1;
-                    u32 size = river & sizeMask;
-                    u32 dirMask = 1 << 3;
-                    bool dir = (river & dirMask) > 0;
-                    u32 twinMask = 1 << 4;
-                    bool toTwin = (river & twinMask) > 0;
+                    // world space origin of lines on this edge
+                    s32 c1 = d;
+                    vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
+                    const float contract = 0.5; // bring rivers toward center of cell
+                    vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
 
-                    if (size > 0) {
-                        s32 c1 = d;
+                    if (connections.segments[d]) {
                         s32 c2 = (c1 + 1) % HEX_CORNER_COUNT;
-                        if (dir) {
-                            // runs in counter-clockwise direction, swap endpoints
-                            s32 temp = c1;
-                            c1 = c2;
-                            c2 = temp;
-                        }
-                        vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
                         vec3 relEnd = {{htw_geo_hexCornerPositions[c2][0], htw_geo_hexCornerPositions[c2][1], 0.0}};
-                        const float contract = 0.5; // bring rivers toward center of cell
-                        vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
                         vec3 end = vec3Add(cellPos, vec3Multiply(relEnd, contract));
+
+                        // Get slope from all 3 other cells touching this edge; factor with existing connections to determine flow speed of segment
+                        s32 dLeft = htw_geo_hexDirectionLeft(d);
+                        s32 dRight = htw_geo_hexDirectionRight(d);
+                        // heights
+                        s32 hTwin = connections.neighbors[d]->height;
+                        s32 hLeft = connections.neighbors[dLeft]->height;
+                        s32 hRight = connections.neighbors[dRight]->height;
+                        // slopes
+                        s32 sTwin = hTwin - hSelf;
+                        s32 sLeft = hLeft - hSelf;
+                        s32 sRight = hRight - hSelf;
+
+                        // positive slope towards left in and twin out: + flow speed
+                        // positive slope towards right out and twin in: - flow speed
+                        // if both twin connections: contribution cancels out
+                        s32 speed = 0;
+                        speed += sLeft  * connections.connectionsIn[dLeft];
+                        speed += sTwin  * connections.connectionsOut[d];
+                        speed -= sTwin  * connections.connectionsIn[d];
+                        speed -= sRight * connections.connectionsOut[dRight];
 
                         instanceData[instanceCount] = (ArrowInstanceData){
                             .start = vec3MultiplyVector(start, *scale),
                             .end = vec3MultiplyVector(end, *scale),
                             .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
-                            .width = 0.05,
-                            .speed = 1.0
+                            .width = lineWidth,
+                            .speed = speed
                         };
                         instanceCount++;
                     }
-                    if (toTwin) {
-                        // get neighboring cell
+                    if (connections.connectionsOut[d]) {
+                        // get neighboring cell's worldspace position
                         htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
-                        CellData *neighbor = htw_geo_getCell(cm, neighborCoord);
                         float posX2, posY2;
                         htw_geo_getHexCellPositionSkewed(neighborCoord, &posX2, &posY2);
-                        vec3 neighborPos = {{posX2, posY2, neighbor->height + 1}};
+                        s32 hTwin = connections.neighbors[d]->height;
+                        vec3 neighborPos = {{posX2, posY2, hTwin + 1}};
 
-                        // start of segment
-                        s32 c1 = d;
                         // Opposite corner from end of segment
                         s32 cTwin = (d + 4) % HEX_CORNER_COUNT;
 
-                        vec3 relStart = {{htw_geo_hexCornerPositions[c1][0], htw_geo_hexCornerPositions[c1][1], 0.0}};
                         vec3 relEnd = {{htw_geo_hexCornerPositions[cTwin][0], htw_geo_hexCornerPositions[cTwin][1], 0.0}};
-                        const float contract = 0.5; // bring rivers toward center of cell
-                        vec3 start = vec3Add(cellPos, vec3Multiply(relStart, contract));
                         vec3 end = vec3Add(neighborPos, vec3Multiply(relEnd, contract));
 
-                        // TODO: swap start and end depending on relative slope. What to do if slope is 0?
-                        s32 slope = neighbor->height - cell->height;
-                        if (slope > 0) {
-                            vec3 temp = start;
-                            start = end;
-                            end = temp;
-                        }
+                        s32 sTwin = hTwin - hSelf;
 
                         instanceData[instanceCount] = (ArrowInstanceData){
                             .start = vec3MultiplyVector(start, *scale),
                             .end = vec3MultiplyVector(end, *scale),
                             .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
-                            .width = 0.05,
-                            .speed = slope
+                            .width = lineWidth,
+                            .speed = -sTwin
                         };
                         instanceCount++;
                     }

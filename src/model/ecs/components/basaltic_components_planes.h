@@ -91,6 +91,8 @@ typedef struct {
     bool connectionsOut[6];
     // stored in neighboring cells; changes to this are ignored by plane_applyRiverConnection
     bool connectionsIn[6];
+    // Need to lookup anyway, store here for use cases that need to know about neighbors (like rendering)
+    CellData *neighbors[6];
 } CellWaterConnections;
 
 typedef struct {
@@ -167,6 +169,8 @@ s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo
  */
 //s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
+
+CellWaterConnections plane_extractCellWaterways(const htw_ChunkMap *cm, htw_geo_GridCoord position);
 
 /// Extracts waterway info from cells at a, b, and all of their neighbors, and stores it in an easier to manipulate format
 RiverConnection plane_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);

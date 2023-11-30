@@ -281,8 +281,8 @@ void extractCellWaterway(const htw_ChunkMap *cm, htw_geo_GridCoord position, Hex
         connections->connectionsOut[i] = connection != 0;
 
         // Get connection data from neighbor cell in direction, in side opposite direction
-        CellData *neighbor = htw_geo_getCell(cm, POSITION_IN_DIRECTION(position, dir));
-        u32 wn = *(u32*)&(neighbor->waterways);
+        connections->neighbors[i] = htw_geo_getCell(cm, POSITION_IN_DIRECTION(position, dir));
+        u32 wn = *(u32*)&(connections->neighbors[i]->waterways);
         dir = htw_geo_hexDirectionOpposite(dir);
         shift = dir * 5;
         edge = wn >> shift;
@@ -305,6 +305,13 @@ void storeCellWaterway(htw_ChunkMap *cm, HexDirection referenceDirection, CellDa
         ww |= edge;
     }
     cell->waterways = *(CellWaterways*)&ww;
+}
+
+CellWaterConnections plane_extractCellWaterways(const htw_ChunkMap *cm, htw_geo_GridCoord position) {
+    CellWaterConnections cw;
+    CellData *cell = htw_geo_getCell(cm, position);
+    extractCellWaterway(cm, position, 0, cell, &cw);
+    return cw;
 }
 
 RiverConnection plane_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b) {
