@@ -272,6 +272,10 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
             for (int x = 0; x < cm->mapWidth && instanceCount < instanceBuffers[i].maxInstances - 1; x++) { // may create 2 instances so need to stop just short of max
                 htw_geo_GridCoord cellCoord = {x, y};
                 CellData *cell = htw_geo_getCell(cm, cellCoord);
+                // quickly eliminate cells with no nearby rivers
+                if (*(u32*)(&cell->waterways) == 0) {
+                    continue;
+                }
                 s32 hSelf = cell->height;
                 CellWaterConnections connections = plane_extractCellWaterways(cm, cellCoord);
                 float posX, posY;
