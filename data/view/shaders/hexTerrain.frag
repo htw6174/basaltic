@@ -4,12 +4,14 @@ precision mediump float;
 #define PI 3.14159
 #define TAU 6.28318530718
 
-#define DRAW_BORDERS
-
 //#include "uniforms.h"
 
+// global uniforms
 uniform float time;
-uniform vec2 mousePosition;
+uniform vec2 mouse;
+
+// terrain uniforms
+uniform bool drawBorders;
 
 in vec4 inout_data1;
 in vec4 inout_data2;
@@ -304,9 +306,8 @@ void main()
 	// TEST: color per tile
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
 
-#ifdef DRAW_BORDERS
-	albedo *= inout_radius > 0.95 ? 0.5 : 1.0;
-#endif
+	vec3 borderColor = drawBorders ? albedo * 0.5 : albedo;
+	albedo = inout_radius > 0.975 ? borderColor : albedo;
 
 	//out_color = vec4(vec3(inout_data2.x), fadeout);
 	out_color = vec4(albedo, fadeout);

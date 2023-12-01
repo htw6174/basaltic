@@ -293,34 +293,29 @@ void UniformPointerToMouse(ecs_iter_t *it) {
 }
 
 void UniformCameraToPVMatrix(ecs_iter_t *it) {
-    const Camera *cam = ecs_singleton_get(it->world, Camera);
-    const WindowSize *w = ecs_singleton_get(it->world, WindowSize);
-    PVMatrix *pv = ecs_singleton_get_mut(it->world, PVMatrix);
-    InverseMatrices *invs = ecs_singleton_get_mut(it->world, InverseMatrices);
+    const Camera *cam = ecs_field(it, Camera, 1);
+    const WindowSize *w = ecs_field(it, WindowSize, 2);
+    PVMatrix *pv = ecs_field(it, PVMatrix, 3);
+    GlobalUniformsVert *gv = ecs_field(it, GlobalUniformsVert, 4);
+    InverseMatrices *invs = ecs_field(it, InverseMatrices, 5);
 
-    // TODO: figure out if inner loops should be used for singleton-only systems
-    //for (int i = 0; i < it->count; i++) {
-    {
-        vec3 cameraPosition = bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0));
-        cameraPosition = vec3Add(cameraPosition, cam->origin);
+    vec3 cameraPosition = bc_sphereToCartesian(cam->yaw, cam->pitch, powf(cam->distance, 2.0));
+    cameraPosition = vec3Add(cameraPosition, cam->origin);
 
-        mat4x4 p, v;
-        mat4x4Perspective(p, PI / 3.f, (float)w->x / w->y, cam->zNear, cam->zFar);
-        mat4x4LookAt(v,
-            cameraPosition,
-            cam->origin,
-            (vec3){ {0.f, 0.f, 1.f} }
-        );
+    mat4x4 p, v;
+    mat4x4Perspective(p, PI / 3.f, (float)w->x / w->y, cam->zNear, cam->zFar);
+    mat4x4LookAt(v,
+        cameraPosition,
+        cam->origin,
+        (vec3){ {0.f, 0.f, 1.f} }
+    );
 
-        mat4x4MultiplyMatrix(pv[0], v, p);
+    mat4x4MultiplyMatrix(gv->pv, v, p);
+    memcpy(pv, &(gv->pv), sizeof(PVMatrix)); // TODO: remove when PVMatrix singleton is unneeded
 
-        // inverse matricies
-        mat4x4Inverse(invs->view, v);
-        mat4x4Inverse(invs->projection, p);
-    }
-
-    ecs_singleton_modified(it->world, PVMatrix);
-    ecs_singleton_modified(it->world, InverseMatrices);
+    // inverse matricies
+    mat4x4Inverse(invs->view, v);
+    mat4x4Inverse(invs->projection, p);
 }
 
 void UniformSunToMatrix(ecs_iter_t *it) {
@@ -355,6 +350,17 @@ void UniformSunToMatrix(ecs_iter_t *it) {
 
     mat4x4MultiplyMatrix(*pv, v, p);
     ecs_singleton_modified(it->world, SunMatrix);
+}
+
+void UpdateGlobalUniformsFrag(ecs_iter_t *it) {
+    int f = 0;
+    // constant source
+    GlobalUniformsFrag *gf = ecs_field(it, GlobalUniformsFrag, ++f);
+    Mouse *mouse = ecs_field(it, Mouse, ++f);
+    Clock *programClock = ecs_field(it, Clock, ++f);
+
+    gf->mouse = (vec2){{mouse->x, mouse->y}};
+    gf->time = programClock->seconds;
 }
 
 void InitRenderPasses(ecs_iter_t *it) {
@@ -768,17 +774,25 @@ void BcviewSystemsImport(ecs_world_t *world) {
         [out] ?Mouse($)
     );
 
+    // TODO: should eventually replace PVMatrix singleton completely with GlobalUniformsVert?
     ECS_SYSTEM(world, UniformCameraToPVMatrix, EcsPreUpdate,
         [in] Camera($),
         [in] WindowSize($),
-        [out] ?PVMatrix($),
-        [out] ?InverseMatrices($)
+        [out] PVMatrix($),
+        [out] GlobalUniformsVert($),
+        [out] InverseMatrices($)
     );
 
     ECS_SYSTEM(world, UniformSunToMatrix, EcsPreUpdate,
         [in] SunLight($),
         [in] Camera($),
         [out] ?SunMatrix($)
+    );
+
+    ECS_SYSTEM(world, UpdateGlobalUniformsFrag, EcsPreUpdate,
+        [out] GlobalUniformsFrag($),
+        [in] Mouse($),
+        [in] Clock($)
     );
 
     // Render pass setup and updates

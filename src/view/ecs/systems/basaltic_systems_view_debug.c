@@ -228,6 +228,7 @@ void UpdateArrowBuffers(ecs_iter_t *it) {
             htw_ChunkMap *cm = plane->chunkMap;
             for (int m = 0; m < mit.count && instanceCount < instanceBuffers[i].maxInstances; m++) {
                 CellData *posCell = htw_geo_getCell(cm, positions[m]);
+                // NOTE: behavior systems that pre-wrap destination coords create arrows stretching across the entire world when crossing a wrap boundary
                 CellData *destCell = htw_geo_getCell(cm, destinations[m]);
                 float startX, startY, endX, endY;
                 htw_geo_getHexCellPositionSkewed(positions[m], &startX, &startY);

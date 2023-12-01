@@ -266,7 +266,7 @@ ECS_STRUCT(RenderDistance, {
 });
 
 
-/* Rendering */
+/* Uniform Data */
 
 ECS_STRUCT(WindowSize, {
     s32 x;
@@ -309,6 +309,40 @@ ECS_STRUCT(SunLight, {
     Color directColor;
     Color indirectColor;
 });
+
+ /* Uniforms */
+ // Added to uniform components for convient building of shader descriptions
+ // TODO: can setup manually for now, but later should be possible to use reflection info to generate
+typedef sg_shader_uniform_block_desc UniformBlockDescription;
+BC_DECL ECS_COMPONENT_DECLARE(UniformBlockDescription);
+
+// Singletons, updated before first render pass, bound to uniform block slot 0
+ECS_STRUCT(GlobalUniformsVert, {
+    PVMatrix pv;
+});
+
+ECS_STRUCT(GlobalUniformsFrag, {
+    float time;
+    vec2 mouse;
+});
+
+// Added to specific pipelines, updated before first render pass, bound to uniform block slot 1
+ECS_STRUCT(TerrainPipelineUniformsVert, {
+    u32 visibility;
+});
+
+ECS_STRUCT(TerrainPipelineUniformsFrag, {
+    bool drawBorders;
+    ECS_PRIVATE
+    u8 padding[3]; // for uniform member alignment
+});
+
+// Updated by draw systems, not necessarially added to any entity, bound to uniform block slot 2
+ECS_STRUCT(CommonDrawUniformsVert, {
+    ModelMatrix m;
+});
+
+/* Rendering */
 
 // To hold different RenderPasses and RenderTargets
 // Also, relationship where the target is a Pipeline entity to be bound in that pass

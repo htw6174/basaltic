@@ -138,7 +138,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_primitive(world, {.entity = ecs_id(ShadowMapSize), .kind = EcsI32});
     ECS_META_COMPONENT(world, RenderDistance);
 
-    // Rendering
+    // Uniform Data
     ECS_META_COMPONENT(world, WindowSize);
     ECS_META_COMPONENT(world, Mouse);
     ECS_META_COMPONENT(world, Visibility);
@@ -149,14 +149,23 @@ void BcviewImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, Clock);
     ECS_META_COMPONENT(world, SunLight);
 
-    ECS_COMPONENT_DEFINE(world, RenderPassDescription);
-    ECS_COMPONENT_DEFINE(world, RenderPass);
-    ECS_COMPONENT_DEFINE(world, RenderTarget);
+    // Uniforms
+    ECS_COMPONENT_DEFINE(world, UniformBlockDescription);
+    ECS_COMPONENT_DEFINE(world, GlobalUniformsVert);
+    ECS_META_COMPONENT(world, GlobalUniformsFrag);
+    ECS_META_COMPONENT(world, TerrainPipelineUniformsVert);
+    ECS_META_COMPONENT(world, TerrainPipelineUniformsFrag);
+    ECS_COMPONENT_DEFINE(world, CommonDrawUniformsVert);
+
+    // Rendering
     ECS_TAG_DEFINE(world, ShadowPass);
     ECS_TAG_DEFINE(world, GBufferPass);
     ECS_TAG_DEFINE(world, LightingPass);
     ECS_TAG_DEFINE(world, TransparentPass);
     ECS_TAG_DEFINE(world, FinalPass);
+    ECS_COMPONENT_DEFINE(world, RenderPassDescription);
+    ECS_COMPONENT_DEFINE(world, RenderPass);
+    ECS_COMPONENT_DEFINE(world, RenderTarget);
 
     ecs_add_id(world, ShadowPass, EcsTraversable);
     ecs_add_id(world, ShadowPass, EcsOneOf);
@@ -201,6 +210,7 @@ void BcviewImport(ecs_world_t *world) {
 
     /* Setup singleton defaults */
     // TODO: most of the singleton initialization moved to script. Play around with it, figure out if the rest can be moved / should be returned
+    // NOTE: a potential issue with singleton setup here or in scripts is ordering with observers: don't want to create an entity before observers its components rely on for setup are defined. General order of operations should be component definitions, system definitions, entity creation
 
     // Set later with bc_SetCameraWrapLimits
     ecs_singleton_add(world, CameraWrap);
@@ -212,6 +222,47 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
 
+    ecs_singleton_add(world, GlobalUniformsVert);
+    ecs_singleton_add(world, GlobalUniformsFrag);
+    // Uniform block descriptions
+    ecs_set(world, ecs_id(GlobalUniformsVert), UniformBlockDescription, {
+        .size = sizeof(GlobalUniformsVert),
+        .layout = SG_UNIFORMLAYOUT_NATIVE,
+        .uniforms = {
+            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
+        }
+    });
+    ecs_set(world, ecs_id(GlobalUniformsFrag), UniformBlockDescription, {
+        .size = sizeof(GlobalUniformsFrag),
+            .layout = SG_UNIFORMLAYOUT_NATIVE,
+            .uniforms = {
+                [0] = {.name = "time", .type = SG_UNIFORMTYPE_FLOAT},
+                [1] = {.name = "mouse", .type = SG_UNIFORMTYPE_FLOAT2},
+            }
+    });
+    ecs_set(world, ecs_id(CommonDrawUniformsVert), UniformBlockDescription, {
+        .size = sizeof(CommonDrawUniformsVert),
+            .layout = SG_UNIFORMLAYOUT_NATIVE,
+            .uniforms = {
+                [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
+            }
+    });
+
+    ecs_set(world, ecs_id(TerrainPipelineUniformsVert), UniformBlockDescription, {
+        .size = sizeof(TerrainPipelineUniformsVert),
+            .layout = SG_UNIFORMLAYOUT_NATIVE,
+            .uniforms = {
+                [0] = {.name = "visibilityOverride", .type = SG_UNIFORMTYPE_INT},
+            }
+    });
+    ecs_set(world, ecs_id(TerrainPipelineUniformsFrag), UniformBlockDescription, {
+        .size = sizeof(TerrainPipelineUniformsFrag),
+            .layout = SG_UNIFORMLAYOUT_NATIVE,
+            .uniforms = {
+                [0] = {.name = "drawBorders", .type = SG_UNIFORMTYPE_INT},
+            }
+    });
+
     ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count, should have a component ctor/dtor if it need to alloc
 
     // Input
@@ -219,6 +270,8 @@ void BcviewImport(ecs_world_t *world) {
     ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
 
     // Global uniforms
+    ecs_singleton_add(world, PVMatrix);
+    ecs_singleton_add(world, InverseMatrices);
     ecs_singleton_add(world, DeltaTime);
     ecs_singleton_add(world, Mouse);
     ecs_singleton_add(world, Visibility);

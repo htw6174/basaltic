@@ -248,11 +248,19 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
             model->tickInterval = 1000 / tps;
             igPopItemWidth();
 
+            // TODO: need a better solution for non-guaranteed entities like this in the final GUI. Currently, this relies on order of setup and some menus being default collapsed to avoid crash from failed lookup
+            ecs_entity_t terrainPipeline = ecs_lookup_fullpath(viewWorld, "bcview.GBufferPass.Terrain Pipeline");
+
             if (igCollapsingHeader_TreeNodeFlags("Video Settings", ImGuiTreeNodeFlags_None)) {
                 // Toggle shadows
                 bool shadows = !ecs_has_id(viewWorld, OnPassShadow, EcsDisabled);
                 if (igCheckbox("Enable Shadows", &shadows)) {
                     ecs_enable(viewWorld, OnPassShadow, shadows);
+                }
+                // tile borders
+                TerrainPipelineUniformsFrag *tf = ecs_get_mut(viewWorld, terrainPipeline, TerrainPipelineUniformsFrag);
+                if (igCheckbox("Show tile borders", &tf->drawBorders)) {
+                    ecs_modified(viewWorld, terrainPipeline, TerrainPipelineUniformsFrag);
                 }
                 // Render scale
                 RenderScale *rs = ecs_get_mut(viewWorld, VideoSettings, RenderScale);
@@ -365,140 +373,6 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igText("Left click and drag to create a river connection between tiles");
                         igText("Right click and drag to remove river connections");
 
-                        // TEST: direct edit ui
-                        /*
-                        {
-                            const SelectedCell *selected = ecs_singleton_get(viewWorld, SelectedCell);
-                            const FocusPlane *fp = ecs_singleton_get(viewWorld, FocusPlane);
-                            const Plane *plane = ecs_get(worldState->ecsWorld, fp->entity, Plane);
-                            CellData *cell = htw_geo_getCell(plane->chunkMap, (htw_geo_GridCoord){selected->x, selected->y});
-                            CellWaterways ww = cell->waterways;
-                            const char *dirs[6] = {"North West", "North East", "West", "East", "South West", "South East"};
-                            int d = 0;
-                            RiverSegment rs;
-
-                            // layout
-                            ImVec2 region;
-                            igGetContentRegionAvail(&region);
-                            float width = region.x * 0.35;
-                            float indent = region.x * 0.1;
-                            igPushItemWidth(width);
-
-                            // Doing this the dumb way so I can lay out the interface in a way that makes sense
-
-
-                            igIndent(indent);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeNW;
-                            rs.connectToTwin = ww.riverToTwinNW;
-                            rs.direction = ww.riverDirNW;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeNW = rs.size;
-                            ww.riverToTwinNW = rs.connectToTwin;
-                            ww.riverDirNW = rs.direction;
-
-                            igSameLine(0, -1);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeNE;
-                            rs.connectToTwin = ww.riverToTwinNE;
-                            rs.direction = ww.riverDirNE;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeNE = rs.size;
-                            ww.riverToTwinNE = rs.connectToTwin;
-                            ww.riverDirNE = rs.direction;
-
-                            igUnindent(indent);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeW;
-                            rs.connectToTwin = ww.riverToTwinW;
-                            rs.direction = ww.riverDirW;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeW = rs.size;
-                            ww.riverToTwinW = rs.connectToTwin;
-                            ww.riverDirW = rs.direction;
-
-                            igSameLine(0, indent * 2);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeE;
-                            rs.connectToTwin = ww.riverToTwinE;
-                            rs.direction = ww.riverDirE;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeE = rs.size;
-                            ww.riverToTwinE = rs.connectToTwin;
-                            ww.riverDirE = rs.direction;
-
-                            igIndent(indent);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeSW;
-                            rs.connectToTwin = ww.riverToTwinSW;
-                            rs.direction = ww.riverDirSW;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeSW = rs.size;
-                            ww.riverToTwinSW = rs.connectToTwin;
-                            ww.riverDirSW = rs.direction;
-
-                            igSameLine(0, -1);
-
-                            igPushID_Str(dirs[d++]);
-                            igBeginGroup();
-                            rs.size = ww.riverSizeSE;
-                            rs.connectToTwin = ww.riverToTwinSE;
-                            rs.direction = ww.riverDirSE;
-                            igSliderInt("##", &rs.size, 0, 7, NULL, 0);
-                            igCheckbox("Twin", &rs.connectToTwin);
-                            igSameLine(0, -1);
-                            igCheckbox("CCW?", &rs.direction);
-                            igEndGroup();
-                            igPopID();
-                            ww.riverSizeSE = rs.size;
-                            ww.riverToTwinSE = rs.connectToTwin;
-                            ww.riverDirSE = rs.direction;
-
-                            igUnindent(indent);
-
-
-
-                            igPopItemWidth();
-
-                            cell->waterways = ww;
-                        }
-                        */
-
                         igEndTabItem();
                     }
                     ecs_enable(viewWorld, riverBindGroup, riverBindActive);
@@ -567,6 +441,8 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 }
                 if (playerBindGroup) {
                     bool playerBindActive = igBeginTabItem("Move Player", NULL, ImGuiTabItemFlags_None);
+                    // to set visibility
+                    TerrainPipelineUniformsVert *tv = ecs_get_mut(viewWorld, terrainPipeline, TerrainPipelineUniformsVert);
                     if (playerBindActive) {
                         igText("Left click to select entities");
                         igText("Right click to set player destination");
@@ -574,7 +450,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igText("Press c to focus camera on the player");
 
                         // Set visibility to 'play mode'
-                        ecs_singleton_set(viewWorld, Visibility, {.override = 0});
+                        if (tv != NULL) tv->visibility = 0;
 
                         const PlayerEntity *player = ecs_singleton_get(viewWorld, PlayerEntity);
                         ecs_world_t *world = worldState->ecsWorld;
@@ -593,8 +469,9 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igEndTabItem();
                     } else {
                         // Set visibility to 'edit mode'
-                        ecs_singleton_set(viewWorld, Visibility, {.override = 2});
+                        if (tv != NULL) tv->visibility = 2;
                     }
+                    ecs_modified(viewWorld, terrainPipeline, TerrainPipelineUniformsVert);
                     ecs_enable(viewWorld, playerBindGroup, playerBindActive);
                 }
 

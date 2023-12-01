@@ -42,11 +42,9 @@ void tickStamina(ecs_iter_t *it);
 void egoBehaviorWander(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
 
     for (int i = 0; i < it->count; i++) {
-        destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
+        destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
     }
 }
 
@@ -69,7 +67,7 @@ void setDescenderDestinations(ecs_iter_t *it) {
         if (lowestDirection == -1) {
             continue;
         } else {
-            destinations[i] = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[lowestDirection]);
+            destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[lowestDirection]);
         }
     }
 }
@@ -270,7 +268,7 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
                 ecs_add_pair(it->world, it->entities[i], Action, ActionFeed);
             } else {
                 // Apply best direction found
-                destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_cubeToGridCoord(bestDirection));
+                destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_cubeToGridCoord(bestDirection));
                 ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
             }
         }
@@ -316,7 +314,7 @@ void egoBehaviorPredator(ecs_iter_t *it) {
         }
         if (!inPersuit) {
             // move randomly
-            destinations[i] = htw_geo_addGridCoordsWrapped(cm, positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
+            destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
         }
         ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }

@@ -21,50 +21,7 @@ typedef struct {
     s16 localY;
 } hexmapVertexData;
 
-// Compressed version of bc_CellData used for rendering
-// TODO: deprecated, only go back to this if video memory starts to become an issue
-typedef struct {
-    // joined to int packed1
-    s16 elevation;
-    u8 paletteX;
-    u8 paletteY;
-    // joined to uint packed2
-    u8 visibilityBits;
-    u8 lightingBits; // TODO: use one of these bits for solid underground areas? Could override elevation as well to create walls
-    u16 unused2; // weather / temporary effect bitmask?
-    //int64_t aligner;
-} terrainCellData;
-
-typedef struct {
-    u32 visibility;
-} terrainPipelineUniformsVert;
-
-typedef struct {
-    vec2 mouse;
-} terrainPipelineUniformsFrag;
-
 static sg_shader_desc terrainShadowShaderDescription = {
-    .vs.uniform_blocks[0] = {
-        .size = sizeof(PVMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4},
-        }
-    },
-    .vs.uniform_blocks[1] = {
-        .size = sizeof(terrainPipelineUniformsVert),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "visibilityOverride", .type = SG_UNIFORMTYPE_INT},
-        }
-    },
-    .vs.uniform_blocks[2] = {
-        .size = sizeof(ModelMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4},
-        }
-    },
     .vs.images[0] = {
         .used = true,
         .image_type = SG_IMAGETYPE_2D,
@@ -113,27 +70,6 @@ static sg_pipeline_desc terrainShadowPipelineDescription = {
 
 // NOTE: can eliminate most of the shader spec later when using reflection utils
 static sg_shader_desc terrainShaderDescription = {
-    .vs.uniform_blocks[0] = {
-        .size = sizeof(PVMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "pv", .type = SG_UNIFORMTYPE_MAT4}
-        }
-    },
-    .vs.uniform_blocks[1] = {
-        .size = sizeof(terrainPipelineUniformsVert),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "visibilityOverride", .type = SG_UNIFORMTYPE_INT}
-        }
-    },
-    .vs.uniform_blocks[2] = {
-        .size = sizeof(ModelMatrix),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "m", .type = SG_UNIFORMTYPE_MAT4}
-        }
-    },
     .vs.images[0] = {
         .used = true,
         .image_type = SG_IMAGETYPE_2D,
@@ -150,30 +86,6 @@ static sg_shader_desc terrainShaderDescription = {
         .glsl_name = "terrain"
     },
     .vs.source = NULL,
-    // Global uniforms
-    .fs.uniform_blocks[0] = {
-        .size = sizeof(float),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "time", .type = SG_UNIFORMTYPE_FLOAT}
-        }
-    },
-    // Pipeline specific uniforms
-    .fs.uniform_blocks[1] = {
-        // NOTE: when using STD140, vec4 size is required here, even though the size/alignment requirement should only be 8 bytes for a STD140 vec2 uniform. Maybe don't bother with STD140 since I only plan to use the GL backend. Can add sokol-shdc to the project later to improve cross-platform support if I really need it.
-        .size = sizeof(terrainPipelineUniformsFrag),
-        .layout = SG_UNIFORMLAYOUT_NATIVE,
-        .uniforms = {
-            [0] = {.name = "mousePosition", .type = SG_UNIFORMTYPE_FLOAT2}
-        }
-    },
-    // Unused per-instance uniforms
-    // .fs.uniform_blocks[2] = {
-    //     .size = 0,
-    //     .layout = SG_UNIFORMLAYOUT_NATIVE,
-    //     .uniforms = {
-    //     }
-    // },
     .fs.source = NULL
 };
 
@@ -1123,6 +1035,21 @@ void UpdateTerrainDataTextureDirtyChunks(ecs_iter_t *it) {
     }
 }
 
+// NOTE: actually don't need this for properties only set manually, something like this might be useful for dynamic uniforms
+// TODO: split into 2 systems for terrain pipelines without one or the other (e.g. shadows)?
+void UpdateTerrainPipelineUniforms(ecs_iter_t *it) {
+    TerrainPipelineUniformsVert *vert = ecs_field(it, TerrainPipelineUniformsVert, 1);
+    TerrainPipelineUniformsFrag *frag = ecs_field(it, TerrainPipelineUniformsFrag, 2);
+    // constant source
+    Visibility *visibility = ecs_field(it, Visibility, 3);
+    // TODO: draw cell borders toggle
+
+    for (int i = 0; i < it->count; i++) {
+        vert[i].visibility = visibility->override;
+        frag[i].drawBorders = false;
+    }
+}
+
 // TODO: restrict number of instances drawn, add LOD meshes and draw different instances for each LOD
 void DrawHexTerrainShadows(ecs_iter_t *it) {
     int f = 0;
@@ -1168,17 +1095,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     DataTexture *dataTextures = ecs_field(it, DataTexture, ++f);
     RingBuffer *pixelPack = ecs_field(it, RingBuffer, ++f);
     // Singletons
-    PVMatrix *pv = ecs_field(it, PVMatrix, ++f);
+    GlobalUniformsVert *gv = ecs_field(it, GlobalUniformsVert, ++f);
+    GlobalUniformsFrag *gf = ecs_field(it, GlobalUniformsFrag, ++f);
+    TerrainPipelineUniformsVert *tv = ecs_field(it, TerrainPipelineUniformsVert, ++f);
+    TerrainPipelineUniformsFrag *tf = ecs_field(it, TerrainPipelineUniformsFrag, ++f);
     Mouse *mouse = ecs_field(it, Mouse, ++f);
-    Clock *programClock = ecs_field(it, Clock, ++f);
-    Visibility *visibility = ecs_field(it, Visibility, ++f);
-    // FIXME: field_is_set returns false may return false when ecs_field returns valid component
-    // if (ecs_field_is_set(it, ++f)) {
-    //     visibility = *ecs_field(it, Visibility, f);
-    // }
-    // if (ecs_field_is_set(it, ++f)) {
-    //     HoveredCell *hovered = ecs_field(it, HoveredCell, f); // may use as uniform input later
-    // }
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -1194,17 +1115,11 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         sg_apply_pipeline(pips[i].pipeline);
         sg_apply_bindings(&bind);
 
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(*pv));
-        terrainPipelineUniformsVert tvu = {
-            .visibility = visibility == NULL ? 0 : visibility->override
-        };
-        sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(tvu));
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 0, &SG_RANGE(*gv));
+        sg_apply_uniforms(SG_SHADERSTAGE_VS, 1, &SG_RANGE(*tv));
 
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(*programClock));
-        terrainPipelineUniformsFrag tfu = {
-            .mouse = {{mouse->x, mouse->y}}
-        };
-        sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(tfu));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 0, &SG_RANGE(*gf));
+        sg_apply_uniforms(SG_SHADERSTAGE_FS, 1, &SG_RANGE(*tf));
 
         if (wraps != NULL) {
             bc_drawWrapInstances(0, mesh[i].elements, instanceBuffers[i].instances, 2, (vec3){{0.0, 0.0, 0.0}}, wraps->offsets);
@@ -1317,11 +1232,11 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] Mesh,
                [in] DataTexture,
                [in] RingBuffer,
-               [in] PVMatrix($),
+               [in] GlobalUniformsVert($),
+               [in] GlobalUniformsFrag($),
+               [in] TerrainPipelineUniformsVert(up(bcview.GBufferPass)),
+               [in] TerrainPipelineUniformsFrag(up(bcview.GBufferPass)),
                [in] Mouse($),
-               [in] Clock($),
-               [in] ?Visibility($),
-               [in] ?HoveredCell($),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
                [none] bcview.TerrainRender,
@@ -1333,18 +1248,33 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [none] bcview.TerrainRender,
     );
 
+    // FIXME: temporary half-measure while transitioning to ecs-defined shader and pipeline descriptions
+    // Add global and pipeline uniform block descriptions
+    terrainShaderDescription.vs.uniform_blocks[0] = *ecs_get(world, ecs_id(GlobalUniformsVert), UniformBlockDescription);
+    terrainShaderDescription.vs.uniform_blocks[1] = *ecs_get(world, ecs_id(TerrainPipelineUniformsVert), UniformBlockDescription);
+    terrainShaderDescription.vs.uniform_blocks[2] = *ecs_get(world, ecs_id(CommonDrawUniformsVert), UniformBlockDescription);
+    terrainShaderDescription.fs.uniform_blocks[0] = *ecs_get(world, ecs_id(GlobalUniformsFrag), UniformBlockDescription);
+    terrainShaderDescription.fs.uniform_blocks[1] = *ecs_get(world, ecs_id(TerrainPipelineUniformsFrag), UniformBlockDescription);
+
+    terrainShadowShaderDescription.vs.uniform_blocks[0] = *ecs_get(world, ecs_id(GlobalUniformsVert), UniformBlockDescription);
+    terrainShadowShaderDescription.vs.uniform_blocks[1] = *ecs_get(world, ecs_id(TerrainPipelineUniformsVert), UniformBlockDescription);
+    terrainShadowShaderDescription.vs.uniform_blocks[2] = *ecs_get(world, ecs_id(CommonDrawUniformsVert), UniformBlockDescription);
+
     // Pipeline, only need to create one per type
     ecs_entity_t terrainPipeline = ecs_set_name(world, 0, "Terrain Pipeline");
     ecs_add_pair(world, terrainPipeline, EcsChildOf, GBufferPass);
     ecs_set_pair(world, terrainPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/hexTerrain.vert"});
     // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
     ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
+    ecs_add(world, terrainPipeline, TerrainPipelineUniformsVert);
+    ecs_add(world, terrainPipeline, TerrainPipelineUniformsFrag);
     ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrainPipelineDescription});
 
     ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");
     ecs_add_pair(world, terrainShadowPipeline, EcsChildOf, ShadowPass);
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/shadow_terrain.vert"});
     ecs_set_pair(world, terrainShadowPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/shadow_terrain.frag"});
+    ecs_add(world, terrainShadowPipeline, TerrainPipelineUniformsVert);
     ecs_set(world, terrainShadowPipeline, PipelineDescription, {.shader_desc = &terrainShadowShaderDescription, .pipeline_desc = &terrainShadowPipelineDescription});
 
     // TODO: give these setup steps a better home
