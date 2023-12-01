@@ -330,7 +330,9 @@ RiverConnection plane_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_G
         rc.uphillCell = c1;
         rc.downhillCell = c2;
     }
-    rc.upToDownDirection = htw_geo_relativeHexDirection(a, b);
+    // wrap difference to ensure relative direction is correct
+    htw_geo_GridCoord wrappedVec = htw_geo_wrapVectorOnChunkMap(cm, htw_geo_subGridCoords(b, a));
+    rc.upToDownDirection = htw_geo_vectorHexDirection(wrappedVec);
 
     // extract info for uphill cell
     extractCellWaterway(cm, a, rc.upToDownDirection, rc.uphillCell, &rc.uphill);

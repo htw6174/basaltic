@@ -1267,7 +1267,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
     ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
     ecs_add(world, terrainPipeline, TerrainPipelineUniformsVert);
-    ecs_add(world, terrainPipeline, TerrainPipelineUniformsFrag);
+    ecs_set(world, terrainPipeline, TerrainPipelineUniformsFrag, {.drawBorders = true});
     ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrainPipelineDescription});
 
     ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");

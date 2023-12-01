@@ -317,10 +317,9 @@ void PaintValueBrush(ecs_iter_t *it) {
     bc_redraw_model(it->world);
 }
 
-/// return: should neighbor cell connection to this one be set?
-bool createSegmentPath(CellWaterConnections *connections) {
-    // find closest existing connections on both cells
-    // TODO: should have a tool setting that controls how segments are created between connections, allow bias toward straight or curvy rivers by increasing minimum distance threshold
+/// Stored in shortestLeft and shorestRight: number of sides between reference direction corner on that side and the closest connection on that side. -1 if no connection. 0 if no segments needed to connect.
+/// return: true = there is a preferred connection side; false = no preferred side
+bool shortestDistanceToConnections(const CellWaterConnections *connections, s32 *shortestLeft, s32 *shortestRight) {
     // Smallest number of segments between the new connection's lefthand (out) corner and the rightmost connection of any other edge
     s32 minDistLeft = 3;
     // Smallest number of segments between the new connection's righthand (in) corner and the leftmost connection of any other edge
@@ -344,21 +343,21 @@ bool createSegmentPath(CellWaterConnections *connections) {
         }
         minDistLeft = MIN(minDistLeft, distLeft);
     }
-    // create path of segments linking new connection to existing and determine what side(s) of the edge connection should be on
-    bool connectNeighbor = false;
-    if (minDistRight < 3) {
-        connectNeighbor = true;
-        for (int i = 0; i < minDistRight; i++) {
-            connections->segments[i + 1] = true;
-        }
+    // -1 if no connection on that side
+    *shortestLeft = minDistLeft < 3 ? minDistLeft : -6;
+    *shortestRight = minDistRight < 3 ? minDistRight : -6;
+    return minDistLeft != minDistRight;
+}
+
+/// return: should neighbor cell connection to this one be set?
+void createSegmentPath(CellWaterConnections *connections, s32 segmentsLeft, s32 segmentsRight) {
+    // TODO: should have a tool setting that controls how segments are created between connections, allow bias toward straight or curvy rivers by increasing minimum distance threshold
+    for (int i = 0; i < segmentsRight; i++) {
+        connections->segments[i + 1] = true;
     }
-    if (minDistLeft < 3) {
-        connections->connectionsOut[0] = true;
-        for (int i = 0; i < minDistLeft; i++) {
-            connections->segments[HEX_DIRECTION_COUNT - (i + 1)] = true;
-        }
+    for (int i = 0; i < segmentsLeft; i++) {
+        connections->segments[HEX_DIRECTION_COUNT - (i + 1)] = true;
     }
-    return connectNeighbor;
 }
 
 void cleanSegmentPath(CellWaterConnections *connections) {
@@ -393,28 +392,70 @@ void PaintRiverBrush(ecs_iter_t *it) {
     void *param = it->param;
     InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis.x = 1.0};
 
-    htw_geo_GridCoord relative = {-ic.delta.x, -ic.delta.y};
-    htw_geo_GridCoord prevHoveredCoord = htw_geo_addGridCoords(hoveredCoord, relative);
-    // Only continue if hovered and prevHovered are neighbors
-    s32 distance = htw_geo_hexGridDistance(hoveredCoord, prevHoveredCoord);
-    if (distance != 1) {
-        return;
-    }
-
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
     htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
+    htw_geo_GridCoord relative = {-ic.delta.x, -ic.delta.y};
+    //relative = htw_geo_wrapVectorOnChunkMap(cm, relative);
+    htw_geo_GridCoord prevHoveredCoord = htw_geo_addGridCoords(hoveredCoord, relative);
+    // Only continue if hovered and prevHovered are neighbors
+    // need to account for world wrapping when computing distance
+    s32 distance = htw_geo_getChunkMapHexDistance(cm, hoveredCoord, prevHoveredCoord);
+    if (distance != 1) {
+        return;
+    }
+
     RiverConnection rc = plane_riverConnectionFromCells(cm, prevHoveredCoord, hoveredCoord);
 
     if (ic.axis.x > 0.0) {
-        rc.downhill.connectionsOut[0] |= createSegmentPath(&rc.uphill);
-        rc.uphill.connectionsOut[0] |= createSegmentPath(&rc.downhill);
-        // if no path to existing connections, should by default add connection or random side
-        if (rc.uphill.connectionsOut[0] == false && rc.downhill.connectionsOut[0] == false) {
+        s32 uphillDistLeft, uphillDistRight, downhillDistLeft, downhillDistRight;
+        bool uphillPreferred = shortestDistanceToConnections(&rc.uphill, &uphillDistLeft, &uphillDistRight);
+        bool downhillPreferred = shortestDistanceToConnections(&rc.downhill, &downhillDistLeft, &downhillDistRight);
+        if (uphillPreferred) {
+            if (abs(uphillDistLeft) < abs(uphillDistRight)) {
+                rc.uphill.connectionsOut[0] = true;
+                uphillDistRight = 0;
+            } else {
+                rc.downhill.connectionsOut[0] = true;
+                uphillDistLeft = 0;
+            }
+        } else if (downhillPreferred) {
+            // when connection side is determined by downhill, still need to set one or the other uphill distance to 0
+            if (abs(downhillDistLeft) < abs(downhillDistRight)) {
+                rc.downhill.connectionsOut[0] = true;
+                uphillDistLeft = 0;
+            } else {
+                rc.uphill.connectionsOut[0] = true;
+                uphillDistRight = 0;
+            }
+        } else {
+            // connect on random or constant side
             rc.uphill.connectionsOut[0] = true;
-            //rc.downhill.connectionsOut[0] = true;
+            uphillDistRight = 0;
         }
+        createSegmentPath(&rc.uphill, uphillDistLeft, uphillDistRight);
+        // determine how to connect downhill
+        // distance to existing connection is increased if new connection is on opposite side
+        s32 extraLeft = 0, extraRight = 0;
+        if (rc.uphill.connectionsOut[0]) {
+            extraLeft += 1;
+        }
+        if (rc.downhill.connectionsOut[0]) {
+            extraRight += 1;
+        }
+        if (abs(downhillDistLeft) + extraLeft < abs(downhillDistRight) + extraRight) {
+            downhillDistRight = 0;
+            if (extraLeft > 0) {
+                rc.downhill.segments[0] = true;
+            }
+        } else {
+            downhillDistLeft = 0;
+            if (extraRight > 0) {
+                rc.downhill.segments[0] = true;
+            }
+        }
+        createSegmentPath(&rc.downhill, downhillDistLeft, downhillDistRight);
         // TODO: should have tool setting that controls if segment is created on the edge(s) being connected
 
     } else {
