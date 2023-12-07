@@ -18,6 +18,7 @@
 #include "basaltic_sokol_gfx.h"
 #include "flecs.h"
 #include "bc_flecs_utils.h"
+#include "khash.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
@@ -29,6 +30,7 @@
 // #include "util/sokol_imgui.h"
 
 #define MAX_CUSTOM_QUERIES 4
+#define STRING_BUFFER_SIZE 4096
 
 // Colors
 #define IG_COLOR_DEFAULT ((ImVec4){1.0, 1.0, 1.0, 1.0})
@@ -43,6 +45,7 @@
 // Other: Green
 
 #define IG_SIZE_DEFAULT ((ImVec2){0.0, 0.0})
+
 
 typedef struct {
     ecs_query_t *query;
@@ -77,6 +80,9 @@ typedef struct {
 static EditorContext ec;
 static EcsInspectionContext viewInspector;
 static EcsInspectionContext modelInspector;
+
+// workspace for editable strings
+static char stringEditBuffer[STRING_BUFFER_SIZE];
 
 
 /* ECS General-purpose */
@@ -116,8 +122,22 @@ void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
 void dateTimeInspector(u64 step);
 void coordInspector(const char *label, htw_geo_GridCoord coord);
 void renderTargetInspector(ecs_world_t *world);
-
 void toolPaletteInspector(ecs_world_t *world);
+
+/* Custom component inspectors */
+
+/**
+ * @brief Callback for specialized handling of a component when viewed in the editor. Should return true if component was modified.
+ *
+ */
+typedef bool (*bc_componentInspector)(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component);
+
+KHASH_MAP_INIT_INT(CustomInspector, bc_componentInspector);
+/// hashmap from Component entity ids to the inspector callback they should use
+static khash_t(CustomInspector) *customInspectors;
+
+bool queryDescriptionInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component);
+bool colorInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component);
 
 /* Misc Functions*/
 /** Create query valid for iterating over results in an entity list, which adds several optional terms for prettifying results and includes disabled entities */
@@ -145,10 +165,20 @@ void bc_setupEditor(void) {
     modelInspector = (EcsInspectionContext){0};
 
     //simgui_setup(&(simgui_desc_t){0});
+
+    // setup custom inspector callback map
+    customInspectors = kh_init(CustomInspector);
+    // NOTE: should consider doing this setup elsewhere. Currently it relies on at least one ECS world being initialized before editor setup, which isn't guaranteed.
+    int i, absent;
+    i = kh_put(CustomInspector, customInspectors, ecs_id(QueryDesc), &absent);
+    kh_val(customInspectors, i) = queryDescriptionInspector;
+    i = kh_put(CustomInspector, customInspectors, ecs_id(Color), &absent);
+    kh_val(customInspectors, i) = colorInspector;
 }
 
 void bc_teardownEditor(void) {
     //simgui_shutdown();
+    kh_destroy(CustomInspector, customInspectors);
 }
 
 void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
@@ -380,7 +410,8 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 if (actorBindGroup) {
                     bool actorBindActive = igBeginTabItem("Create Actors", NULL, ImGuiTabItemFlags_None);
                     if (actorBindActive) {
-                        igText("Click to create an entity from selected prefab");
+                        igText("Left click to select tiles and entities");
+                        igText("Right click to create an entity from selected prefab");
                         // Brush settings
                         PrefabBrush *pb = ecs_singleton_get_mut(viewWorld, PrefabBrush);
                         /* Ensure the model isn't running before doing anything else */
@@ -444,7 +475,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                     // to set visibility
                     TerrainPipelineUniformsVert *tv = ecs_get_mut(viewWorld, terrainPipeline, TerrainPipelineUniformsVert);
                     if (playerBindActive) {
-                        igText("Left click to select entities");
+                        igText("Left click to select tiles and entities");
                         igText("Right click to set player destination");
                         igText("Press space to advance time and move toward destination");
                         igText("Press c to focus camera on the player");
@@ -799,6 +830,7 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     igBeginDisabled(!enabled);
 
     // Current Components, Tags, Relationships
+    // TODO: also need to get components derived from IsA relationships
     const ecs_type_t *type = ecs_get_type(world, e);
     for (int i = 0; i < type->count; i++) {
         ecs_id_t id = type->array[i];
@@ -901,7 +933,7 @@ void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity
         ecs_err("Entity %s has pair with invalid target: %lu", ecs_get_name(world, e), second);
         return;
     }
-    igText("Pair: ");
+    igText("(");
     igSameLine(0, -1);
     if (entityButton(world, first)) {
         *focusEntity = first;
@@ -911,17 +943,26 @@ void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity
         *focusEntity = second;
     }
     igSameLine(0, -1);
+    igText(")");
+    igSameLine(0, -1);
     if (igSmallButton("x")) {
         ecs_remove_id(world, e, pair);
-        // need to skip component inspector from here, otherwise pairs with data will get immediately re-added
-    } else if (ecs_has_id(world, first, EcsTag)) {
+        // must skip component inspector, otherwise pairs with data will get immediately re-added
+        return;
+    }
+    if (ecs_has_id(world, first, EcsTag)) {
         // A tag relationship by definition contains no component data
         return;
-    } else if (ecs_has(world, first, EcsMetaType)) {
+    }
+
+    // start meta inspectors on same line
+    if (ecs_has(world, first, EcsMetaType)) {
+        igSameLine(0, -1);
         void *componentData = ecs_get_mut_id(world, e, pair);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, first, componentData);
         ecsMetaInspector(world, &cur, focusEntity);
     } else if (ecs_has(world, second, EcsMetaType)) {
+        igSameLine(0, -1);
         void *componentData = ecs_get_mut_id(world, e, pair);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, second, componentData);
         ecsMetaInspector(world, &cur, focusEntity);
@@ -958,7 +999,7 @@ bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t n
             doesNameConflict = false;
             return true;
         } else {
-            // Inform user that there is already a sibling with the same name
+            // TODO: Inform user that there is already a sibling with the same name
             doesNameConflict = true;
         }
     }
@@ -1252,48 +1293,22 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
         igEndGroup();
         return;
     }
+    igSameLine(0, -1);
 
     bool modified = false;
-    // TODO: custom inspectors for specific component types, like QueryDesc. Is this the right place to handle this behavior?
-    if (component == ecs_id(QueryDesc)) {
-        igSameLine(0, -1);
-
-        //QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
-        // button opens input for new query expression, will create description from expression
-        if (igButton("Set Query Expression", (ImVec2){0, 0})) {
-            igOpenPopup_Str("query_expr", 0);
-        }
-        if (igBeginPopup("query_expr", 0)) {
-            QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
-            static char queryExpr[MAX_QUERY_EXPR_LENGTH];
-            if (igIsWindowAppearing()) {
-                if (qd->expr == NULL) {
-                    // TODO
-                } else {
-                    memcpy(queryExpr, qd->expr, MAX_QUERY_EXPR_LENGTH);
-                }
-            }
-            if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-                // TODO: ensure null handled
-                memcpy(qd->expr, queryExpr, MAX_QUERY_EXPR_LENGTH);
-                modified = true;
-                igCloseCurrentPopup();
-            }
-            igEndPopup();
-        }
-    } else if (component == ecs_id(Color)) {
-        igSameLine(0, -1);
-        // Color picker
-        static ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_PickerHueWheel;
-        Color *col = ecs_get_mut(world, e, Color);
-        modified = igColorEdit4("##color_picker", col->v, flags);
+    // custom inspectors for specific component types
+    khint_t i = kh_get(CustomInspector, customInspectors, component);
+    if (i != kh_end(customInspectors)) {
+        bc_componentInspector inspectorCallback = kh_val(customInspectors, i);
+        modified = inspectorCallback(world, e, component);
     } else if (ecs_has(world, component, EcsMetaType)) {
         // NOTE: calling ecs_get_mut_id AFTER a call to ecs_remove_id will end up adding the removed component again, with default values
         void *componentData = ecs_get_mut_id(world, e, component);
         ecs_meta_cursor_t cur = ecs_meta_cursor(world, component, componentData);
         modified = ecsMetaInspector(world, &cur, focusEntity);
     } else {
-        // TODO: make it clear that this is a component with no meta info available, still show some basic params like size if possible
+        // component with no meta info and no custom inspector
+        igTextColored(IG_COLOR_DISABLED, "(opaque component)");
     }
 
     if (modified) {
@@ -1305,20 +1320,18 @@ void componentInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t compone
 
 bool ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_t *focusEntity)
 {
+    // FIXME: should have a general-purpose way to disallow editor modification of some component types, especially flecs internal stuff e.g. MetaType
     bool modified = false;
-    ecs_entity_t type = ecs_meta_get_type(cursor);
-
-    // NOTE: pushing IDs is only needed because meta inspector can recurse; Because entities can't have 2 of the same component, and components can't have 2 members with the same name, label conflicts only come up when an entity has 2 components with members of the same name e.g. Position {int x, y}, Velocity {int x, y} -> must push id of component before making label for members
-    igPushID_Int(type);
-    igIndent(0);
-    ecs_meta_push(cursor);
-
     int i = 0;
     do {
         igPushID_Int(i);
-        type = ecs_meta_get_type(cursor);
+        ecs_entity_t type = ecs_meta_get_type(cursor);
         if (type != 0) {
-            igText("%s (%s): ", ecs_meta_get_member(cursor), ecs_get_name(world, type));
+            const char *memberName = ecs_meta_get_member(cursor);
+            if (memberName != NULL) {
+                igText("%s:", memberName);
+                igSetItemTooltip("%s", ecs_get_name(world, type));
+            }
             ecs_type_kind_t kind = ecs_get(world, type, EcsMetaType)->kind;
             switch (kind) {
                 case EcsPrimitiveType:
@@ -1328,16 +1341,35 @@ bool ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
                     break;
                 case EcsStructType:
                     // recurse componentInspector
+                    // should indent + newline for struct, array, vector, (and bitmask?) types
+                    igNewLine();
+                    igIndent(0);
+                    ecs_meta_push(cursor);
                     // TODO: component members with special componentInspector handling should also get their custom inspectors here
                     modified |= ecsMetaInspector(world, cursor, focusEntity);
+                    ecs_meta_pop(cursor);
+                    igUnindent(0);
                     break;
                 case EcsEnumType:
                     igSameLine(0, -1);
-                    // TODO: proper enum inspector, use map to create selectable dropdown, set modified
                     ecs_map_t enumMap = ecs_get(world, type, EcsEnum)->constants;
-                    s32 key = ecs_meta_get_int(cursor);
+                    s64 key = ecs_meta_get_int(cursor);
                     ecs_enum_constant_t *enumDesc = *ecs_map_get_ref(&enumMap, ecs_enum_constant_t, key);
-                    igText("%s = %i", enumDesc->name, enumDesc->value);
+                    //igText("%s = %i", enumDesc->name, enumDesc->value);
+                    if (igBeginCombo("##enumList", enumDesc->name, 0)) {
+                        // FIXME: map iter is out of order from enum order; better to just do an ecs_children iter?
+                        ecs_map_iter_t mi = ecs_map_iter(&enumMap);
+                        while (ecs_map_next(&mi)) {
+                            s64 key2 = *mi.res;
+                            ecs_enum_constant_t *enumEntry = *ecs_map_get_ref(&enumMap, ecs_enum_constant_t, key2);
+                            if (igSelectable_Bool(enumEntry->name, key == key2, 0, IG_SIZE_DEFAULT)) {
+                                s32 *val = ecs_meta_get_ptr(cursor);
+                                *val = enumEntry->value;
+                                modified = true;
+                            }
+                        }
+                        igEndCombo();
+                    }
                     break;
                 default:
                     // TODO priority order: bitmask, array, vector, opaque
@@ -1350,10 +1382,6 @@ bool ecsMetaInspector(ecs_world_t *world, ecs_meta_cursor_t *cursor, ecs_entity_
         i++;
     } while (ecs_meta_try_next(cursor));
 
-    ecs_meta_pop(cursor);
-    igUnindent(0);
-    igPopID();
-
     return modified;
 }
 
@@ -1364,6 +1392,7 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             modified = igCheckbox("##", field);
             break;
         case EcsChar:
+            // NOTE: char is s8 on some platforms. Not currently using any components with single char members, so unsure if this matters much
             modified = igInputScalar("##", ImGuiDataType_U8, field, NULL, NULL, "%c", 0);
             break;
         case EcsByte:
@@ -1406,12 +1435,37 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             modified = igInputScalar("##", ImGuiDataType_S64, field, NULL, NULL, "%x", 0);
             break;
         case EcsString:
-            (void)0; // So the parser doesn't freak out /shrug
+            (void)0; // So kdevelop's parser doesn't freak out /shrug
             char *str = *(char**)field;
             //igText(str);
-            u64 len = strlen(str);
-            igTextUnformatted(str, str + len);
-            //modified = igInputText("##", field, 0, 0, NULL, NULL); // TODO set size
+            //u64 len = strlen(str);
+            //igTextUnformatted(str, str + len);
+            // display as normal string until edit button clicked
+            if(igSmallButton("edit")) {
+                strncpy(stringEditBuffer, str, STRING_BUFFER_SIZE);
+                igOpenPopup_Str("edit_string", 0);
+            }
+            igSameLine(0, -1);
+            igTextWrapped(str);
+            // begin edit window for string
+            if (igBeginPopup("edit_string", 0)) {
+                // inputText should get default focus
+                if (igIsWindowAppearing()) {
+                    igSetKeyboardFocusHere(0);
+                }
+                // TODO: any way to make imgui's text input wrap single line text?
+                const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CtrlEnterForNewLine;
+                if(igInputTextMultiline("##edit_this_string", stringEditBuffer, STRING_BUFFER_SIZE, (ImVec2){600, 0}, flags, NULL, NULL)) {
+                    size_t len = strlen(stringEditBuffer) + 1; // strlen doesn't include terminator
+                    char *newStr = malloc(len);
+                    strncpy(newStr, stringEditBuffer, len);
+                    free(str);
+                    *(char**)field = newStr;
+                    modified = true;
+                    igCloseCurrentPopup();
+                }
+                igEndPopup();
+            }
             break;
         case EcsEntity:
         {
@@ -1558,6 +1612,41 @@ void toolPaletteInspector(ecs_world_t *world) {
     // Keep track of selected tool
     // Mini entity inspector for editing tool values?
     // Assign selected tool to ActiveTool (how?)
+}
+
+bool queryDescriptionInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component) {
+    bool modified = false;
+    //QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
+    // button opens input for new query expression, will create description from expression
+    if (igButton("Set Query Expression", (ImVec2){0, 0})) {
+        igOpenPopup_Str("query_expr", 0);
+    }
+    if (igBeginPopup("query_expr", 0)) {
+        QueryDesc *qd = ecs_get_mut(world, e, QueryDesc);
+        static char queryExpr[MAX_QUERY_EXPR_LENGTH];
+        if (igIsWindowAppearing()) {
+            if (qd->expr == NULL) {
+                // TODO
+            } else {
+                memcpy(queryExpr, qd->expr, MAX_QUERY_EXPR_LENGTH);
+            }
+        }
+        if (igInputText("Query", queryExpr, MAX_QUERY_EXPR_LENGTH, ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+            // TODO: ensure null handled
+            memcpy(qd->expr, queryExpr, MAX_QUERY_EXPR_LENGTH);
+            modified = true;
+            igCloseCurrentPopup();
+        }
+        igEndPopup();
+    }
+    return modified;
+}
+
+bool colorInspector(ecs_world_t *world, ecs_entity_t e, ecs_entity_t component) {
+    // Color picker
+    static ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_PickerHueWheel;
+    Color *col = ecs_get_mut(world, e, Color);
+    return igColorEdit4("##color_picker", col->v, flags);
 }
 
 ecs_query_t *createInspectorQuery(ecs_world_t *world, const char *expr) {

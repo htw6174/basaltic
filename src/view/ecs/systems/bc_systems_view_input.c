@@ -409,6 +409,7 @@ void PaintRiverBrush(ecs_iter_t *it) {
     RiverConnection rc = plane_riverConnectionFromCells(cm, prevHoveredCoord, hoveredCoord);
 
     if (ic.axis.x > 0.0) {
+        // TODO: allow river brush strength to influence how many connections are made in one pass
         s32 uphillDistLeft, uphillDistRight, downhillDistLeft, downhillDistRight;
         bool uphillPreferred = shortestDistanceToConnections(&rc.uphill, &uphillDistLeft, &uphillDistRight);
         bool downhillPreferred = shortestDistanceToConnections(&rc.downhill, &downhillDistLeft, &downhillDistRight);

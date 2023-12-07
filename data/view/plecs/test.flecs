@@ -72,6 +72,11 @@ bcview {
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)"}
     }
 
+    villages : DebugDrawPrefab {
+        - Color {0.9, 0.9, 0.1, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.tribes.Village"}
+    }
+
     // TEST: disable shadow pass by default
     phases.OnPassShadow :- Disabled
 
@@ -128,8 +133,8 @@ bcview {
             - InputBindGroup
             pan :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraPan}
             orbit :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraOrbit}
+            // TODO: might be nice to change cursor while left click is held?
             // bindings to lock mouse while orbiting
-            // TODO: would be nice to change cursor while left click is held?
             lockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
             unlockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
         }
@@ -143,12 +148,15 @@ bcview {
 
         actorMouseBindings {
             - InputBindGroup
-            spawnPrefab :- InputBinding {button: BC_MOUSE_LEFT, system: PaintPrefabBrush}
+            selectCell :- InputBinding {button: BC_MOUSE_LEFT, system: SelectCell}
+            selectEntity :- InputBinding {button: BC_MOUSE_LEFT, system: SelectEntity}
+            spawnPrefab :- InputBinding {button: BC_MOUSE_RIGHT, system: PaintPrefabBrush}
         }
         //actorMouseBindings :- Disabled
 
         playerMouseBindings {
             - InputBindGroup
+            selectCell :- InputBinding {button: BC_MOUSE_LEFT, system: SelectCell}
             selectEntity :- InputBinding {button: BC_MOUSE_LEFT, system: SelectEntity}
             movePlayer :- InputBinding {button: BC_MOUSE_RIGHT, system: SetPlayerDestination}
         }

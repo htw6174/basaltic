@@ -1,3 +1,4 @@
+#include "bc_flecs_utils.h"
 #define BC_COMPONENT_IMPL
 #include "basaltic_components_planes.h"
 #include <math.h>
@@ -92,6 +93,8 @@ void BcPlanesImport(ecs_world_t *world) {
     // ecs_add_id(world, IsOn, EcsOneOf);
     // Don't do this with the plane component, instead add all planes as children of IsOn
     // ecs_add_pair(world, ecs_id(Plane), EcsChildOf, IsOn);
+
+    bc_loadModuleScript(world, "model/plecs/modules");
 }
 
 // FIXME: this shouldn't return false for new entities created this step

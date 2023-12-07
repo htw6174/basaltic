@@ -77,6 +77,50 @@ ECS_STRUCT(Condition, {
     s16 stamina;
 });
 
+// Core statistics, usually inherited from a prefab.
+ECS_STRUCT(Stats, {
+    s8 reason;
+    s8 instinct;
+    s8 force;
+    s8 vitality;
+    s8 spirit;
+    s8 unity;
+});
+
+// Ability scores are derived from base stats, but can be individually improved or neglected. AbilityModifiers track the difference of abilities from baseline.
+ECS_STRUCT(AbilityModifiers, {
+    s8 logic;
+    s8 attunement;
+    s8 agility;
+    s8 endurance;
+    s8 courage;
+    s8 charisma;
+
+    s8 perception;
+    s8 reflex;
+    s8 strength;
+    s8 willpower;
+    s8 leadership;
+    s8 scholarship;
+
+    s8 resistance;
+    s8 support;
+    s8 negotiation;
+    s8 prowess;
+    s8 ingenuity;
+    s8 intimidation;
+
+    s8 artifice;
+    s8 tactics;
+    s8 survival;
+});
+
+// relationship where target is a skill requiring specalized knowledge, such as medicine, construction, archery, etc.
+ECS_STRUCT(Skill, {
+    s32 level;
+    s32 experience; // experience gained this level; when >= experience required for next level, remainder overflows and level increases
+});
+
 void BcActorsImport(ecs_world_t *world);
 
 #endif // BASALTIC_COMPONENTS_ACTORS_H_INCLUDED

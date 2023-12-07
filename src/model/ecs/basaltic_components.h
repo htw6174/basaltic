@@ -7,6 +7,7 @@
 #include "components/basaltic_components_actors.h"
 #include "components/basaltic_components_wildlife.h"
 #include "components/bc_components_elementals.h"
+#include "components/bc_components_tribes.h"
 
 void BcImport(ecs_world_t *world);
 

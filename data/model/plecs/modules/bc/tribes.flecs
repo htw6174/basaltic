@@ -1,0 +1,66 @@
+using bc.planes
+using bc.actors
+using flecs.doc
+
+bc.tribes {
+
+    // TODO: best way to assign step or day durations for these stages per-species?
+    LifeStage {
+        - OneOf
+        - Exclusive
+        Infant
+        Child
+        Adolescent
+        Adult
+        Elder
+    }
+
+    Prefab TribePrefab {
+        - OVERRIDE|Tribe
+        - (Description, Brief) {"Faction that villages and actors can belong to"}
+    }
+
+    Prefab VillagePrefab {
+        - OVERRIDE|Village
+        - OVERRIDE|Position
+        - (Description, Brief) {"A home for villagers that occupies a single tile. Has goals that villagers organize to achieve. Container for buildings and supplies"}
+    }
+
+    Prefab CharacterPrefab {
+        - OVERRIDE|Position
+        - OVERRIDE|Destination
+        - OVERRIDE|Condition
+        - Individual
+        - (Description, Brief) {"Base Prefab for playable characters and NPCs"}
+    }
+
+    Prefab Human : CharacterPrefab {
+        - Stats {reason: 11, instinct: 9, force: 9, vitality: 11, spirit: 10, unity: 10}
+        - Condition {maxHealth: 100, health: 100, maxStamina: 100, stamina: 100}
+        - ActorSize {ACTOR_SIZE_AVERAGE}
+        - (Description, Brief) {"Adept crafters and builders. Durable and quick learners, but lack natural physical advantages"}
+    }
+
+    Prefab Nephilim : CharacterPrefab {
+        - Stats {reason: 9, instinct: 10, force: 10, vitality: 11, spirit: 11, unity: 9}
+        - Condition {maxHealth: 120, health: 120, maxStamina: 110, stamina: 110}
+        - ActorSize {ACTOR_SIZE_LARGE}
+        - (Description, Brief) {"Giant humanoids, degenerated descendents of a long dead civilization. Proud and individually tough, but solitary and close-minded"}
+    }
+
+    Prefab Raptorian : CharacterPrefab {
+        - Stats {reason: 11, instinct: 11, force: 10, vitality: 9, spirit: 9, unity: 10}
+        - Condition {maxHealth: 90, health: 90, maxStamina: 100, stamina: 100}
+        - ActorSize {ACTOR_SIZE_AVERAGE}
+        - (Description, Brief) {"Cunning and curious feathered reptiles. Keen planners that try to stay one step ahead, but crack quickly when things don't go as planned. Light bodies and vestigial wings make them natural climbers"}
+        - bc.wildlife.Climbing
+    }
+
+    Prefab Carapaceon : CharacterPrefab {
+        - Stats {reason: 9, instinct: 10, force: 11, vitality: 9, spirit: 10, unity: 11}
+        - Condition {maxHealth: 90, health: 90, maxStamina: 80, stamina: 80}
+        - ActorSize {ACTOR_SIZE_AVERAGE}
+        - (Description, Brief) {"Eusocial relatives of aquatic isopods. Relatively frail and individually weak, but well-coordinated and selfless. Live on land, but able to spend long periods of time underwater"}
+        - bc.wildlife.Amphibious
+    }
+}

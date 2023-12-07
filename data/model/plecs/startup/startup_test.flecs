@@ -1,15 +1,7 @@
+// TODO: move these into startup files for each module, or do setup in c
+
 bc.common {
     Step :- Step {0}
-}
-
-bc.planes {
-    Position :- AlwaysOverride
-    Destination :- AlwaysOverride
-}
-
-bc.actors {
-    Condition :- AlwaysOverride
-    Group :- AlwaysOverride
 }
 
 bc.wildlife {

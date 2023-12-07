@@ -145,6 +145,21 @@ ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
     return e;
 }
 
+void bc_loadModuleScript(ecs_world_t *world, const char *modulesPath) {
+    // get scope fullpath string
+    char *scopePath = ecs_get_path_w_sep(world, 0, ecs_get_scope(world), "/", NULL);
+    // convert to filepath
+    static char filePath[1024];
+    // TODO: make trailing '/' on modulesPath optional, only add if not included
+    sprintf(filePath, "%s/%s.flecs", modulesPath, scopePath);
+    if (ecs_plecs_from_file(world, filePath)) {
+        // log error with module; flecs already logs specific error details
+        ecs_err("Failed to load script %s for module %s", filePath, scopePath);
+    }
+
+    free(scopePath);
+}
+
 void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query) {
 
     ecs_iter_t it;

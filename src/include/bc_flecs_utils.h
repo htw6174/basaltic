@@ -33,6 +33,14 @@
 
 ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab);
 
+/**
+ * @brief Load a plecs script to do final setup for a module. This should be called at the end of module import, the current scope must be the same as when the module was loaded, and the directory structure inside modulesPath should reflect the module scructure. For exampe, calling this from the Import function for BcActors will load the file "{modulesPath}/bc/actors.flecs"
+ *
+ * @param world p_world:...
+ * @param modulesPath absolute path or relative to CWD with '/' seperator; must not have a trailing '/'
+ */
+void bc_loadModuleScript(ecs_world_t *world, const char *modulesPath);
+
 void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query);
 
 

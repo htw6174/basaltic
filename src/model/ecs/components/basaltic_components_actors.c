@@ -1,3 +1,4 @@
+#include "bc_flecs_utils.h"
 #define BC_COMPONENT_IMPL
 #include "basaltic_components_actors.h"
 
@@ -44,4 +45,12 @@ void BcActorsImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, ActorSize);
 
     ECS_META_COMPONENT(world, Condition);
+
+    ECS_META_COMPONENT(world, Stats);
+    ECS_META_COMPONENT(world, AbilityModifiers);
+
+    ECS_META_COMPONENT(world, Skill);
+    ecs_add_id(world, ecs_id(Skill), EcsOneOf);
+
+    bc_loadModuleScript(world, "model/plecs/modules");
 }

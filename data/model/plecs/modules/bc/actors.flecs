@@ -1,0 +1,14 @@
+bc.actors {
+    Condition :- AlwaysOverride
+    Group :- AlwaysOverride
+
+    Skills {
+        - OneOf
+        Farming
+        Fishing
+        Hunting
+        Herbalism
+        Medicine
+        Construction
+    }
+}

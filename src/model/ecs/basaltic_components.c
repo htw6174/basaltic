@@ -13,4 +13,5 @@ void BcImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcActors);
     ECS_IMPORT(world, BcWildlife);
     ECS_IMPORT(world, BcElementals);
+    ECS_IMPORT(world, BcTribes);
 }
