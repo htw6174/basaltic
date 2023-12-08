@@ -1,5 +1,6 @@
 using bc.planes
 using bc.actors
+using bc.actors.Ego
 using flecs.doc
 
 bc.tribes {
@@ -38,6 +39,8 @@ bc.tribes {
         - Stats {reason: 11, instinct: 9, force: 9, vitality: 11, spirit: 10, unity: 10}
         - Condition {maxHealth: 100, health: 100, maxStamina: 100, stamina: 100}
         - ActorSize {ACTOR_SIZE_AVERAGE}
+        - (LifeStage, Adult)
+        - (Ego, EgoWanderer)
         - (Description, Brief) {"Adept crafters and builders. Durable and quick learners, but lack natural physical advantages"}
     }
 
@@ -62,5 +65,24 @@ bc.tribes {
         - ActorSize {ACTOR_SIZE_AVERAGE}
         - (Description, Brief) {"Eusocial relatives of aquatic isopods. Relatively frail and individually weak, but well-coordinated and selfless. Live on land, but able to spend long periods of time underwater"}
         - bc.wildlife.Amphibious
+    }
+
+
+    // example village setup
+    Prefab HumanVillage : VillagePrefab {
+        // TODO: instead of targeting prefab, need a way to make all children members of the prefab instance
+        // TODO: should also place all members in the village, consider automatically replacing ChildOf with IsIn when instancing with prefab brush or spawner system
+        with (MemberOf, HumanVillage) {
+            chief : Human
+            hunter1 : Human
+            hunter2 : Human
+            gatherer1 : Human
+            gatherer2 : Human
+        }
+    }
+
+    lost_tribe : TribePrefab
+    starting_settlement : HumanVillage {
+        - (MemberOf, lost_tribe)
     }
 }

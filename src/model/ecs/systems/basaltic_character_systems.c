@@ -45,6 +45,7 @@ void egoBehaviorWander(ecs_iter_t *it) {
 
     for (int i = 0; i < it->count; i++) {
         destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[htw_randIndex(HEX_DIRECTION_COUNT)]);
+        ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
     }
 }
 
@@ -68,6 +69,7 @@ void setDescenderDestinations(ecs_iter_t *it) {
             continue;
         } else {
             destinations[i] = htw_geo_addGridCoords(positions[i], htw_geo_hexGridDirections[lowestDirection]);
+            ecs_add_pair(it->world, it->entities[i], Action, ActionMove);
         }
     }
 }
@@ -488,12 +490,10 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcActors);
     ECS_IMPORT(world, BcWildlife);
 
-    // TODO: change IsOn field, use Plane(up(bc.planes.IsOn)) instead
-    // - NOTE: should ask about or profile this; could cause the query to switch to per-instance iteration instead, which may negatively effect performance. Tradeoff is that access to the Plane is faster?
     ECS_SYSTEM(world, egoBehaviorWander, Planning,
                [in] Position,
                [out] Destination,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsOn)),
                [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
     );
 
@@ -580,6 +580,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
                [inout] Group
     );
 
+    // TODO: might want to remove this system and instead make group splitting and merging the outcome of an event, which has a chance of appearing when 2 groups cross paths or a group is large enough
     ECS_SYSTEM(world, mergeGroups, Cleanup,
                [in] Position,
                [in] (bc.planes.IsOn, _),

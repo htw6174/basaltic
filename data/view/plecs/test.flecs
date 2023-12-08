@@ -37,6 +37,11 @@ bcview {
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.MapVision"}
     }
 
+    characters : DebugDrawPrefab {
+        - Color {0.3, 0.3, 1.0, 1.0}
+        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.Individual"}
+    }
+
     carnivores : DebugDrawPrefab {
         - Color {0.7, 0.0, 0.0, 1.0}
         - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}

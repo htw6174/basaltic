@@ -523,7 +523,7 @@ void bc_editorOnModelStart(void) {
     modelInspector = (EcsInspectionContext){
         .worldName = "Model",
         .customQueries = {
-            [0] = {.queryExpr = "Position"},
+            [0] = {.queryExpr = "Position, Plane(up(bc.planes.IsOn))"},
             [1] = {.queryExpr = "bc.planes.Plane"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System"},
