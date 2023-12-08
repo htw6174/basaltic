@@ -39,10 +39,15 @@
 #define IG_COLOR_ERROR ((ImVec4){1.0, 0.0, 0.0, 1.0})
 // Flecs Explorer color defaults:
 // Module: Yellow
-// Component: Blue
-// Tag: ???
+// Component: Blue (Tags are also blue for some reason)
 // Prefab: White
 // Other: Green
+// Also adding Relationship: Teal
+#define IG_COLOR_MODULE ((ImVec4){0.9, 0.9, 0.0, 1.0})
+#define IG_COLOR_COMPONENT ((ImVec4){0.5, 0.5, 1.0, 1.0})
+#define IG_COLOR_RELATIONSHIP ((ImVec4){0.6, 0.9, 0.9, 1.0})
+#define IG_COLOR_PREFAB ((ImVec4){1.0, 1.0, 1.0, 1.0})
+#define IG_COLOR_ENTITY ((ImVec4){0.0, 0.85, 0.0, 1.0})
 
 #define IG_SIZE_DEFAULT ((ImVec2){0.0, 0.0})
 
@@ -933,6 +938,9 @@ void ecsPairWidget(ecs_world_t *world, ecs_entity_t e, ecs_id_t pair, ecs_entity
         ecs_err("Entity %s has pair with invalid target: %lu", ecs_get_name(world, e), second);
         return;
     }
+
+    // TODO: if first == IsA, then could make this an expanding tree node instead, showing components inherited from the target
+
     igText("(");
     igSameLine(0, -1);
     if (entityButton(world, first)) {
@@ -1037,8 +1045,17 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
     const char *label = getEntityLabel(world, node);
     if (ecs_has_id(world, node, EcsDisabled)) {
         igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DISABLED);
+    } else if (ecs_has_id(world, node, EcsModule)) {
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_MODULE);
+    } else if (ecs_has(world, node, EcsComponent)) {
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_COMPONENT);
+    } else if (ecs_has_id(world, node, EcsOneOf)) {
+        // Acyclic, Traversable, Union, OneOf, and Tag all indicate that the entity is a relationship / pair first
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_RELATIONSHIP);
+    } else if (ecs_has_id(world, node, EcsPrefab)) {
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_PREFAB);
     } else {
-        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DEFAULT);
+        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_ENTITY);
     }
     // Note: leaf nodes are always *expanded*, not collapsed. Should skip iterating children, but still TreePop if leaf.
     bool expandNode = igTreeNodeEx_Str(label, flags);
@@ -1213,8 +1230,12 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     u32 lastResult = firstResult + pageLength;
 
     while (ecs_iter_next(it)) {
-        // Fields from default expression
-        bool disabled = ecs_field_is_set(it, 5);
+        // Fields from default expression: ?Module, ?Component, ?Tag, ?Prefab, ?Disabled
+        bool isModule = ecs_field_is_set(it, 1);
+        bool isComponent = ecs_field_is_set(it, 2);
+        bool isTag = ecs_field_is_set(it, 3);
+        bool isPrefab = ecs_field_is_set(it, 4);
+        bool isDisabled = ecs_field_is_set(it, 5);
 
         for (int i = 0; i < it->count; i++) {
             ecs_entity_t e = it->entities[i];
@@ -1223,10 +1244,21 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
             if (ImGuiTextFilter_PassFilter(filter, name, NULL)) {
                 if (resultsCount >= firstResult && resultsCount < lastResult) {
                     igPushID_Int(e);
-                    if (disabled) {
+                    if (isDisabled) {
                         igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DISABLED);
+                    } else if (isModule) {
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_MODULE);
+                    } else if (isComponent || isTag) {
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_COMPONENT);
+                    }
+                    // TODO: add a way to check for relationship types with the default query
+                    // else if (isRelationship) {
+                    //     igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_RELATIONSHIP);
+                    // }
+                    else if (isPrefab) {
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_PREFAB);
                     } else {
-                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_DEFAULT);
+                        igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_ENTITY);
                     }
                     // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
                     if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
