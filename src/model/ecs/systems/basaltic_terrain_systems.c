@@ -117,15 +117,14 @@ void chunkDailyUpdate(Plane *plane, const Climate *climate, size_t chunkIndex) {
 
 void CleanEmptyRoots(ecs_iter_t *it) {
     for (int i = 0; i < it->count; i++) {
-        // Remove root if no more children
-        u32 childCount = 0;
-        ecs_iter_t children = ecs_children(it->world, it->entities[i]);
-        while (ecs_iter_next(&children)) {
-            for (int i = 0; i < children.count; i++) {
-                childCount++;
-            }
-        }
-        if (childCount == 0) {
+        // Remove root if no contianed entities
+        ecs_iter_t ti = ecs_term_iter(it->world, &(ecs_term_t){
+            .first = {.id = IsIn},
+            .second = {.id = it->entities[i]}
+        });
+        if (ecs_iter_is_true(&ti)) {
+            // at least one contained entity, don't delete
+        } else {
             ecs_delete(it->world, it->entities[i]);
         }
     }

@@ -134,7 +134,7 @@ Prefab VolcanoSpirit {
     - OVERRIDE|SpiritPower
     - (RandomizeInt, SpiritLifetime.matureSteps) {min: 500, max: 2500, mean: 1500, distribution: RAND_DISTRIBUTION_NORMAL}
     - SpiritPower {maxValue: 65535}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
     - (Description, Brief) {"Volcanos raise the land around them, destroying vegetation while active but covering the area in nutrient-rich ash"}
 }
 
@@ -148,53 +148,53 @@ Prefab StormSpirit {
     - OVERRIDE|StormCloud
     - SpiritPower {maxValue: 65535}
     - StormCloud {radius: 5, maxDuration: 100}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
     - (Description, Brief) {"Storm spirits move with the wind, gathering energy from warm bodies of water and releasing it as rain"}
 }
 
 
 mountains_spawner {
     - Spawner{prefab: MountainSpirit, count: 2, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 oceans_spawner {
     - Spawner{prefab: OceanSpirit, count: 2, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 hills_spawner {
     - Spawner{prefab: HillSpirit, count: 16, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 seas_spawner {
     - Spawner{prefab: SeaSpirit, count: 24, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 cliffs_spawner {
     - Spawner{prefab: CliffSpirit, count: 24, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 volcano_spawner {
     - Spawner{prefab: VolcanoSpirit, count: 10, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 storm_spawner {
     - Spawner{prefab: StormSpirit, count: 40, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 grazer_spawner {
     - Spawner{prefab: GrazerHerd, count: 400, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 
 player_spawner {
     - Spawner{prefab: PlayerPrefab, count: 1, oneShot: true}
-    - (IsOn, Overworld)
+    - (IsIn, Overworld)
 }
 

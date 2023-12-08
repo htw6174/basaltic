@@ -63,9 +63,9 @@ void BcPlanesImport(ecs_world_t *world) {
 
     ECS_COMPONENT_DEFINE(world, Position);
     ECS_COMPONENT_DEFINE(world, Destination);
-    ECS_TAG_DEFINE(world, IsOn);
-    ecs_add_id(world, IsOn, EcsExclusive);
-    ecs_add_id(world, IsOn, EcsTraversable);
+    ECS_TAG_DEFINE(world, IsIn);
+    ecs_add_id(world, IsIn, EcsExclusive);
+    ecs_add_id(world, IsIn, EcsTransitive);
     ECS_TAG_DEFINE(world, CellRoot);
 
     ecs_struct(world, {
@@ -103,7 +103,7 @@ bool plane_IsValidRootEntity(ecs_world_t *world, ecs_entity_t root, ecs_entity_t
     if (ecs_is_valid(world, root)) {
         if (ecs_has(world, root, CellRoot)) return true;
         const Position *rootPos = ecs_get(world, root, Position);
-        ecs_entity_t rootPlane = ecs_get_target(world, root, IsOn, 0);
+        ecs_entity_t rootPlane = ecs_get_target(world, root, IsIn, 0);
         if (rootPos && rootPlane == plane) {
             if (htw_geo_isEqualGridCoords(*rootPos, pos)) {
                 return true;
@@ -115,8 +115,7 @@ bool plane_IsValidRootEntity(ecs_world_t *world, ecs_entity_t root, ecs_entity_t
 
 void plane_SetupCellRoot(ecs_world_t *world, ecs_entity_t newRoot, ecs_entity_t plane, Position pos) {
     ecs_add(world, newRoot, CellRoot);
-    ecs_add_id(world, newRoot, ecs_childof(plane));
-    //ecs_add_pair(world, newRoot, IsOn, plane);
+    ecs_add_pair(world, newRoot, IsIn, plane);
     //ecs_set(world, newRoot, Position, {pos.x, pos.y});
 }
 
@@ -154,8 +153,8 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
         ecs_entity_t root = kh_val(wm, i);
         if (plane_IsValidRootEntity(world, root, plane, pos)) {
             if (ecs_has(world, root, CellRoot)) {
-                // Already a root entity here, add as new child
-                ecs_add_pair(world, e, EcsChildOf, root);
+                // Already a root entity here, place 'in' cellRoot
+                ecs_add_pair(world, e, IsIn, root);
             } else {
                 // Make new cell root, add both as child
                 ecs_entity_t newRoot = ecs_new_id(world);
@@ -170,12 +169,12 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
                 } else {
                     plane_SetupCellRoot(world, newRoot, plane, pos);
                 }
-                ecs_add_pair(world, root, EcsChildOf, newRoot);
-                ecs_add_pair(world, e, EcsChildOf, newRoot);
+                ecs_add_pair(world, root, IsIn, newRoot);
+                ecs_add_pair(world, e, IsIn, newRoot);
             }
         } else {
-            // Invalid entity here, make child of plane and set value to place here / make this cell's root
-            ecs_add_pair(world, e, EcsChildOf, plane);
+            // Invalid entity here, place in plane and set value to place here / make this cell's root
+            ecs_add_pair(world, e, IsIn, plane);
             kh_val(wm, i) = e;
         }
     }
@@ -193,8 +192,8 @@ void plane_RemoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, 
             // e is cell root, there will be no other entities in the cell after moving
             kh_del(WorldMap, wm, i);
         } else {
-            // Restore plane as parent
-            ecs_add_pair(world, e, EcsChildOf, plane);
+            // Restore plane as container
+            ecs_add_pair(world, e, IsIn, plane);
         }
     }
 }

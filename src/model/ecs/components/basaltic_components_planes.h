@@ -143,7 +143,7 @@ typedef htw_geo_GridCoord Position, Destination;
 
 BC_DECL ECS_COMPONENT_DECLARE(Position);
 BC_DECL ECS_COMPONENT_DECLARE(Destination);
-BC_DECL ECS_TAG_DECLARE(IsOn); // Relationship type for entities on a Plane
+BC_DECL ECS_TAG_DECLARE(IsIn); // Transitive relationship for spatial hierarchies, e.g. cup IsIn shelf IsIn house IsIn town IsIn earth
 BC_DECL ECS_TAG_DECLARE(CellRoot); // For marking entities that contain multiple child entities occupying the same cell
 
 void BcPlanesImport(ecs_world_t *world);

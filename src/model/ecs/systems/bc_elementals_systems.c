@@ -353,15 +353,15 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
         [in] Destination,
         [inout] SpiritPower,
         [inout] StormCloud,
-        [in] Plane(up(bc.planes.IsOn)),
-        [in] Climate(up(bc.planes.IsOn))
+        [in] Plane(up(bc.planes.IsIn)),
+        [in] Climate(up(bc.planes.IsIn))
     );
 
     ECS_SYSTEM(world, ExecuteShiftPlates, Execution,
         [in] Position,
         [inout] Elevation,
         [in] AngleRadians,
-        [in] Plane(up(bc.planes.IsOn)),
+        [in] Plane(up(bc.planes.IsIn)),
         [in] PlateShiftStrength,
         [in] SpiritLifetime,
         [in] CreationTime,
@@ -372,7 +372,7 @@ void BcSystemsElementalsImport(ecs_world_t *world) {
     ECS_SYSTEM(world, ExecuteErupt, Execution,
         [in] Position,
         [in] Elevation,
-        [in] Plane(up(bc.planes.IsOn)),
+        [in] Plane(up(bc.planes.IsIn)),
         [in] SpiritLifetime,
         [in] CreationTime,
         [in] Step($),

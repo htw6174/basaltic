@@ -207,7 +207,7 @@ void PaintPrefabBrush(ecs_iter_t *it) {
     } else {
         e = ecs_new_w_pair(modelWorld, EcsChildOf, focusPlane);
     }
-    ecs_add_pair(modelWorld, e, IsOn, focusPlane);
+    ecs_add_pair(modelWorld, e, IsIn, focusPlane);
     ecs_set(modelWorld, e, Position, {cellCoord.x, cellCoord.y});
     ecs_set(modelWorld, e, CreationTime, {step});
     plane_PlaceEntity(modelWorld, focusPlane, e, cellCoord);

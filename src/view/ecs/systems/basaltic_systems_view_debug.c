@@ -182,8 +182,7 @@ void UpdateDebugBuffers(ecs_iter_t *it) {
         ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
         while (ecs_query_next(&mit)) {
             Position *positions = ecs_field(&mit, Position, 1);
-            ecs_entity_t tmEnt = ecs_field_id(&mit, 2);
-            htw_ChunkMap *cm = ecs_get(mit.world, ecs_pair_second(mit.world, tmEnt), Plane)->chunkMap;
+            htw_ChunkMap *cm = ecs_field(&mit, Plane, 2)->chunkMap;
             for (int m = 0; m < mit.count && instanceCount < instanceBuffers[i].maxInstances; m++) {
                 u32 chunkIndex, cellIndex;
                 htw_geo_gridCoordinateToChunkAndCellIndex(cm, positions[m], &chunkIndex, &cellIndex);

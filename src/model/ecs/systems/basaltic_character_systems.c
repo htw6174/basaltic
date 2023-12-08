@@ -52,16 +52,15 @@ void egoBehaviorWander(ecs_iter_t *it) {
 void setDescenderDestinations(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
+    const Plane *plane = ecs_field(it, Plane, 3);
 
     for (int i = 0; i < it->count; i++) {
         s32 lowestDirection = -1;
-        s32 lowestElevation = ((CellData*)htw_geo_getCell(tm->chunkMap, positions[i]))->height;
+        s32 lowestElevation = ((CellData*)htw_geo_getCell(plane->chunkMap, positions[i]))->height;
         for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
             // Get cell elevation
-            htw_geo_GridCoord evalCoord = htw_geo_addGridCoordsWrapped(tm->chunkMap, positions[i], htw_geo_hexGridDirections[d]);
-            CellData *cell = (CellData*)htw_geo_getCell(tm->chunkMap, evalCoord);
+            htw_geo_GridCoord evalCoord = htw_geo_addGridCoordsWrapped(plane->chunkMap, positions[i], htw_geo_hexGridDirections[d]);
+            CellData *cell = (CellData*)htw_geo_getCell(plane->chunkMap, evalCoord);
             if (cell->height < lowestElevation) lowestDirection = d;
             lowestElevation = MIN(lowestElevation, cell->height);
         }
@@ -127,7 +126,7 @@ void revealMap(ecs_iter_t *it) {
 
 void characterCreated(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t plane = ecs_get_target(it->world, it->entities[0], IsOn, 0);
+    ecs_entity_t plane = ecs_field_src(it, 2);
 
     for (int i = 0; i < it->count; i++) {
         plane_PlaceEntity(it->world, plane, it->entities[i], positions[i]);
@@ -136,7 +135,7 @@ void characterCreated(ecs_iter_t *it) {
 
 void characterMoved(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t plane = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_field_src(it, 2);
     for (int i = 0; i < it->count; i++) {
         plane_MoveEntity(it->world, plane, it->entities[i], positions[i]);
     }
@@ -144,7 +143,7 @@ void characterMoved(ecs_iter_t *it) {
 
 void characterDestroyed(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t plane = ecs_field_id(it, 2);
+    ecs_entity_t plane = ecs_field_src(it, 2);
     for (int i = 0; i < it->count; i++) {
         plane_RemoveEntity(it->world, plane, it->entities[i], positions[i]);
     }
@@ -152,14 +151,15 @@ void characterDestroyed(ecs_iter_t *it) {
 
 void spawnActors(ecs_iter_t *it) {
     Spawner *spawners = ecs_field(it, Spawner, 1);
-    ecs_entity_t plane = ecs_pair_second(it->world, ecs_field_id(it, 2));
+    Plane *plane = ecs_field(it, Plane, 2);
+    ecs_entity_t planeEntity = ecs_field_src(it, 2);
     Step *step = ecs_field(it, Step, 3);
 
     ecs_world_t *world = it->world;
-    htw_ChunkMap *cm = ecs_get(world, plane, Plane)->chunkMap;
+    htw_ChunkMap *cm = plane->chunkMap;
 
     ecs_entity_t oldScope = ecs_get_scope(world);
-    ecs_set_scope(world, plane);
+    //ecs_set_scope(world, plane); // TODO: best way to organize spawned entities for editor inspection?
 
     u32 maxX = cm->mapWidth;
     u32 maxY = cm->mapHeight;
@@ -177,12 +177,12 @@ void spawnActors(ecs_iter_t *it) {
                 .y = htw_randIndex(maxY)
             };
             // THEORY: the observer doesn't trigger here, because the entity doesn't yet have both of these components before the function ends, and the merge doesn't trigger OnSet observers as expected
-            ecs_add_pair(world, newCharacter, IsOn, plane);
+            ecs_add_pair(world, newCharacter, IsIn, planeEntity);
             // TODO: only set position to random map coord if the prefab has a tag like `RandomizePosition`
             ecs_set(world, newCharacter, Position, {coord.x, coord.y});
             ecs_set(world, newCharacter, CreationTime, {*step});
             // TODO: if instance has Elevation, set to current cell's height
-            plane_PlaceEntity(world, plane, newCharacter, coord);
+            plane_PlaceEntity(world, planeEntity, newCharacter, coord);
         }
         if (sp.oneShot) {
             // Don't delete while iterating the same table
@@ -199,10 +199,7 @@ void spawnActors(ecs_iter_t *it) {
 void egoBehaviorGrazer(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
-    htw_ChunkMap *cm = tm->chunkMap;
+    htw_ChunkMap *cm = ecs_field(it, Plane, 3)->chunkMap;
 
     for (int i = 0; i < it->count; i++) {
 
@@ -281,8 +278,8 @@ void egoBehaviorGrazer(ecs_iter_t *it) {
 void egoBehaviorPredator(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t tmEnt = ecs_field_id(it, 3);
-    htw_ChunkMap *cm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane)->chunkMap;
+    htw_ChunkMap *cm = ecs_field(it, Plane, 3)->chunkMap;
+    ecs_entity_t planeEntity = ecs_field_src(it, 3);
 
     for (int i = 0; i < it->count; i++) {
 
@@ -302,7 +299,7 @@ void egoBehaviorPredator(ecs_iter_t *it) {
 
             // Get root entity at cell, find any Grazers, break if found
             // TODO: Descend tree. for now, only pick out lone grazers (stragglers)
-            ecs_entity_t root = plane_GetRootEntity(it->world, tmEnt, worldCoord);
+            ecs_entity_t root = plane_GetRootEntity(it->world, planeEntity, worldCoord);
             if (ecs_is_valid(it->world, root)) {
                 if (ecs_has_pair(it->world, root, Ego, EgoGrazer)) {
                     // Apply destination
@@ -325,9 +322,8 @@ void egoBehaviorPredator(ecs_iter_t *it) {
 void executeMove(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
     Destination *destinations = ecs_field(it, Destination, 2);
-    ecs_entity_t planePair = ecs_field_id(it, 3);
-    ecs_entity_t planeEnt = ecs_pair_second(it->world, planePair);
-    const Plane *p = ecs_get(it->world, planeEnt, Plane);
+    const Plane *plane = ecs_field(it, Plane, 3);
+    ecs_entity_t planeEntity = ecs_field_src(it, 3);
 
     if (ecs_field_is_set(it, 4)) {
         Group *groups = ecs_field(it, Group, 4);
@@ -335,32 +331,30 @@ void executeMove(ecs_iter_t *it) {
         for (int i = 0; i < it->count; i++) {
             u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
             // TODO: move along each cell in path, leaving tracks on each
-            CellData *cell = htw_geo_getCell(p->chunkMap, positions[i]);
+            CellData *cell = htw_geo_getCell(plane->chunkMap, positions[i]);
             s64 tracks = cell->tracks;
             tracks += groups[i].count;
             cell->tracks = MIN(tracks, UINT16_MAX);
 
             // TODO: move towards destination by maximum single turn move distance
-            plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
+            plane_MoveEntity(it->world, planeEntity, it->entities[i], destinations[i]);
             // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-            positions[i] = htw_geo_wrapGridCoordOnChunkMap(p->chunkMap, destinations[i]);
+            positions[i] = htw_geo_wrapGridCoordOnChunkMap(plane->chunkMap, destinations[i]);
         }
     } else {
         for (int i = 0; i < it->count; i++) {
             u32 movementDistance = htw_geo_hexGridDistance(positions[i], destinations[i]);
             // TODO: move towards destination by maximum single turn move distance
-            plane_MoveEntity(it->world, planeEnt, it->entities[i], destinations[i]);
+            plane_MoveEntity(it->world, planeEntity, it->entities[i], destinations[i]);
             // TODO: if entity has stamina, deduct stamina (or add if no move taken. Should maybe be in a seperate system)
-            positions[i] = htw_geo_wrapGridCoordOnChunkMap(p->chunkMap, destinations[i]);
+            positions[i] = htw_geo_wrapGridCoordOnChunkMap(plane->chunkMap, destinations[i]);
         }
     }
 }
 
 void executeFeed(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t tmEnt = ecs_field_id(it, 2);
-    const Plane *tm = ecs_get(it->world, ecs_pair_second(it->world, tmEnt), Plane);
-    htw_ChunkMap *cm = tm->chunkMap;
+    htw_ChunkMap *cm = ecs_field(it, Plane, 2)->chunkMap;
     ecs_entity_t diet = ecs_pair_second(it->world, ecs_field_id(it, 3));
     Condition *conditions = ecs_field(it, Condition, 4);
     if (ecs_field_is_set(it, 5)) {
@@ -420,16 +414,13 @@ void resolveHealth(ecs_iter_t *it) {
 
 void mergeGroups(ecs_iter_t *it) {
     Position *positions = ecs_field(it, Position, 1);
-    ecs_entity_t planePair = ecs_field_id(it, 2);
-    ecs_entity_t planeEnt = ecs_pair_second(it->world, planePair);
-    const Plane *tm = ecs_get(it->world, planeEnt, Plane);
-    htw_ChunkMap *cm = tm->chunkMap;
+    ecs_entity_t planeEntity = ecs_field_src(it, 2);
     Group *groups = ecs_field(it, Group, 3);
     ecs_entity_t prefab = ecs_pair_second(it->world, ecs_field_id(it, 4));
 
     for (int i = 0; i < it->count; i++) {
 
-        ecs_entity_t root = plane_GetRootEntity(it->world, planeEnt, positions[i]);
+        ecs_entity_t root = plane_GetRootEntity(it->world, planeEntity, positions[i]);
         // filter for: entities in root's hierarchy tree & instances of the same prefab & is a group
         ecs_filter_t *filter = ecs_filter(it->world, {
             .terms = {
@@ -491,36 +482,36 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcWildlife);
 
     ECS_SYSTEM(world, egoBehaviorWander, Planning,
-               [in] Position,
-               [out] Destination,
-               [in] Plane(up(bc.planes.IsOn)),
-               [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
+        [in] Position,
+        [out] Destination,
+        [in] Plane(up(bc.planes.IsIn)),
+        [none] (bc.actors.Ego, bc.actors.Ego.EgoWanderer)
     );
 
     ECS_SYSTEM(world, revealMap, Resolution,
-               [in] Position,
-               [in] Plane(up(bc.planes.IsOn)),
-               [in] MapVision
+        [in] Position,
+        [in] Plane(up(bc.planes.IsIn)),
+        [in] MapVision
     );
 
     // TODO: try out observers only for position changes
     // NOTE: observers can propogate events along traversable relationships, meaning that when Plane is set, this event triggers for all entities on that plane
     // ECS_OBSERVER(world, characterCreated, EcsOnAdd,
     //     [in] Position,
-    //     [none] Plane(up(bc.planes.IsOn))
+    //     [none] Plane(up(bc.planes.IsIn))
     // );
     // ECS_OBSERVER(world, characterMoved, EcsOnSet,
     //     [in] Position,
-    //     (bc.planes.IsOn, _)
+    //     Plane(up(bc.planes.IsIn))
     // );
     // ECS_OBSERVER(world, characterDestroyed, EcsOnDelete,
     //     Position,
-    //     (bc.planes.IsOn, _)
+    //     Plane(up(bc.planes.IsIn))
     // );
 
     ECS_SYSTEM(world, spawnActors, EcsPreUpdate,
         [in] Spawner,
-        [in] (bc.planes.IsOn, _),
+        [in] Plane(up(bc.planes.IsIn)),
         [in] Step($)
     );
     // NOTE: by passing an existing system to .entity, properties of the existing system can be overwritten. Useful when creating systems with ECS_SYSTEM that need finer control than the macro provides.
@@ -534,7 +525,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_SYSTEM(world, egoBehaviorGrazer, Planning,
                [in] Position,
                [out] Destination,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsIn)),
                [none] (bc.actors.Ego, bc.actors.Ego.EgoGrazer),
     );
     ecs_system(world, {
@@ -545,7 +536,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_SYSTEM(world, egoBehaviorPredator, Planning,
                [in] Position,
                [out] Destination,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsIn)),
                [none] (bc.actors.Ego, bc.actors.Ego.EgoPredator),
     );
     ecs_system(world, {
@@ -556,7 +547,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     ECS_SYSTEM(world, executeMove, Execution,
                [out] Position,
                [in] Destination,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsIn)),
                [in] ?Group,
                [none] (bc.actors.Action, bc.actors.Action.ActionMove)
     );
@@ -568,7 +559,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, executeFeed, Execution,
                [in] Position,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsIn)),
                [in] (bc.wildlife.Diet, _),
                [in] Condition,
                [in] ?Group,
@@ -583,7 +574,7 @@ void BcSystemsCharactersImport(ecs_world_t *world) {
     // TODO: might want to remove this system and instead make group splitting and merging the outcome of an event, which has a chance of appearing when 2 groups cross paths or a group is large enough
     ECS_SYSTEM(world, mergeGroups, Cleanup,
                [in] Position,
-               [in] (bc.planes.IsOn, _),
+               [in] Plane(up(bc.planes.IsIn)),
                [inout] Group,
                [in] (IsA, _), // TODO: consider a better way to determine merge compatability. Can't use query variables for cached queries
                [none] bc.planes.CellRoot(parent)

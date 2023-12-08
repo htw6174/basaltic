@@ -24,7 +24,7 @@ bcview {
     // debug draw
     destinationArrows : DebugArrowPrefab {
         - Color {0.9, 0.9, 0.9, 1.0}
-        - QueryDesc {expr: "Position, Destination, Plane(up(bc.planes.IsOn)), (bc.actors.Action, bc.actors.Action.ActionMove)"}
+        - QueryDesc {expr: "Position, Destination, Plane(up(bc.planes.IsIn)), (bc.actors.Action, bc.actors.Action.ActionMove)"}
     }
 
     riverArrows : DebugArrowPrefab {
@@ -34,52 +34,52 @@ bcview {
 
     player : DebugDrawPrefab {
         - Color {0.6, 0.0, 0.8, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.MapVision"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.actors.MapVision"}
     }
 
     characters : DebugDrawPrefab {
         - Color {0.3, 0.3, 1.0, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.actors.Individual"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.actors.Individual"}
     }
 
     carnivores : DebugDrawPrefab {
         - Color {0.7, 0.0, 0.0, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
     }
 
     berry_pickers : DebugDrawPrefab {
         - Color {0.7, 0.0, 0.7, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"}
     }
 
     arbivores : DebugDrawPrefab {
         - Color {0.0, 0.7, 0.7, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"}
     }
 
     grazers : DebugDrawPrefab {
         - Color {0.0, 0.7, 0.0, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
     }
 
     tectonics : DebugDrawPrefab {
         - Color {0.7, 0.8, 0.7, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.elementals.PlateShiftStrength"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.elementals.PlateShiftStrength"}
     }
 
     volcanos : DebugDrawPrefab {
         - Color {0.9, 0.5, 0.0, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)"}
     }
 
     storms : DebugDrawPrefab {
         - Color {0.5, 0.5, 0.8, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)"}
     }
 
     villages : DebugDrawPrefab {
         - Color {0.9, 0.9, 0.1, 1.0}
-        - QueryDesc {expr: "Position, (bc.planes.IsOn, _), bc.tribes.Village"}
+        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.tribes.Village"}
     }
 
     // TEST: disable shadow pass by default
