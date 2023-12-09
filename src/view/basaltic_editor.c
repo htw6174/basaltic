@@ -100,7 +100,18 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic);
 void entityCreator(ecs_world_t *world, ecs_entity_t parent, ecs_entity_t *focusEntity);
 /** Displays an igInputText for [name]]. Returns true when [name] is set to a unique name in parent scope and submitted. When used within a popup, auto-focuses input field and closes popup when confirming. */
 bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t name_buf_size);
-/** Returns number of entities in hierarchy, including the root */
+/**
+ * @brief Displays a tree of entity labels starting from node and traversing given relationship downward.
+ *
+ * @param world
+ * @param node root entity for tree
+ * @param relationship relationship to traverse. Should be Acyclic
+ * @param focus set to clicked entity, if any
+ * @param defaultOpen if true, automatically expands all nodes. Must be false if relationship is not Acyclic
+ * @return number of entities in tree, including root node
+ */
+u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t relationship, ecs_entity_t *focus, bool defaultOpen);
+/// Displays a tree of entity labels starting from node and traversing children downward. Returns number of entities in hierarchy, including the root node
 u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen);
 bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected);
 bool pairSelector(ecs_world_t *world, ecs_query_t *relationshipQuery, ecs_id_t *selected);
@@ -523,7 +534,7 @@ void bc_editorOnModelStart(void) {
     modelInspector = (EcsInspectionContext){
         .worldName = "Model",
         .customQueries = {
-            [0] = {.queryExpr = "Position, Plane(up(bc.planes.IsOn))"},
+            [0] = {.queryExpr = "Position, Plane(up(bc.planes.IsIn))"},
             [1] = {.queryExpr = "bc.planes.Plane"},
             [2] = {.queryExpr = "Prefab"},
             [3] = {.queryExpr = "flecs.system.System"},
@@ -659,7 +670,7 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         ecs_entity_t selectedRoot = plane_GetRootEntity(world, plane, coord);
         if (selectedRoot != 0) {
             if (ecs_is_valid(world, selectedRoot)) {
-                entityCountHere += hierarchyInspector(world, selectedRoot, focusEntity, true);
+                entityCountHere += relationshipTreeInspector(world, selectedRoot, IsIn, focusEntity, true);
             }
         }
         igValue_Uint("Entities here", entityCountHere);
@@ -766,8 +777,12 @@ void ecsQueryInspector(ecs_world_t *world, QueryContext *qc, ecs_entity_t *selec
 
 // TODO: should limit max number of displayed entities. For now, make sure bulk creation happens in some scope
 void ecsTreeInspector(ecs_world_t *world, ecs_entity_t *selected) {
-    ecs_iter_t it = ecs_children(world, 0);
-    while (ecs_children_next(&it)) {
+    //ecs_iter_t it = ecs_children(world, 0);
+    ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){
+        .id = ecs_childof(0),
+        .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
+    });
+    while (ecs_term_next(&it)) {
         for (int i = 0; i < it.count; i++) {
             hierarchyInspector(world, it.entities[i], selected, false);
         }
@@ -1017,7 +1032,7 @@ bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t n
     return false;
 }
 
-u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen) {
+u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t relationship, ecs_entity_t *focus, bool defaultOpen) {
     u32 count = 1;
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     // Highlight focused node
@@ -1031,7 +1046,7 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         flags |= ImGuiTreeNodeFlags_Leaf;
     } else {
         children = ecs_term_iter(world, &(ecs_term_t){
-            .id = ecs_childof(node),
+            .id = ecs_pair(relationship, node),
             .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
         });
         // Display as a leaf if no children
@@ -1082,9 +1097,6 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         igEndDragDropTarget();
     }
 
-    // expandNode ? treePop
-    // hasChildren
-
     if (expandNode) {
         if (hasChildren) {
             do {
@@ -1098,6 +1110,10 @@ u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focu
         ecs_iter_fini(&children);
     }
     return count;
+}
+
+u32 hierarchyInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t *focus, bool defaultOpen) {
+    return relationshipTreeInspector(world, node, EcsChildOf, focus, defaultOpen);
 }
 
 bool entitySelector(ecs_world_t *world, ecs_query_t *query, ecs_entity_t *selected) {
