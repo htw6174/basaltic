@@ -803,12 +803,14 @@ void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTex
             s32 temp = plane_GetCellTemperature(plane, climate, htw_geo_addGridCoords(startTexel, (htw_geo_GridCoord){x, y}));
             u8 tempIndex = remap_int(temp, -3000, 3000, 0, UINT8_MAX);
 
+            u16 geology = cell->geology.rockType1;
+
             // Cast to u32 before shifting so that sign bits stay with the packed value
             // Continuous values compressed to 8-bit range
             // Shape and visibility
             u32 rChannel =  ((u32)(u8)cell->height) | //((u32)cell->height) |
                             ((u32)cell->visibility << 8) |
-                            ((u32)cell->geology << 16);
+                            ((u32)geology << 16);
             // Things on the surface
             u32 gChannel =  ((u32)cell->understory >> 24) |
                             ((u32)(cell->canopy >> 24) << 8) |

@@ -33,6 +33,16 @@ ECS_STRUCT(SpatialStorage, {
     khash_t(WorldMap) *hashMap;
 });
 
+// Placeholder, subject to change
+typedef struct {
+    u8 rockType1  : 4;
+    u8 rockType2  : 4;
+    u8 soilParam1 : 4;
+    u8 soilParam2 : 4;
+} CellGeology;
+
+BC_DECL ECS_COMPONENT_DECLARE(CellGeology);
+
 typedef struct {
     // 0 = no river segment
     unsigned riverSizeNE : 3;
@@ -73,11 +83,11 @@ ECS_STRUCT(RiverSegment, {
 // Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though
 ECS_STRUCT(CellData, {
     s8 height; // Each height step represents 100m of elevation change
-    u8 visibility; // bitmask
-    u16 geology; // reserving some space for later TODO: how to implement and represent varying cell geology
+    u8 visibility; // 0 = fully hidden from player, 2 = fully visible to player
+    CellGeology geology; // reserving some space for later TODO: how to implement and represent varying cell geology
     u16 tracks; // Increases when actors move into a tile, decreases over time. Persists longer in some terrain types than others
-    s16 groundwater; // If > 0: Units currently undefined, base decrease of 1/hour; if <= 0: Represents number of hours without groundwater, always decreases by 1/hour
-    u16 surfacewater; // Converts into groundwater and evaporates over time, rate based on geology and vegetation
+    s16 groundwater; // If > 0: Subsurface water in Megalitres, base decrease of 1/hour; if <= 0: Number of hours without groundwater, always decreases by 1/hour
+    u16 surfacewater; // Surface water in Megalitres. Converts into groundwater and evaporates over time, rate based on geology and vegetation
     u16 humidityPreference; // Type of vegetation growing here; the higher this is, the less time water can be unavailable before vegetation starts dying off. Moves toward average water availability over time
     CellWaterways waterways;
     u32 understory; // Units currently undefined; biomass of grasses, shrubs, etc.

@@ -18,7 +18,15 @@ ECS_STRUCT(Tribe, {
 });
 
 ECS_STRUCT(Village, {
-    s32 wealth;
+    s32 level;
+});
+
+// 1 unit of food = amount required by 1 average size actor per day
+ECS_STRUCT(Stockpile, {
+    s32 grain;
+    s32 fruit;
+    s32 meat;
+    s32 fish;
 });
 
 // Relationship where target is a settlement or organization:

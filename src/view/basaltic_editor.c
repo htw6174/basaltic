@@ -610,7 +610,7 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
 
     coordInspector("Cell coordinates", coord);
 
-    if (igCollapsingHeader_TreeNodeFlags("Cell Data", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (igCollapsingHeader_TreeNodeFlags("Cell Data", 0)) {
         igSpacing();
 
         // TODO: should make some of this layout automatic based on CellData component reflection info, in case I change the types around
@@ -631,7 +631,7 @@ bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coo
         const u8 minVisibility = 0;
         const u8 maxVisibility = UINT8_MAX;
         edited |= igInputScalar("Height", ImGuiDataType_S8, &(cellData->height), &smallHeightStep, &bigHeightStep, NULL, 0);
-        edited |= igInputScalar("Geology", ImGuiDataType_U16, &(cellData->geology), &smallWaterStep, &bigWaterStep, NULL, 0);
+        //edited |= igInputScalar("Geology", ImGuiDataType_U16, &(cellData->geology), &smallWaterStep, &bigWaterStep, NULL, 0);
         edited |= igInputScalar("Tracks", ImGuiDataType_U16, &(cellData->tracks), &smallWaterStep, &bigWaterStep, NULL, 0);
         igSameLine(0, -1);
         igText("%.1f%%", 100.0 * (float)cellData->tracks / (float)UINT16_MAX);
@@ -1489,30 +1489,54 @@ bool primitiveInspector(ecs_world_t *world, ecs_primitive_kind_t kind, void *fie
             //u64 len = strlen(str);
             //igTextUnformatted(str, str + len);
             // display as normal string until edit button clicked
-            if(igSmallButton("edit")) {
-                strncpy(stringEditBuffer, str, STRING_BUFFER_SIZE);
-                igOpenPopup_Str("edit_string", 0);
-            }
-            igSameLine(0, -1);
-            igTextWrapped(str);
-            // begin edit window for string
-            if (igBeginPopup("edit_string", 0)) {
-                // inputText should get default focus
-                if (igIsWindowAppearing()) {
-                    igSetKeyboardFocusHere(0);
+            if (str != NULL) {
+                if(igSmallButton("edit")) {
+                    strncpy(stringEditBuffer, str, STRING_BUFFER_SIZE);
+                    igOpenPopup_Str("edit_string", 0);
                 }
-                // TODO: any way to make imgui's text input wrap single line text?
-                const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CtrlEnterForNewLine;
-                if(igInputTextMultiline("##edit_this_string", stringEditBuffer, STRING_BUFFER_SIZE, (ImVec2){600, 0}, flags, NULL, NULL)) {
-                    size_t len = strlen(stringEditBuffer) + 1; // strlen doesn't include terminator
-                    char *newStr = malloc(len);
-                    strncpy(newStr, stringEditBuffer, len);
-                    free(str);
-                    *(char**)field = newStr;
-                    modified = true;
-                    igCloseCurrentPopup();
+                igSameLine(0, -1);
+                igTextWrapped(str);
+                // begin edit window for string
+                if (igBeginPopup("edit_string", 0)) {
+                    // inputText should get default focus
+                    if (igIsWindowAppearing()) {
+                        igSetKeyboardFocusHere(0);
+                    }
+                    // TODO: any way to make imgui's text input wrap single line text?
+                    const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CtrlEnterForNewLine;
+                    if(igInputTextMultiline("##edit_this_string", stringEditBuffer, STRING_BUFFER_SIZE, (ImVec2){600, 0}, flags, NULL, NULL)) {
+                        size_t len = strlen(stringEditBuffer) + 1; // strlen doesn't include terminator
+                        char *newStr = malloc(len);
+                        strncpy(newStr, stringEditBuffer, len);
+                        free(str);
+                        *(char**)field = newStr;
+                        modified = true;
+                        igCloseCurrentPopup();
+                    }
+                    igEndPopup();
                 }
-                igEndPopup();
+            } else {
+                if(igSmallButton("set")) {
+                    stringEditBuffer[0] = '\0';
+                    igOpenPopup_Str("set_string", 0);
+                }
+                // begin edit window for string
+                if (igBeginPopup("set_string", 0)) {
+                    // inputText should get default focus
+                    if (igIsWindowAppearing()) {
+                        igSetKeyboardFocusHere(0);
+                    }
+                    const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CtrlEnterForNewLine;
+                    if(igInputTextMultiline("##edit_this_string", stringEditBuffer, STRING_BUFFER_SIZE, (ImVec2){600, 0}, flags, NULL, NULL)) {
+                        size_t len = strlen(stringEditBuffer) + 1; // strlen doesn't include terminator
+                        char *newStr = malloc(len);
+                        strncpy(newStr, stringEditBuffer, len);
+                        *(char**)field = newStr;
+                        modified = true;
+                        igCloseCurrentPopup();
+                    }
+                    igEndPopup();
+                }
             }
             break;
         case EcsEntity:

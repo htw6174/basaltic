@@ -60,14 +60,8 @@ void chunkDailyUpdate(Plane *plane, const Climate *climate, size_t chunkIndex) {
         s64 understory = cell->understory;
         s64 canopy = cell->canopy;
 
-        // Calc rain probabality and volume TODO: should be agent-based instead of part of the terrain update, but good enough for testing
-        // if (htw_randRange(256 * 128) < cell->surfacewater) {
-        //     // "rainstorm"; if less than 0 (tracking number of dry hours), then start from 0
-        //     cell->groundwater = min_int(max_int(cell->surfacewater, cell->groundwater + cell->surfacewater), 512);
-        // }
-
         // erase tracks
-        tracks = MIN(tracks * 0.95, tracks - 1);
+        tracks = MIN(tracks * 0.98, tracks - 1);
 
         // surface water evaporates and filters into ground water TODO: variable rates depending on vegetation
         if (surfacewater > 0) {
@@ -81,15 +75,15 @@ void chunkDailyUpdate(Plane *plane, const Climate *climate, size_t chunkIndex) {
             // Track hours since water was available
             groundwater -= 24;
             // kill vegetation if dry longer than drought resistance threshold
-            if (-cell->groundwater > (MAX_DROUGHT_TOLERANCE - cell->humidityPreference)) {
+            if (-groundwater > (MAX_DROUGHT_TOLERANCE - humidityPreference)) {
                 // lower humidity preference
-                humidityPreference -= 1;
+                humidityPreference -= 24;
                 understory *= 0.98;
                 canopy *= 0.98;
             }
         } else if (isGrowingSeason) {
             // raise humidity preference
-            humidityPreference += 1;
+            humidityPreference += 24;
             // Remove groundwater according to evapotranspiration TODO
             groundwater -= 24;
             // grow new vegetation
@@ -97,6 +91,7 @@ void chunkDailyUpdate(Plane *plane, const Climate *climate, size_t chunkIndex) {
             understory += (0.01 * UINT32_MAX);
 
             // should take ~100 years to reach full canopy, but numbers are less clear because of variable growth rate
+            // TODO: high tracks % should slow early canopy growth, very high tracks % should slow understory growth
             float canopyGrowth = plane_CanopyGrowthRate(plane, cellCoord);
             canopy += (canopyGrowth * 0.0005 * UINT32_MAX);
         } else {

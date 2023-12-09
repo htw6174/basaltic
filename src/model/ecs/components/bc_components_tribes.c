@@ -7,6 +7,7 @@ void BcTribesImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, Tribe);
     ECS_META_COMPONENT(world, Village);
+    ECS_META_COMPONENT(world, Stockpile);
 
     ECS_TAG_DEFINE(world, MemberOf);
     ecs_add_id(world, MemberOf, EcsTraversable);

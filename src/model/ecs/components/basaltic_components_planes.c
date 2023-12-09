@@ -3,10 +3,59 @@
 #include "basaltic_components_planes.h"
 #include <math.h>
 
+int serializeCellGeology(const ecs_serializer_t *ser, const void *src) {
+    // TODO
+    return 0;
+}
+
 void BcPlanesImport(ecs_world_t *world) {
     ECS_MODULE(world, BcPlanes);
 
+    ECS_IMPORT(world, FlecsUnits);
+
     ECS_META_COMPONENT(world, SpatialStorage);
+
+    // Units used for cell data values
+    ecs_entity_t DecaMeters = ecs_set_name(world, 0, "DecaMeters");
+    ecs_unit(world, {
+        .entity = DecaMeters,
+        .base = EcsMeters,
+        .prefix = EcsDeca,
+    });
+
+    ecs_entity_t Volume = ecs_quantity(world, {
+        .name = "Volume"
+    });
+
+    ecs_entity_t Litres = ecs_set_name(world, 0, "Litres");
+    ecs_unit(world, {
+        .entity = Litres,
+        .quantity = Volume,
+        .symbol = "L"
+    });
+
+    ecs_entity_t MegaLitres = ecs_set_name(world, 0, "MegaLitres");
+    ecs_unit(world, {
+        .entity = MegaLitres,
+        .base = Litres,
+        .prefix = EcsMega
+    });
+
+    ecs_entity_t Biomass = ecs_set_name(world, 0, "Biomass");
+    ecs_unit(world, {
+        .entity = Biomass,
+        .base = EcsKiloGrams
+    });
+
+    ECS_COMPONENT_DEFINE(world, CellGeology);
+    ecs_opaque(world, {
+        .entity = ecs_id(CellGeology),
+        .type = {
+            .as_type = ecs_id(ecs_u16_t),
+            .serialize = serializeCellGeology,
+            // TODO: figure out details of using opaque types
+        }
+    });
 
     ECS_COMPONENT_DEFINE(world, CellWaterways);
     ecs_struct(world, {
@@ -18,30 +67,66 @@ void BcPlanesImport(ecs_world_t *world) {
 
     ECS_META_COMPONENT(world, RiverSegment);
 
-    ECS_META_COMPONENT(world, CellData);
-    { // Add range to CellData members
-        ecs_entity_t e;
-        e = ecs_lookup_child(world, ecs_id(CellData), "height");
-        ecs_set(world, e, EcsMemberRanges, {.value = {INT8_MIN, INT8_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "visibility");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, 2}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "geology");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "tracks");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "groundwater");
-        ecs_set(world, e, EcsMemberRanges, {.value = {INT16_MIN, INT16_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "surfacewater");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "humidityPreference");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT16_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "waterways");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "understory");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
-        e = ecs_lookup_child(world, ecs_id(CellData), "canopy");
-        ecs_set(world, e, EcsMemberRanges, {.value = {0, UINT32_MAX}});
-    }
+    ECS_COMPONENT_DEFINE(world, CellData);
+    ecs_struct(world, {
+        .entity = ecs_id(CellData),
+        .members = {
+            {
+                .name = "height",
+                .type = ecs_id(ecs_i8_t),
+                .unit = DecaMeters,
+                .range = {.min = INT8_MIN, .max = INT8_MAX}
+            },
+            {
+                .name = "visibility",
+                .type = ecs_id(ecs_u8_t),
+                .range = {.min = 0, .max = 2}
+            },
+            {
+                .name = "geology",
+                .type = ecs_id(CellGeology)
+            },
+            {
+                .name = "tracks",
+               .type = ecs_id(ecs_u16_t),
+               .range = {.min = 0, .max = UINT16_MAX}
+            },
+            {
+                .name = "groundwater",
+               .type = ecs_id(ecs_i16_t),
+               .unit = MegaLitres,
+               .range = {.min = INT16_MIN, .max = INT16_MAX}
+            },
+            {
+                .name = "surfacewater",
+               .type = ecs_id(ecs_u16_t),
+               .unit = MegaLitres,
+               .range = {.min = 0, .max = UINT16_MAX}
+            },
+            {
+                .name = "humidityPreference",
+               .type = ecs_id(ecs_u16_t),
+               .unit = MegaLitres,
+               .range = {.min = 0, .max = UINT16_MAX}
+            },
+            {
+                .name = "waterways",
+               .type = ecs_id(CellWaterways)
+            },
+            {
+                .name = "understory",
+               .type = ecs_id(ecs_u32_t),
+               .unit = Biomass,
+               .range = {.min = 0, .max = UINT32_MAX}
+            },
+            {
+                .name = "canopy",
+               .type = ecs_id(ecs_u32_t),
+               .unit = Biomass,
+               .range = {.min = 0, .max = UINT32_MAX}
+            },
+        }
+    });
 
     ECS_META_COMPONENT(world, ClimateType);
     ECS_META_COMPONENT(world, Season);

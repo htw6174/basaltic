@@ -89,7 +89,7 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
                 float rainNoise = htw_geo_simplex(cm, cellCoord, seed + 2, 4, 4);
                 cell->height = (baseNoise - 0.5) * 64;
                 cell->visibility = 0;
-                cell->geology = 0;
+                cell->geology = (CellGeology){0};
                 cell->tracks = 0;
                 cell->groundwater = rainNoise * INT16_MAX / 8;
                 cell->surfacewater = rainNoise * UINT16_MAX / 16;

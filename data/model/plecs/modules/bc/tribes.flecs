@@ -3,7 +3,14 @@ using bc.actors
 using bc.actors.Ego
 using flecs.doc
 
+bc.actors.Ego {
+    EgoVillager
+}
+
 bc.tribes {
+    Tribe :- AlwaysOverride
+    Village :- AlwaysOverride
+    Stockpile :- AlwaysOverride
 
     // TODO: best way to assign step or day durations for these stages per-species?
     LifeStage {
@@ -23,6 +30,7 @@ bc.tribes {
 
     Prefab VillagePrefab {
         - OVERRIDE|Village
+        - OVERRIDE|Stockpile
         - OVERRIDE|Position
         - (Description, Brief) {"A home for villagers that occupies a single tile. Has goals that villagers organize to achieve. Container for buildings and supplies"}
     }
@@ -40,7 +48,7 @@ bc.tribes {
         - Condition {maxHealth: 100, health: 100, maxStamina: 100, stamina: 100}
         - ActorSize {ACTOR_SIZE_AVERAGE}
         - (LifeStage, Adult)
-        - (Ego, EgoWanderer)
+        - (Ego, EgoVillager)
         - (Description, Brief) {"Adept crafters and builders. Durable and quick learners, but lack natural physical advantages"}
     }
 
@@ -70,8 +78,9 @@ bc.tribes {
 
     // example village setup
     Prefab HumanVillage : VillagePrefab {
+        - Stockpile {grain: 20, fruit: 10, meat: 10}
         // TODO: instead of targeting prefab, need a way to make all children members of the prefab instance
-        // TODO: should also place all members in the village, consider automatically replacing ChildOf with IsIn when instancing with prefab brush or spawner system
+        // TODO: consider automatically replacing ChildOf with IsIn when instancing with prefab brush or spawner system
         with (MemberOf, HumanVillage) {
             chief : Human
             hunter1 : Human
