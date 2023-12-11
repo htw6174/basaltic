@@ -91,12 +91,237 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
                 cell->visibility = 0;
                 cell->geology = (CellGeology){0};
                 cell->tracks = 0;
-                cell->groundwater = rainNoise * INT16_MAX / 8;
-                cell->surfacewater = rainNoise * UINT16_MAX / 16;
+                cell->groundwater = rainNoise * INT16_MAX / 128;
+                cell->surfacewater = 0; //rainNoise * UINT16_MAX / 256;
                 cell->humidityPreference = rainNoise * UINT16_MAX;
                 cell->understory = nutrientNoise * (float)UINT32_MAX / 16;
                 cell->canopy = nutrientNoise * (float)UINT32_MAX / 128;
             }
         }
     }
+}
+
+/* Rivers */
+
+/// Stored in shortestLeft and shorestRight: number of sides between reference direction corner on that side and the closest connection on that side. -1 if no connection. 0 if no segments needed to connect.
+/// return: true = there is a preferred connection side; false = no preferred side
+bool shortestDistanceToConnections(const CellWaterConnections *connections, s32 *shortestLeft, s32 *shortestRight) {
+    // Smallest number of segments between the new connection's lefthand (out) corner and the rightmost connection of any other edge
+    s32 minDistLeft = 3;
+    // Smallest number of segments between the new connection's righthand (in) corner and the leftmost connection of any other edge
+    s32 minDistRight = 3;
+    for (int i = 1; i < HEX_DIRECTION_COUNT; i++) {
+        bool conLeft = connections->connectionsOut[i];
+        bool conRight = connections->connectionsIn[i];
+        s32 distRight = minDistRight;
+        if (conLeft) {
+            distRight = i - 1;
+        } else if (conRight) {
+            distRight = i;
+        }
+        minDistRight = MIN(minDistRight, distRight);
+
+        s32 distLeft = minDistLeft;
+        if (conRight) {
+            distLeft = HEX_DIRECTION_COUNT - (i + 1);
+        } else if (conLeft) {
+            distLeft = HEX_DIRECTION_COUNT - i;
+        }
+        minDistLeft = MIN(minDistLeft, distLeft);
+    }
+    // -1 if no connection on that side
+    *shortestLeft = minDistLeft < 3 ? minDistLeft : -6;
+    *shortestRight = minDistRight < 3 ? minDistRight : -6;
+    return minDistLeft != minDistRight;
+}
+
+/// return: should neighbor cell connection to this one be set?
+void createSegmentPath(CellWaterConnections *connections, s32 segmentsLeft, s32 segmentsRight) {
+    // TODO: should have a tool setting that controls how segments are created between connections, allow bias toward straight or curvy rivers by increasing minimum distance threshold
+    for (int i = 0; i < segmentsRight; i++) {
+        connections->segments[i + 1] = true;
+    }
+    for (int i = 0; i < segmentsLeft; i++) {
+        connections->segments[HEX_DIRECTION_COUNT - (i + 1)] = true;
+    }
+}
+
+void cleanSegmentPath(CellWaterConnections *connections) {
+    // Clean only outward from edge 0 of connections
+    // to the left, all the way around:
+    for (int i = 0; i < HEX_DIRECTION_COUNT; i++) {
+        // If left end of segment has no connections and no adjoining segment, remove the segment
+        s32 iLeft = htw_geo_hexDirectionLeft(i);
+        bool hasSegmentToLeft = connections->segments[iLeft];
+        bool hasInConnection = connections->connectionsIn[iLeft];
+        bool hasOutConnection = connections->connectionsOut[i];
+        connections->segments[i] &= hasSegmentToLeft || hasInConnection || hasOutConnection;
+    }
+    // to the right, all the way around
+    for (int i = HEX_DIRECTION_COUNT - 1; i >= 0; i--) {
+        // If left end of segment has no connections and no adjoining segment, remove the segment
+        s32 iRight = htw_geo_hexDirectionRight(i);
+        bool hasSegmentToLeft = connections->segments[iRight];
+        bool hasInConnection = connections->connectionsIn[i];
+        bool hasOutConnection = connections->connectionsOut[iRight];
+        connections->segments[i] &= hasSegmentToLeft || hasInConnection || hasOutConnection;
+    }
+}
+
+void extractCellWaterway(const htw_ChunkMap *cm, htw_geo_GridCoord position, HexDirection referenceDirection, const CellData *cell, CellWaterConnections *connections) {
+    u32 ww = *(u32*)&(cell->waterways);
+    for (int i = 0; i < HEX_DIRECTION_COUNT; i++) {
+        HexDirection dir = (referenceDirection + i) % HEX_DIRECTION_COUNT;
+        u32 shift = dir * 5;
+        u32 edge = ww >> shift;
+        u32 segmentMask = (1 << 2) - 1;
+        u32 connectionMask = 1 << 4;
+        u32 segment = edge & segmentMask;
+        u32 connection = edge & connectionMask;
+
+        connections->segments[i] = segment != 0;
+        connections->connectionsOut[i] = connection != 0;
+
+        // Get connection data from neighbor cell in direction, in side opposite direction
+        connections->neighbors[i] = htw_geo_getCell(cm, POSITION_IN_DIRECTION(position, dir));
+        u32 wn = *(u32*)&(connections->neighbors[i]->waterways);
+        dir = htw_geo_hexDirectionOpposite(dir);
+        shift = dir * 5;
+        edge = wn >> shift;
+        connection = edge & connectionMask;
+        connections->connectionsIn[i] = connection != 0;
+    }
+}
+
+void storeCellWaterway(htw_ChunkMap *cm, HexDirection referenceDirection, CellData *cell, const CellWaterConnections *connections) {
+    u32 ww = 0; // new blank CellWaterways
+    for (int i = 0; i < HEX_DIRECTION_COUNT; i++) {
+        HexDirection dir = (referenceDirection + i) % HEX_DIRECTION_COUNT;
+        u32 shift = dir * 5;
+        u32 connectionShift = 4;
+        u32 segment = connections->segments[i];
+        u32 connection = connections->connectionsOut[i];
+        u32 edge = segment | (connection << connectionShift);
+        edge = edge << shift;
+        // merge in edge
+        ww |= edge;
+    }
+    cell->waterways = *(CellWaterways*)&ww;
+}
+
+bool bc_hasAnyWaterways(CellWaterways waterways) {
+    static const CellWaterways emptyWW = {0};
+    return memcmp(&waterways, &emptyWW, sizeof(CellWaterways)) != 0;
+}
+
+CellWaterConnections bc_extractCellWaterways(const htw_ChunkMap *cm, htw_geo_GridCoord position) {
+    CellWaterConnections cw;
+    CellData *cell = htw_geo_getCell(cm, position);
+    extractCellWaterway(cm, position, 0, cell, &cw);
+    return cw;
+}
+
+RiverConnection bc_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b) {
+    RiverConnection rc;
+    CellData *c1 = htw_geo_getCell(cm, a);
+    CellData *c2 = htw_geo_getCell(cm, b);
+
+    // for convience, ensure a is coord of uphill cell
+    if (c2->height > c1->height) {
+        rc.uphillCell = c2;
+        rc.downhillCell = c1;
+        htw_geo_GridCoord temp = a;
+        a = b;
+        b = temp;
+    } else {
+        rc.uphillCell = c1;
+        rc.downhillCell = c2;
+    }
+    // wrap difference to ensure relative direction is correct
+    htw_geo_GridCoord wrappedVec = htw_geo_wrapVectorOnChunkMap(cm, htw_geo_subGridCoords(b, a));
+    rc.upToDownDirection = htw_geo_vectorHexDirection(wrappedVec);
+
+    // extract info for uphill cell
+    extractCellWaterway(cm, a, rc.upToDownDirection, rc.uphillCell, &rc.uphill);
+    // for downhill
+    extractCellWaterway(cm, b, htw_geo_hexDirectionOpposite(rc.upToDownDirection), rc.downhillCell, &rc.downhill);
+
+    return rc;
+}
+
+void bc_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc) {
+    storeCellWaterway(cm, rc->upToDownDirection, rc->uphillCell, &rc->uphill);
+    storeCellWaterway(cm, htw_geo_hexDirectionOpposite(rc->upToDownDirection), rc->downhillCell, &rc->downhill);
+}
+
+void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b) {
+    RiverConnection rc = bc_riverConnectionFromCells(cm, a, b);
+
+    // TODO: arg to control how many connections are made
+    s32 uphillDistLeft, uphillDistRight, downhillDistLeft, downhillDistRight;
+    bool uphillPreferred = shortestDistanceToConnections(&rc.uphill, &uphillDistLeft, &uphillDistRight);
+    bool downhillPreferred = shortestDistanceToConnections(&rc.downhill, &downhillDistLeft, &downhillDistRight);
+    if (uphillPreferred) {
+        if (abs(uphillDistLeft) < abs(uphillDistRight)) {
+            rc.uphill.connectionsOut[0] = true;
+            uphillDistRight = 0;
+        } else {
+            rc.downhill.connectionsOut[0] = true;
+            uphillDistLeft = 0;
+        }
+    } else if (downhillPreferred) {
+        // when connection side is determined by downhill, still need to set one or the other uphill distance to 0
+        if (abs(downhillDistLeft) < abs(downhillDistRight)) {
+            rc.downhill.connectionsOut[0] = true;
+            uphillDistLeft = 0;
+        } else {
+            rc.uphill.connectionsOut[0] = true;
+            uphillDistRight = 0;
+        }
+    } else {
+        // connect on random or constant side
+        rc.uphill.connectionsOut[0] = true;
+        uphillDistRight = 0;
+    }
+    createSegmentPath(&rc.uphill, uphillDistLeft, uphillDistRight);
+    // determine how to connect downhill
+    // distance to existing connection is increased if new connection is on opposite side
+    s32 extraLeft = 0, extraRight = 0;
+    if (rc.uphill.connectionsOut[0]) {
+        extraLeft += 1;
+    }
+    if (rc.downhill.connectionsOut[0]) {
+        extraRight += 1;
+    }
+    if (abs(downhillDistLeft) + extraLeft < abs(downhillDistRight) + extraRight) {
+        downhillDistRight = 0;
+        if (extraLeft > 0) {
+            rc.downhill.segments[0] = true;
+        }
+    } else {
+        downhillDistLeft = 0;
+        if (extraRight > 0) {
+            rc.downhill.segments[0] = true;
+        }
+    }
+    createSegmentPath(&rc.downhill, downhillDistLeft, downhillDistRight);
+    // TODO: should have arg that controls if segment is created on the edge(s) being connected
+
+    bc_applyRiverConnection(cm, &rc);
+}
+
+void bc_removeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b) {
+    RiverConnection rc = bc_riverConnectionFromCells(cm, a, b);
+
+    // remove edge connections between cells
+    // NOTE: in connections aren't applied back to the cell, but still need to set them here so that segment cleanup can see that they are removed
+    rc.uphill.connectionsOut[0] = false;
+    rc.uphill.connectionsIn[0] = false;
+    rc.downhill.connectionsOut[0] = false;
+    rc.downhill.connectionsIn[0] = false;
+    // Remove river segments that are no longer linking edge connections
+    cleanSegmentPath(&rc.uphill);
+    cleanSegmentPath(&rc.downhill);
+
+    bc_applyRiverConnection(cm, &rc);
 }

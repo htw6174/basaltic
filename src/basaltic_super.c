@@ -74,11 +74,13 @@ static void mainLoop(void) {
         if (e.type == SDL_QUIT) { // Normal quit
             requestProcessStop(&superContext.appState, &superContext.modelThreadState);
         } else if (e.type == SDL_KEYDOWN) { // Quit hotkey; don't stop from within app on web builds
-#ifndef __EMSCRIPTEN__
-            if (e.key.keysym.sym == SDLK_ESCAPE) {
+            if (e.key.keysym.sym == SDLK_q && (e.key.keysym.mod & KMOD_CTRL)) { // crtl+q
+#ifdef __EMSCRIPTEN__
+                // TODO: should restart wasm module or reload page
+#else
                 requestProcessStop(&superContext.appState, &superContext.modelThreadState);
-            }
 #endif
+            }
         } else if (e.type == SDL_WINDOWEVENT) {
             if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                 bc_changeScreenSize(wc, e.window.data1, e.window.data2);

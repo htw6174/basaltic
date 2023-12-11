@@ -196,7 +196,7 @@ void PrepStorm(ecs_iter_t *it) {
                 // give 1% spirit power to cell as surfacewater
                 s64 surfacewater = c->surfacewater;
                 s32 rainfall = MAX(1, sp->value * 0.01);
-                surfacewater += rainfall * 24;
+                surfacewater += rainfall * 5;
                 sp->value -= rainfall;
                 c->surfacewater = MIN(surfacewater, UINT16_MAX);
 

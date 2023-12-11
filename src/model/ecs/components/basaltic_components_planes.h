@@ -180,12 +180,4 @@ s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo
 //s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
 
-CellWaterConnections plane_extractCellWaterways(const htw_ChunkMap *cm, htw_geo_GridCoord position);
-
-/// Extracts waterway info from cells at a, b, and all of their neighbors, and stores it in an easier to manipulate format
-RiverConnection plane_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);
-
-/// Updates the river segments on both cells uesd to form the connection, and the connection edges between those cells
-void plane_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc);
-
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

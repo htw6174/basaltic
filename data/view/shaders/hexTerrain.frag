@@ -237,9 +237,16 @@ void main()
 	float noiseHighFreq = noise21sharp(inout_pos.xy * noiseFreq * 10.0);
 
 	// snow
-	float snowReduceCoverage = noiseMidFreq * 0.25 - 0.25;
+// 	float snowReduceCoverage = noiseMidFreq * 0.25 - 0.25;
+// 	float snowMaxCoverage = surfacewater;
+// 	const float biotempFreezing = 0.5;
+// 	biomeColor = biotemp - snowReduceCoverage < biotempFreezing ? snowColor : biomeColor;
+
 	const float biotempFreezing = 0.5;
-	biomeColor = biotemp - snowReduceCoverage < biotempFreezing ? snowColor : biomeColor;
+	float isFreezing = step(biotempFreezing, 1.0 - biotemp);
+	float snowCoverage = surfacewater;
+	snowColor = snowCoverage > noiseMidFreq ? snowColor : biomeColor;
+	biomeColor = isFreezing > 0.0 ? snowColor : biomeColor;
 
 	// tracks
 	float trackSample = caustic(inout_pos.xy, inout_pos.z);
@@ -265,6 +272,10 @@ void main()
 
 	vec3 albedo = isCliff ? cliffColor * cliffValue : biomeColor * groundValue;
 
+	// Surface water
+	float waterThreshold = inout_radius;
+	float isSurfacewater = step(waterThreshold, surfacewater);
+
 	// TODO: proper water level recoloring
 	float tideMag = 0.005;
 	float tideFreq = 5.0;
@@ -272,6 +283,7 @@ void main()
 
 	float seaLevelOffset = 0.05;
 	float isOcean = step(inout_pos.z + seaLevelOffset, tide * tideMag);
+	isOcean = max(isSurfacewater - isFreezing, isOcean);
 
 	float depth = 1.0 - min(-inout_pos.z, 1.0);
 	depth = depth * depth * depth;

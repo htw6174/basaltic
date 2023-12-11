@@ -2,7 +2,7 @@
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
 #include "basaltic_components.h"
-#include "components/basaltic_components_planes.h"
+#include "basaltic_worldGen.h"
 #include "ccVector.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
@@ -277,7 +277,7 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                     continue;
                 }
                 s32 hSelf = cell->height;
-                CellWaterConnections connections = plane_extractCellWaterways(cm, cellCoord);
+                CellWaterConnections connections = bc_extractCellWaterways(cm, cellCoord);
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
                 // world space position
