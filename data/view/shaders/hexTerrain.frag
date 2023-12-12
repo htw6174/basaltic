@@ -244,7 +244,7 @@ void main()
 
 	const float biotempFreezing = 0.5;
 	float isFreezing = step(biotempFreezing, 1.0 - biotemp);
-	float snowCoverage = surfacewater;
+	float snowCoverage = surfacewater * 10.0;
 	snowColor = snowCoverage > noiseMidFreq ? snowColor : biomeColor;
 	biomeColor = isFreezing > 0.0 ? snowColor : biomeColor;
 

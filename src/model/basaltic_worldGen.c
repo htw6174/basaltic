@@ -253,6 +253,7 @@ void bc_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc) {
 
 void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b, u8 size) {
     RiverConnection rc = bc_riverConnectionFromCells(cm, a, b);
+    size = MAX(size, 7);
 
     // TODO: arg to control how many connections are made
     s32 uphillDistLeft, uphillDistRight, downhillDistLeft, downhillDistRight;

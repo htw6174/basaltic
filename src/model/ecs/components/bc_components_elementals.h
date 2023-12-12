@@ -43,7 +43,7 @@ ECS_STRUCT(PlateShiftStrength, {
 
 ECS_STRUCT(StormCloud, {
     bool isStorming;
-    u32 radius; // in tiles
+    s32 radius; // in tiles
     s32 maxDuration;
     s32 currentDuration;
 });

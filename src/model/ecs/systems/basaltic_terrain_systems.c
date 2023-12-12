@@ -89,8 +89,8 @@ void chunkUpdate(Plane *plane, const Climate *climate, const size_t chunkIndex, 
             s64 groundAvailableCapacity = INT16_MAX - groundwater;
             s64 limit = MIN(surfacewater, groundAvailableCapacity); // can't transfer more than is available or more than destination can accept
             infiltration = MIN(infiltration, limit);
-            // if groundwater in negative, start from 0
-            groundwater = MAX(0, groundwater) + infiltration;
+            // if groundwater in negative, start from 1 so frozen surface water doesn't 'dry out' the tile
+            groundwater = MAX(1, groundwater) + infiltration;
             surfacewater -= evaporation + infiltration;
         }
 
@@ -148,8 +148,8 @@ void riverConnectionsUpdate(Plane *plane, size_t chunkIndex) {
             continue;
         }
 
-        // If more than 1/8 of max, form a river to lowest neighbor
-        if (cell->groundwater > (INT16_MAX / 8)) {
+        // If more than 1/4 of max, form a river to lowest neighbor
+        if (cell->groundwater > (INT16_MAX / 4)) {
             s32 lowest = cell->height;
             s32 lowestDir = -1;
             for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
@@ -161,8 +161,10 @@ void riverConnectionsUpdate(Plane *plane, size_t chunkIndex) {
                 }
             }
             if (lowestDir != -1) {
-                // determine size from groundwater %
-                u8 size = cell->groundwater / (INT16_MAX / 8);
+                // min at 8k, max above 65k
+                // min river size at 8k (2^13), max above 8k*7 (2^16 - 2^13)
+                s64 totalWater = (s64)cell->groundwater + (s64)cell->surfacewater;
+                u8 size = totalWater / (1 << 13);
                 // form river from cell to lowestDir
                 htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, lowestDir);
                 bc_makeRiverConnection(cm, cellCoord, neighborCoord, size);
@@ -224,9 +226,12 @@ void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
             if (bc_hasAnyWaterways(cell->waterways) || bc_hasAnyWaterways(neighborCell->waterways)) {
                 RiverConnection rc = bc_riverConnectionFromCells(cm, cellCoord, neighborCoord);
 
-                // if no gradient, use side with higher groundwater as uphill
-                if (cell->height == neighborCell->height) {
-                    if (rc.downhillCell->groundwater > rc.uphillCell->groundwater) {
+                s32 slope = rc.uphillCell->height - rc.downhillCell->height;
+                // if no gradient, use side with higher total water as uphill
+                if (slope == 0) {
+                    s64 totalDown = rc.downhillCell->groundwater + rc.downhillCell->surfacewater;
+                    s64 totalUp = rc.uphillCell->groundwater + rc.uphillCell->surfacewater;
+                    if (totalDown > totalUp) {
                         CellData *temp = rc.uphillCell;
                         rc.uphillCell = rc.downhillCell;
                         rc.downhillCell = temp;
@@ -236,12 +241,17 @@ void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
                 s64 source = rc.uphillCell->groundwater;
                 s64 dest = rc.downhillCell->groundwater;
 
-                // max volume determined by size of both connecting segments
-                s64 volume = 10.0 * (float)(rc.uphill.connectionsIn[0] + rc.uphill.connectionsOut[0]) * dT;
+                // max volume determined by size of both connecting segments and velocity determined slope
+                s32 inArea = rc.uphill.connectionsIn[0] * rc.uphill.connectionsIn[0];
+                s32 outArea = rc.uphill.connectionsOut[0] * rc.uphill.connectionsOut[0];
+                s64 volume = (float)(slope + 1) * (float)(inArea + outArea) * dT;
                 // ignore negative groundwater on uphill side
                 s64 available= MAX(0, source);
                 // can't transport more than is available uphill
                 volume = MIN(volume, available);
+
+                // TODO: net volume as function of volume and total source water; should stop flowing before source completely dries up
+                // TODO: should be able to flow from ground and surface water, flow from groundwater should be limited; overflow to dest should go to surface water
 
                 // if some water going to dest, reset dry days counter
                 dest = volume > 0 ? MAX(0, dest) : dest;

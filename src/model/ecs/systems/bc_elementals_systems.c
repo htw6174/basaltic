@@ -92,12 +92,13 @@ void landslideParticle(htw_ChunkMap *cm, htw_geo_GridCoord start) {
                 candidate = sample;
                 greatestDrop = drop;
             }
-            // Wipe out vegetation and add some nutrient (groundwater?)
+            // Wipe out vegetation and add nutrients
             sampleCell->understory = 0;
             sampleCell->canopy = 0;
-            s64 groundwater = sampleCell->groundwater;
-            groundwater += 150;
-            sampleCell->groundwater = MIN(groundwater, INT16_MAX);
+            // TODO: modify cell geology
+            //s64 groundwater = sampleCell->groundwater;
+            //groundwater += 150;
+            //sampleCell->groundwater = MIN(groundwater, INT16_MAX);
         }
         sliding = greatestDrop > maxSlope;
         pos = candidate;
@@ -186,7 +187,7 @@ void PrepStorm(ecs_iter_t *it) {
         if (storm->isStorming) {
             // apply rain
             // less accumulated energy = smaller storm area
-            u32 radius = ((float)(storm->radius * sp->value) / sp->maxValue) + 1;
+            s32 radius = ((float)(storm->radius * sp->value) / sp->maxValue) + 2;
             u32 area = htw_geo_getHexArea(radius);
             htw_geo_CubeCoord cubeCoord = {0, 0, 0};
             for (int i = 0; i < area; i++) {
@@ -199,6 +200,9 @@ void PrepStorm(ecs_iter_t *it) {
                 surfacewater += rainfall * 5;
                 sp->value -= rainfall;
                 c->surfacewater = MIN(surfacewater, UINT16_MAX);
+                if (sp->value < 0) {
+                    break;
+                }
 
                 htw_geo_getNextHexSpiralCoord(&cubeCoord);
             }
