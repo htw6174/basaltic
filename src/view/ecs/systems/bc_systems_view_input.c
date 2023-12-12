@@ -343,7 +343,7 @@ void PaintRiverBrush(ecs_iter_t *it) {
     }
 
     if (ic.axis.x > 0.0) {
-        bc_makeRiverConnection(cm, prevHoveredCoord, hoveredCoord);
+        bc_makeRiverConnection(cm, prevHoveredCoord, hoveredCoord, rb->value);
     } else {
         bc_removeRiverConnection(cm, prevHoveredCoord, hoveredCoord);
     }

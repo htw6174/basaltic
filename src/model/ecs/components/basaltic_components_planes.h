@@ -44,41 +44,27 @@ typedef struct {
 BC_DECL ECS_COMPONENT_DECLARE(CellGeology);
 
 typedef struct {
+    // 0 = no connection, >0 = start of this edge connects to end of twin edge (with clockwise direction)
+    unsigned sizeOutNE : 3;
     // 0 = no river segment
-    unsigned riverSizeNE : 3;
-    // 0 = clockwise around cell, 1 = counter-clockwise around cell
-    bool riverDirNE      : 1;
-    // 0 = no connection, 1 = start of this edge connects to end of twin edge (with clockwise direction)
-    bool riverToTwinNE   : 1;
-    unsigned riverSizeE  : 3;
-    bool riverDirE       : 1;
-    bool riverToTwinE    : 1;
-    unsigned riverSizeSE : 3;
-    bool riverDirSE      : 1;
-    bool riverToTwinSE   : 1;
-    unsigned riverSizeSW : 3;
-    bool riverDirSW      : 1;
-    bool riverToTwinSW   : 1;
-    unsigned riverSizeW  : 3;
-    bool riverDirW       : 1;
-    bool riverToTwinW    : 1;
-    unsigned riverSizeNW : 3;
-    bool riverDirNW      : 1;
-    bool riverToTwinNW   : 1;
+    bool     segmentNE : 1;
+    unsigned sizeOutE  : 3;
+    bool     segmentE  : 1;
+    unsigned sizeOutSE : 3;
+    bool     segmentSE : 1;
+    unsigned sizeOutSW : 3;
+    bool     segmentSW : 1;
+    unsigned sizeOutW  : 3;
+    bool     segmentW  : 1;
+    unsigned sizeOutNW : 3;
+    bool     segmentNW : 1;
 
-    // last 2 bits unused, may be used for on-cell lakes in future
+    // last 8 bits unused, may be used for on-cell lakes in future
     // could use a few to store type of waterway, e.g. lake, swamp, estuary
-    unsigned : 2;
+    unsigned : 8;
 } CellWaterways;
 
 BC_DECL ECS_COMPONENT_DECLARE(CellWaterways);
-
-// Expanded, inspectable form of river segment data usually packed into CellWaterways
-ECS_STRUCT(RiverSegment, {
-    s32 size; // range [0, 7]
-    bool direction; // 0 = clockwise around cell, 1 = counter-clockwise around cell TODO make an enum for this?
-    bool connectToTwin;
-});
 
 // Not typically used as a component, just need reflection data about this struct. Might be useful for brushes though
 ECS_STRUCT(CellData, {
@@ -95,12 +81,12 @@ ECS_STRUCT(CellData, {
 });
 
 typedef struct {
-    // segments[n+1] is next of segments[n]
+    // stored in the reference cell, range [0, 7]
+    u8 connectionsOut[6];
+    // stored in neighboring cells; changes to this are ignored by bc_applyRiverConnection
+    u8 connectionsIn[6];
+    // segments[n+1] is next half-edge of segments[n]
     bool segments[6];
-    // stored in the reference cell
-    bool connectionsOut[6];
-    // stored in neighboring cells; changes to this are ignored by plane_applyRiverConnection
-    bool connectionsIn[6];
     // Need to lookup anyway, store here for use cases that need to know about neighbors (like rendering)
     CellData *neighbors[6];
 } CellWaterConnections;

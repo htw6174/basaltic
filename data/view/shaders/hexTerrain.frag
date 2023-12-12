@@ -319,7 +319,8 @@ void main()
 	//albedo = randColor(hash21(vec2(inout_cellCoord)));
 
 	vec3 borderColor = drawBorders ? albedo * 0.5 : albedo;
-	albedo = inout_radius > 0.975 ? borderColor : albedo;
+	// don't draw borders on water
+	albedo = (inout_radius > 0.975) && (isOcean < 1.0) ? borderColor : albedo;
 
 	//out_color = vec4(vec3(inout_data2.x), fadeout);
 	out_color = vec4(albedo, fadeout);

@@ -28,7 +28,7 @@ RiverConnection bc_riverConnectionFromCells(const htw_ChunkMap *cm, htw_geo_Grid
 /// Updates the river segments on both cells uesd to form the connection, and the connection edges between those cells
 void bc_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc);
 
-void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);
+void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b, u8 size);
 void bc_removeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);
 
 #endif // BASALTIC_WORLDGEN_H_INCLUDED

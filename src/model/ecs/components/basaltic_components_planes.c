@@ -65,8 +65,6 @@ void BcPlanesImport(ecs_world_t *world) {
         }
     });
 
-    ECS_META_COMPONENT(world, RiverSegment);
-
     ECS_COMPONENT_DEFINE(world, CellData);
     ecs_struct(world, {
         .entity = ecs_id(CellData),

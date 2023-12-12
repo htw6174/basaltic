@@ -61,6 +61,8 @@ void chunkUpdate(Plane *plane, const Climate *climate, const size_t chunkIndex, 
 
         // don't need to do anything if cell is below sea level
         if (cell->height < 0) {
+            cell->groundwater = 0;
+            cell->surfacewater = 0;
             continue;
         }
 
@@ -133,7 +135,7 @@ void chunkUpdate(Plane *plane, const Climate *climate, const size_t chunkIndex, 
     }
 }
 
-void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
+void riverConnectionsUpdate(Plane *plane, size_t chunkIndex) {
     htw_ChunkMap *cm = plane->chunkMap;
     CellData *base = cm->chunks[chunkIndex].cellData;
 
@@ -146,8 +148,8 @@ void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
             continue;
         }
 
-        // If more than 1/4 of max, form a river to lowest neighbor
-        if (cell->groundwater > (1 << 14)) {
+        // If more than 1/8 of max, form a river to lowest neighbor
+        if (cell->groundwater > (INT16_MAX / 8)) {
             s32 lowest = cell->height;
             s32 lowestDir = -1;
             for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
@@ -159,36 +161,59 @@ void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
                 }
             }
             if (lowestDir != -1) {
+                // determine size from groundwater %
+                u8 size = cell->groundwater / (INT16_MAX / 8);
                 // form river from cell to lowestDir
                 htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, lowestDir);
-                bc_makeRiverConnection(cm, cellCoord, neighborCoord);
+                bc_makeRiverConnection(cm, cellCoord, neighborCoord, size);
             }
 
-            // Mixed up pointers to different directions
-            // HexDirection candidates[HEX_DIRECTION_COUNT] = {1, 4, 5, 2, 3, 0};
-            // for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
-            //     htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
-            //     CellData *neighborCell = htw_geo_getCell(cm, neighborCoord);
-            //     if (neighborCell->height <= cell->height) {
-            //         // make candidate self-reference to indicate that search can stop here
-            //         candidates[d] = d;
-            //     }
-            // }
-            // // hashed random starting point in candidates list
-            // u32 hash = xxh_hash2d(0, cellCoord.x, cellCoord.y) % HEX_DIRECTION_COUNT;
-            // HexDirection dir = candidates[hash];
-            // // try each candidate in mixed order until self reference found
-            // for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
-            //     if (candidates[dir] == dir) {
-            //         // form river from cell to lowestDir
-            //         htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, dir);
-            //         bc_makeRiverConnection(cm, cellCoord, neighborCoord);
-            //         break;
-            //     } else {
-            //         dir = candidates[dir];
-            //     }
-            // }
+            /*
+             *   // Mixed up pointers to different directions
+             *   HexDirection candidates[HEX_DIRECTION_COUNT] = {1, 4, 5, 2, 3, 0};
+             *   for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
+             *       htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
+             *       CellData *neighborCell = htw_geo_getCell(cm, neighborCoord);
+             *       if (neighborCell->height <= cell->height) {
+             *           // make candidate self-reference to indicate that search can stop here
+             *           candidates[d] = d;
         }
+        }
+        // hashed random starting point in candidates list
+        u32 hash = xxh_hash2d(0, cellCoord.x, cellCoord.y) % HEX_DIRECTION_COUNT;
+        HexDirection dir = candidates[hash];
+        // try each candidate in mixed order until self reference found
+        for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
+            if (candidates[dir] == dir) {
+                // form river from cell to lowestDir
+                htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, dir);
+                bc_makeRiverConnection(cm, cellCoord, neighborCoord);
+                break;
+        } else {
+            dir = candidates[dir];
+        }
+        }
+            */
+        } else if (cell->groundwater < (-180 * 24) && bc_hasAnyWaterways(cell->waterways)) {
+            // If 2 neighboring cells dry for more than 6 months, remove river connection
+            for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
+                htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
+                CellData *neighborCell = htw_geo_getCell(cm, neighborCoord);
+                if (neighborCell->groundwater < (-180 * 24) && bc_hasAnyWaterways(neighborCell->waterways)) {
+                    bc_removeRiverConnection(cm, cellCoord, neighborCoord);
+                }
+            }
+        }
+    }
+}
+
+void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
+    htw_ChunkMap *cm = plane->chunkMap;
+    CellData *base = cm->chunks[chunkIndex].cellData;
+
+    for (int c = 0; c < cm->cellsPerChunk; c++) {
+        CellData *cell = &base[c];
+        htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, chunkIndex, c);
 
         // If any river connections, carry groundwater downhill
         // Only need to check 3 directions to operate on every pair of neighboring cells
@@ -211,19 +236,22 @@ void riverUpdate(Plane *plane, size_t chunkIndex, s64 dT) {
                 s64 source = rc.uphillCell->groundwater;
                 s64 dest = rc.downhillCell->groundwater;
 
-                s64 volume = 10 * dT;
+                // max volume determined by size of both connecting segments
+                s64 volume = 10.0 * (float)(rc.uphill.connectionsIn[0] + rc.uphill.connectionsOut[0]) * dT;
                 // ignore negative groundwater on uphill side
                 s64 available= MAX(0, source);
                 // can't transport more than is available uphill
                 volume = MIN(volume, available);
 
+                // if some water going to dest, reset dry days counter
+                dest = volume > 0 ? MAX(0, dest) : dest;
+
                 source -= volume;
-                dest = MAX(0, dest) + volume;
+                dest += volume;
 
-                rc.uphillCell->groundwater = CLAMP(source, INT16_MIN, INT16_MAX);;
-                rc.downhillCell->groundwater = CLAMP(dest, INT16_MIN, INT16_MAX);;
+                rc.uphillCell->groundwater = CLAMP(source, INT16_MIN, INT16_MAX);
+                rc.downhillCell->groundwater = CLAMP(dest, INT16_MIN, INT16_MAX);
             }
-
         }
     }
 }
@@ -260,10 +288,22 @@ void FormRivers(ecs_iter_t *it) {
         htw_ChunkMap *cm = planes[i].chunkMap;
         for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
             for (int x = 0; x < cm->chunkCountX; x++, c++) {
+                riverConnectionsUpdate(&planes[i], c);
+            }
+        }
+    }
+}
+
+void FlowRivers(ecs_iter_t *it) {
+    Plane *planes = ecs_field(it, Plane, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        htw_ChunkMap *cm = planes[i].chunkMap;
+        for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
+            for (int x = 0; x < cm->chunkCountX; x++, c++) {
                 riverUpdate(&planes[i], c, 24);
             }
         }
-
     }
 }
 
@@ -299,7 +339,12 @@ void BcSystemsTerrainImport(ecs_world_t *world) {
     ECS_SYSTEM(world, FormRivers, AdvanceStep,
         [inout] Plane,
     );
-    ecs_set_tick_source(world, FormRivers, TickDay);
+    ecs_set_tick_source(world, FormRivers, TickMonth);
+
+    ECS_SYSTEM(world, FlowRivers, AdvanceStep,
+        [inout] Plane,
+    );
+    ecs_set_tick_source(world, FlowRivers, TickDay);
 
     ECS_SYSTEM(world, CleanEmptyRoots, Cleanup, bc.planes.CellRoot);
 }

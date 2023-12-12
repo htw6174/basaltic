@@ -419,6 +419,12 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         igText("Left click and drag to create a river connection between tiles");
                         igText("Right click and drag to remove river connections");
 
+                        RiverBrush *rb = ecs_singleton_get_mut(viewWorld, RiverBrush);
+
+                        if (igSliderInt("River Size", &rb->value, 1, 7, "%d", ImGuiSliderFlags_AlwaysClamp)) {
+                            ecs_singleton_modified(viewWorld, RiverBrush);
+                        }
+
                         igEndTabItem();
                     }
                     ecs_enable(viewWorld, riverBindGroup, riverBindActive);

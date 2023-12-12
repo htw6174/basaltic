@@ -266,7 +266,7 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
         const Plane *plane = ecs_get(modelWorld, fp->entity, Plane);
         htw_ChunkMap *cm = plane->chunkMap;
 
-        const float lineWidth = 0.1;
+        const float lineWidth = 0.03;
 
         for (int y = 0; y < cm->mapHeight; y++) {
             for (int x = 0; x < cm->mapWidth && instanceCount < instanceBuffers[i].maxInstances - 1; x++) { // may create 2 instances so need to stop just short of max
@@ -280,8 +280,8 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                 CellWaterConnections connections = bc_extractCellWaterways(cm, cellCoord);
                 float posX, posY;
                 htw_geo_getHexCellPositionSkewed(cellCoord, &posX, &posY);
-                // world space position
-                vec3 cellPos = {{posX, posY, cell->height + 1}};
+                // world space position; z should be at least 0, don't need to draw river down into ocean
+                vec3 cellPos = {{posX, posY, MAX(0, cell->height + 1)}};
                 for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
                     // world space origin of lines on this edge
                     s32 c1 = d;
@@ -310,27 +310,35 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                         // positive slope towards right out and twin in: - flow speed
                         // if both twin connections: contribution cancels out
                         s32 speed = 0;
-                        speed += sLeft  * connections.connectionsIn[dLeft];
-                        speed += sTwin  * connections.connectionsOut[d];
-                        speed -= sTwin  * connections.connectionsIn[d];
-                        speed -= sRight * connections.connectionsOut[dRight];
+                        speed += sLeft  * (connections.connectionsIn[dLeft] > 0);
+                        speed += sTwin  * (connections.connectionsOut[d] > 0);
+                        speed -= sTwin  * (connections.connectionsIn[d] > 0);
+                        speed -= sRight * (connections.connectionsOut[dRight] > 0);
+
+                        // As wide as widest connection
+                        // TODO: segment width should be additive from inflow connections only and propogate towards outflows; alternatively, could make constant based on inflow for entire cell
+                        float widthMult = MAX(
+                            MAX(connections.connectionsIn[dLeft], connections.connectionsOut[d]),
+                            MAX(connections.connectionsIn[d], connections.connectionsOut[dRight])
+                        );
+                        widthMult = MAX(widthMult, 1.0);
 
                         instanceData[instanceCount] = (ArrowInstanceData){
                             .start = vec3MultiplyVector(start, *scale),
                             .end = vec3MultiplyVector(end, *scale),
                             .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
-                            .width = lineWidth,
+                            .width = lineWidth * widthMult,
                             .speed = speed
                         };
                         instanceCount++;
                     }
-                    if (connections.connectionsOut[d]) {
+                    if (connections.connectionsOut[d] > 0) {
                         // get neighboring cell's worldspace position
                         htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
                         float posX2, posY2;
                         htw_geo_getHexCellPositionSkewed(neighborCoord, &posX2, &posY2);
                         s32 hTwin = connections.neighbors[d]->height;
-                        vec3 neighborPos = {{posX2, posY2, hTwin + 1}};
+                        vec3 neighborPos = {{posX2, posY2, MAX(0, hTwin + 1)}};
 
                         // Opposite corner from end of segment
                         s32 cTwin = (d + 4) % HEX_CORNER_COUNT;
@@ -344,7 +352,7 @@ void UpdateRiverArrowBuffers(ecs_iter_t *it) {
                             .start = vec3MultiplyVector(start, *scale),
                             .end = vec3MultiplyVector(end, *scale),
                             .color = colors == NULL ? (vec4){{1.0, 0.0, 1.0, 1.0}} : colors[i],
-                            .width = lineWidth,
+                            .width = lineWidth * connections.connectionsOut[d],
                             .speed = -sTwin
                         };
                         instanceCount++;
