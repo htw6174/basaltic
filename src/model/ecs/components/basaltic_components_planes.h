@@ -153,9 +153,6 @@ void plane_MoveEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, Po
 
 CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellIndex);
 
-
-s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos);
-
 /**
  * @brief Represents mean annual temperature at a cell on the plane, determined by distance to the plane origin and cell height. Approximate range from -30c to +30c
  *
@@ -163,7 +160,12 @@ s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo
  * @param pos p_pos:...
  * @return Biotemperature in centicelsius (degrees celsius * 100)
  */
-//s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos);
+s32 plane_GetCellBiotemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos);
+/// real temperature that includes seasonal variation
+s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos);
+
 float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos);
+
+const char *plane_getCellLifezoneName(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos);
 
 #endif // BASALTIC_COMPONENTS_PLANES_H_INCLUDED

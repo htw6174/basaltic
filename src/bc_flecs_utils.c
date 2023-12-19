@@ -66,6 +66,20 @@ ecs_primitive_kind_t bc_meta_cursorToPrim(ecs_meta_cursor_t *cursor, ecs_entity_
 ecs_entity_t bc_instantiateRandomizer(ecs_world_t *world, ecs_entity_t prefab) {
 
     ecs_entity_t e = ecs_new_w_pair(world, EcsIsA, prefab);
+    // TODO: want a mechanism to mark relations as inheritable, i.e. behave the same as ChildOf when instantiating
+    // if new entity has any children, and those children have any inheritable relationships: change target of inheritable relationship from prefab scope to same relative in instance scope
+    ecs_iter_t children = ecs_children(world, e);
+    ecs_entity_t isinrel = ecs_lookup_fullpath(world, "bc.planes.IsIn");
+    while(ecs_children_next(&children)) {
+        for (int i = 0; i < children.count; i++) {
+            // ecs_entity_t target = ecs_get_target(world, e, rel, 0);
+            // if (target != 0) {
+            //     // TODO: remove (rel, target), add (rel, instanceTarget)
+            // }
+            // For this test, just add (IsIn, instance) by default for all children
+            ecs_add_pair(world, children.entities[i], isinrel, e);
+        }
+    }
 
     // Find all (RandomizeInt, *) relationships in prefab's type
     ecs_table_t *prefab_table = ecs_get_table(world, prefab);

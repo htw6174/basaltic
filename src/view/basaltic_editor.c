@@ -173,7 +173,7 @@ void bc_setupEditor(void) {
         .customQueries = {
             [0] = {.queryExpr = "bcview.Tool"},
             [1] = {.queryExpr = "Pipeline || InstanceBuffer"}, //(bcview.RenderPipeline, _)"},
-            [2] = {.queryExpr = "Prefab"},
+            [2] = {.queryExpr = "Prefab, !Prefab(up(ChildOf))"}, // only display top-level prefabs
             [3] = {.queryExpr = "flecs.system.System"},
         }
     };
@@ -278,10 +278,17 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
 }
 
 void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *viewWorld) {
-    if (igBegin("Settings", NULL, 0)) {
-        if (model == NULL) {
+    // enable docking over entire screen
+    igDockSpaceOverViewport(igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
+
+    if (model == NULL) {
+        if (igBegin("New World", NULL, 0)) {
             modelSetupInspector(si);
-        } else {
+        }
+        igEnd();
+    } else {
+        ecs_world_t *modelWorld = model->world->ecsWorld;
+        if (igBegin("Settings", NULL, 0)) {
             bc_WorldState *worldState = model->world;
             if (igButton("Create new world", (ImVec2){0, 0})) {
                 si->signal = BC_SUPERVISOR_SIGNAL_STOP_MODEL;
@@ -290,7 +297,9 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
             dateTimeInspector(worldState->step);
             igPushItemWidth(200);
             int tps = 1000 / MAX(model->tickInterval, 1);
-            igSliderInt("Max Ticks per Second", &tps, 1, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+            tps = model->tickInterval == 0 ? 10000 : tps;
+            char *ticksFormat = model->tickInterval == 0 ? "Unlimited" : "%d";
+            igSliderInt("Max Ticks per Second", &tps, 1, 10000, ticksFormat, ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
             model->tickInterval = 1000 / tps;
             igPopItemWidth();
 
@@ -439,22 +448,23 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         /* Ensure the model isn't running before doing anything else */
                         if (!bc_model_isRunning(model)) {
                             if (SDL_SemWaitTimeout(worldState->lock, 16) != SDL_MUTEX_TIMEDOUT) {
-                                ecs_world_t *world = worldState->ecsWorld;
                                 // set model ecs world scope, to keep view's external tags/queries separate
-                                ecs_entity_t oldScope = ecs_get_scope(world);
-                                ecs_entity_t viewScope = ecs_entity_init(world, &(ecs_entity_desc_t){.name = "bcview"});
-                                ecs_set_scope(world, viewScope);
+                                ecs_entity_t oldScope = ecs_get_scope(modelWorld);
+                                ecs_entity_t viewScope = ecs_entity_init(modelWorld, &(ecs_entity_desc_t){.name = "bcview"});
+                                ecs_set_scope(modelWorld, viewScope);
 
-                                const char *prefabName = getEntityLabel(world, pb->prefab);
+                                const char *prefabName = getEntityLabel(modelWorld, pb->prefab);
                                 if (igBeginCombo("Select Prefab", prefabName, 0)) {
-                                    ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){
+                                    ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){
                                         .id = EcsPrefab,
-                                        .flags = EcsTermMatchDisabled | EcsTermMatchPrefab
+                                        .flags = EcsTermMatchPrefab
                                     });
+                                    // TODO: dedicated query for top-level prefabs
+                                    //ecs_iter_t it = ecs_query_iter(modelWorld, modelInspector.customQueries[2].query);
                                     while (ecs_term_next(&it)) {
                                         for (int i = 0; i < it.count; i++) {
                                             ecs_entity_t ent = it.entities[i];
-                                            const char *entName = getEntityLabel(world, ent);
+                                            const char *entName = getEntityLabel(modelWorld, ent);
                                             if (igSelectable_Bool(entName, ent == pb->prefab, 0, IG_SIZE_DEFAULT)) {
                                                 modelInspector.focusEntity = ent;
                                                 pb->prefab = ent;
@@ -465,7 +475,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                                 }
 
                                 if (pb->prefab) {
-                                    const char *brief = ecs_doc_get_brief(world, pb->prefab);
+                                    const char *brief = ecs_doc_get_brief(modelWorld, pb->prefab);
                                     if (brief != NULL) {
                                         igTextWrapped(brief);
                                     }
@@ -475,11 +485,11 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                                         //     // copy to new prefab
                                         //     pb->prefab = ecs_clone(world, 0, pb->prefab, true);
                                         // }
-                                        ecsEntityInspector(world, &modelInspector);
+                                        ecsEntityInspector(modelWorld, &modelInspector);
                                     }
                                 }
 
-                                ecs_set_scope(world, oldScope);
+                                ecs_set_scope(modelWorld, oldScope);
                                 SDL_SemPost(worldState->lock);
                             }
                         } else {
@@ -506,10 +516,9 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         if (tv != NULL) tv->visibility = 0;
 
                         const PlayerEntity *player = ecs_singleton_get(viewWorld, PlayerEntity);
-                        ecs_world_t *world = worldState->ecsWorld;
-                        if (!ecs_is_valid(world, player->entity)) {
+                        if (!ecs_is_valid(modelWorld, player->entity)) {
                             // assign player entity
-                            ecs_iter_t it = ecs_term_iter(world, &(ecs_term_t){.id = ecs_id(MapVision)});
+                            ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){.id = ecs_id(MapVision)});
                             while(ecs_term_next(&it)) {
                                 if (it.count > 0) {
                                     ecs_singleton_set(viewWorld, PlayerEntity, {it.entities[0]});
@@ -532,8 +541,45 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
             }
 
         }
+        igEnd();
+
+        const FocusPlane *focusPlane = ecs_singleton_get(viewWorld, FocusPlane);
+        if (focusPlane) {
+            ecs_entity_t planeEntity = focusPlane->entity;
+            if (planeEntity != 0) {
+                // big inspector for selected cell
+                if (!bc_model_isRunning(model)) {
+                    const SelectedCell *selectedCell = ecs_singleton_get(viewWorld, SelectedCell);
+                    ecs_entity_t selectedRoot = plane_GetRootEntity(modelWorld, planeEntity, *selectedCell);
+                    if (selectedRoot != 0) {
+                        const ImGuiWindowFlags flags = ImGuiWindowFlags_None;
+                        if (igBegin("Selected Tile", NULL, flags)) {
+                            relationshipTreeInspector(modelWorld, selectedRoot, IsIn, NULL, true);
+                        }
+                        igEnd();
+                    }
+                }
+
+                // small preview for hovered cell
+                const HoveredCell *hoveredCell = ecs_singleton_get(viewWorld, HoveredCell);
+                ecs_entity_t hoveredRoot = plane_GetRootEntity(modelWorld, planeEntity, *hoveredCell);
+                const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs;
+                if (igBegin("##hoveredEntities", NULL, flags)) {
+                    // lifezone name
+                    const Plane *plane = ecs_get(modelWorld, planeEntity, Plane);
+                    const Climate *climate = ecs_get(modelWorld, planeEntity, Climate);
+                    igText("%s", plane_getCellLifezoneName(plane, climate, *hoveredCell));
+
+                    if (hoveredRoot != 0) {
+                        const char *label = getEntityLabel(modelWorld, hoveredRoot);
+                        // TODO: display either label or "multiple actors" if root is a CellRoot
+                        igText("%s", label);
+                    }
+                }
+                igEnd();
+            }
+        }
     }
-    igEnd();
 }
 
 void bc_editorOnModelStart(void) {
@@ -542,7 +588,7 @@ void bc_editorOnModelStart(void) {
         .customQueries = {
             [0] = {.queryExpr = "Position, Plane(up(bc.planes.IsIn))"},
             [1] = {.queryExpr = "bc.planes.Plane"},
-            [2] = {.queryExpr = "Prefab"},
+            [2] = {.queryExpr = "Prefab, !Prefab(up(ChildOf))"}, // only display top-level prefabs
             [3] = {.queryExpr = "flecs.system.System"},
         }
     };
@@ -1038,12 +1084,16 @@ bool entityRenamer(ecs_world_t *world, ecs_entity_t parent, char *name, size_t n
     return false;
 }
 
-u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t relationship, ecs_entity_t *focus, bool defaultOpen) {
+u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_t relationship, ecs_entity_t *focusRef, bool defaultOpen) {
+    if (!ecs_is_valid(world, node)) {
+        return 0;
+    }
+    ecs_entity_t focus = focusRef == NULL ? 0 : *focusRef;
     u32 count = 1;
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
     // Highlight focused node
     if (defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
-    if (node == *focus) flags |= ImGuiTreeNodeFlags_Selected;
+    if (node == focus) flags |= ImGuiTreeNodeFlags_Selected;
 
     bool hasChildren = false;
     ecs_iter_t children;
@@ -1083,7 +1133,7 @@ u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_
     igPopStyleColor(1);
     // If tree node was clicked, but not expanded, inspect node
     if (igIsItemClicked(ImGuiMouseButton_Left) && !igIsItemToggledOpen()) {
-        *focus = node;
+        focus = node;
     }
 
     // drag and drop
@@ -1107,13 +1157,16 @@ u32 relationshipTreeInspector(ecs_world_t *world, ecs_entity_t node, ecs_entity_
         if (hasChildren) {
             do {
                 for (int i = 0; i < children.count; i++) {
-                    count += hierarchyInspector(world, children.entities[i], focus, defaultOpen);
+                    count += hierarchyInspector(world, children.entities[i], &focus, defaultOpen);
                 }
             } while (ecs_term_next(&children));
         }
         igTreePop();
     } else if (hasChildren) {
         ecs_iter_fini(&children);
+    }
+    if (focusRef != NULL) {
+        *focusRef = focus;
     }
     return count;
 }
@@ -1576,12 +1629,12 @@ const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e) {
     if (e == 0) {
         return "(nothing)";
     } else if (!ecs_is_alive(world, e)) {
-        sprintf(idStr, "non-alive entity %lu", e);
+        sprintf(idStr, "non-alive entity %u", ecs_entity_t_lo(e));
         return idStr;
     } else if (ecs_is_valid(world, e)) {
         const char *name = ecs_get_name(world, e);
         if (name == NULL) {
-            sprintf(idStr, "%lu", e);
+            sprintf(idStr, "%u", ecs_entity_t_lo(e));
             return idStr;
         } else {
             return name;
@@ -1593,16 +1646,7 @@ const char *getEntityLabel(ecs_world_t *world, ecs_entity_t e) {
 }
 
 void entityLabel(ecs_world_t *world, ecs_entity_t e) {
-    if (ecs_is_valid(world, e)) {
-        const char *name = ecs_get_name(world, e);
-        if (name == NULL) {
-            igText("%lu (unnamed)", e);
-        } else {
-            igText(name);
-        }
-    } else {
-        igText("INVALID ENTITY %lu", e);
-    }
+    igText("%s", getEntityLabel(world, e));
 
     // Consider enabling this for extra info
     // if (igIsItemHovered(0)) {

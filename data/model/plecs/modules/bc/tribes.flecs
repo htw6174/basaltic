@@ -32,7 +32,7 @@ bc.tribes {
         - OVERRIDE|Village
         - OVERRIDE|Stockpile
         - OVERRIDE|Position
-        - (Description, Brief) {"A home for villagers that occupies a single tile. Has goals that villagers organize to achieve. Container for buildings and supplies"}
+        - (Description, Brief) {"A home for villagers that occupies a single tile. Has goals that villagers organize to achieve. Container for buildings and supplies (WIP)"}
     }
 
     Prefab CharacterPrefab {

@@ -93,7 +93,7 @@ void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
                 cell->tracks = 0;
                 cell->groundwater = rainNoise * INT16_MAX / 128;
                 cell->surfacewater = 0; //rainNoise * UINT16_MAX / 256;
-                cell->humidityPreference = rainNoise * UINT16_MAX;
+                cell->humidityPreference = rainNoise * 8192;
                 cell->understory = nutrientNoise * (float)UINT32_MAX / 16;
                 cell->canopy = nutrientNoise * (float)UINT32_MAX / 128;
             }
@@ -253,7 +253,7 @@ void bc_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc) {
 
 void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b, u8 size) {
     RiverConnection rc = bc_riverConnectionFromCells(cm, a, b);
-    size = MAX(size, 7);
+    size = MIN(size, 7);
 
     // TODO: arg to control how many connections are made
     s32 uphillDistLeft, uphillDistRight, downhillDistLeft, downhillDistRight;

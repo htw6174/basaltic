@@ -227,10 +227,11 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
     bc_WorldPosition wp = {.plane = plane, .gridPos = pos};
     khint_t i = kh_get(WorldMap, wm, wp);
     if (i == kh_end(wm)) {
-        // No entry here yet, add key and set value to place here
+        // No entry here yet: add key, set value to place here, and place in plane
         int absent;
         i = kh_put(WorldMap, wm, wp, &absent);
         kh_val(wm, i) = e;
+        ecs_add_pair(world, e, IsIn, plane);
     } else {
         // Need to create a new root entity if valid entity is here already
         ecs_entity_t root = kh_val(wm, i);
@@ -257,8 +258,8 @@ void plane_PlaceEntity(ecs_world_t *world, ecs_entity_t plane, ecs_entity_t e, P
             }
         } else {
             // Invalid entity here, place in plane and set value to place here / make this cell's root
-            ecs_add_pair(world, e, IsIn, plane);
             kh_val(wm, i) = e;
+            ecs_add_pair(world, e, IsIn, plane);
         }
     }
 }
@@ -292,17 +293,14 @@ CellData *bc_getCellByIndex(htw_ChunkMap *chunkMap, u32 chunkIndex, u32 cellInde
     return &cell[cellIndex];
 }
 
-s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos) {
-    if (climate == NULL) {
-        return 2000; // Neutral ambient temperature if climate is undefined
-    }
-    s32 biotemp;
+s32 plane_GetCellBiotemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos) {
+    s32 latitudeTemp;
     switch(climate->type) {
         case CLIMATE_TYPE_UNIFORM:
-            biotemp = climate->equatorBiotemp;
+            latitudeTemp = climate->equatorBiotemp;
             break;
         case CLIMATE_TYPE_RADIAL:
-            biotemp = htw_geo_circularGradientByGridCoord(
+            latitudeTemp = htw_geo_circularGradientByGridCoord(
                 plane->chunkMap,
                 pos,
                 (htw_geo_GridCoord){0, 0},
@@ -315,21 +313,22 @@ s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo
             // TODO
         default:
             ecs_err("Unhandled Climate Type: %u", climate->type);
-            biotemp = 2000;
+            latitudeTemp = 2000;
             break;
     }
-
     s32 elevation = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
-    return biotemp + climate->season.temperatureModifier + (abs(elevation) * climate->tempChangePerElevationStep);
+    s32 altitudeTemp = (abs(elevation) * climate->tempChangePerElevationStep);
+    return latitudeTemp + altitudeTemp;
 }
 
-s32 plane_GetCellBiotemperature(const Plane *plane, htw_geo_GridCoord pos) {
-    // "Temperatures in the atmosphere decrease with height at an average rate of 6.5 °C per kilometer"; height steps are 100m
-    const s32 centicelsiusPerHeightUnit = -65;
-    s32 latitudeTemp = htw_geo_circularGradientByGridCoord(
-        plane->chunkMap, pos, (htw_geo_GridCoord){0, 0}, -2000, 4000, plane->chunkMap->mapHeight * 0.57735);
-    s32 altitude = ((CellData*)htw_geo_getCell(plane->chunkMap, pos))->height; // meters * 100
-    return latitudeTemp + (abs(altitude) * centicelsiusPerHeightUnit);
+s32 plane_GetCellTemperature(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos) {
+    if (climate == NULL) {
+        return 2000; // Neutral ambient temperature if climate is undefined
+    }
+
+    s32 biotemp = plane_GetCellBiotemperature(plane, climate, pos);
+    s32 varyingTemp = climate->season.temperatureModifier;
+    return biotemp + varyingTemp;
 }
 
 /**
@@ -349,6 +348,43 @@ float plane_CanopyGrowthRate(const Plane *plane, htw_geo_GridCoord pos) {
     // decreasing benefit of high understory coverage as canopy takes over
     float maxUnderstoryCoverage = 1.0 - canopyCoverage;
     return shrubRatio * understoryCoverage * maxUnderstoryCoverage;
+}
+
+// x: increasing temperature
+// y: increasing humidity
+const char *lifezoneNames[8][6] = {
+    {"freezing desert", "cold desert", "cold desert", "cool desert", "warm desert", "hot desert"},
+    {"freezing desert", "cold desert", "cold desert", "cool desert", "warm desert", "desert scrub"},
+    {"freezing desert", "cold desert", "cold desert", "cool desert", "desert scrub", "thorn woodland"},
+    {"freezing desert", "cold desert", "cold desert", "desert scrub", "thorn steppe", "parched forest"},
+    {"freezing desert", "dry tundra", "dry scrub", "steppe", "dry forest", "dry tropical forest"},
+    {"freezing desert", "moist tundra", "moist boreal forest", "moist temperate forest", "moist forest", "moist tropical forest"},
+    {"glacier", "wet tundra", "wet boreal forest", "wet temperate forest", "wet forest", "wet tropical forest"},
+    {"glacier", "rain tundra", "boreal rain forest", "temperate rain forest", "rain forest", "tropical rain forest"},
+};
+
+const char *waterzoneNames[6] = {"arctic ocean", "cold ocean", "cool ocean", "temperate ocean", "warm ocean", "tropical ocean"};
+
+// TODO: lots of ways to make this better/more interesting, can have several different adjective/noun pools based on different cell properties
+const char *plane_getCellLifezoneName(const Plane *plane, const Climate *climate, htw_geo_GridCoord pos) {
+    CellData *cell = htw_geo_getCell(plane->chunkMap, pos);
+
+    s32 biotemp = plane_GetCellBiotemperature(plane, climate, pos);
+    s32 petRatio = cell->humidityPreference;
+    // TODO: translate biotemp and petRatio into range of name array
+    s32 biotempRemap = sqrt(biotemp); // [0, 2400] -> [0, 48]
+    biotempRemap = remap_int(biotempRemap, 2, 48, 1, 5);
+    biotemp = biotemp < -1750 ? 0 : biotempRemap;
+    if (cell->height < 0) {
+        return waterzoneNames[biotemp];
+    }
+
+    petRatio = sqrt(petRatio); // [0, 8192] -> [0, 90]
+    petRatio = remap_int(petRatio, 0, 90, 0, 7);
+
+    CLAMP(petRatio, 0, 7);
+    CLAMP(biotemp, 0, 5);
+    return lifezoneNames[petRatio][biotemp];
 }
 
 

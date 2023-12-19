@@ -817,7 +817,8 @@ void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTex
                             ((u32)(cell->tracks >> 8) << 16) |
                             0; // unused 8 bits, may use for roads
             // Water features
-            u32 bChannel =  ((u32)cell->humidityPreference >> 8) |
+            u32 humidityPreference = MIN(cell->humidityPreference, 8191); // 2^13 is max humidity preference
+            u32 bChannel =  ((u32)humidityPreference >> 5) |
                             ((u32)(cell->surfacewater >> 8) << 8) |
                             0; // unused 16 bits, will probably use for rivers, lakes, ponds, swamps
             // Extra features
@@ -1269,7 +1270,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     // NOTE: as of 2023-7-29, there is an issue in Flecs where trigging an Observer by setitng a pair will cause the observer system to run BEFORE the component value is set. Workaround: trigger observer with a tag by adding it last, or set this up without observers
     ecs_set_pair(world, terrainPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/hexTerrain.frag"});
     ecs_add(world, terrainPipeline, TerrainPipelineUniformsVert);
-    ecs_set(world, terrainPipeline, TerrainPipelineUniformsFrag, {.drawBorders = true});
+    ecs_set(world, terrainPipeline, TerrainPipelineUniformsFrag, {.drawBorders = false});
     ecs_set(world, terrainPipeline, PipelineDescription, {.shader_desc = &terrainShaderDescription, .pipeline_desc = &terrainPipelineDescription});
 
     ecs_entity_t terrainShadowPipeline = ecs_set_name(world, 0, "Terrain Shadow Pipeline");
