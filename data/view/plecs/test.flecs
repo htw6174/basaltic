@@ -83,7 +83,7 @@ bcview {
     }
 
     // TEST: disable shadow pass by default
-    //phases.OnPassShadow :- Disabled
+    phases.OnPassShadow :- Disabled
 
     // TEST: default visibility override
     //Visibility :- Visibility {override: 2}

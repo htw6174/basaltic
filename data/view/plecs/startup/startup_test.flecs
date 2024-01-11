@@ -42,7 +42,7 @@ bcview {
 
     Prefab VideoSettingsDefault {
         - VideoSettings
-        - RenderScale {1.0}
+        - RenderScale {0.5}
         - ShadowMapSize {512}
         - RenderDistance {radius: 2}
         - OVERRIDE|RenderScale
