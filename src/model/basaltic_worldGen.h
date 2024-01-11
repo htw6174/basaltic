@@ -31,4 +31,7 @@ void bc_applyRiverConnection(htw_ChunkMap *cm, const RiverConnection *rc);
 void bc_makeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b, u8 size);
 void bc_removeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_GridCoord b);
 
+/* Smoothing */
+void bc_smoothTerrain(htw_ChunkMap *cm, s32 minProminance);
+
 #endif // BASALTIC_WORLDGEN_H_INCLUDED

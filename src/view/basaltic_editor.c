@@ -10,6 +10,7 @@
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
 #include "basaltic_worldState.h"
+#include "basaltic_worldGen.h"
 #include "basaltic_logic.h"
 #include "basaltic_commandBuffer.h"
 #include "basaltic_phases_view.h"
@@ -410,6 +411,22 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                                 }
                             }
                             igEndCombo();
+                        }
+
+                        // Manual terrain smoothing
+                        igSpacing();
+                        static s32 smoothThreshold = 24;
+                        static s32 smoothIterations = 30;
+                        igText("Smoothing");
+                        igSliderInt("##smoothThreshold", &smoothThreshold, 0, 100, "Threshold: %i", 0);
+                        igSliderInt("##smoothIterations", &smoothThreshold, 1, 50, "Iterations: %i", 0);
+                        if (igButton("Smooth map", IG_SIZE_DEFAULT)) {
+                            const FocusPlane *fp = ecs_singleton_get(viewWorld, FocusPlane);
+                            const Plane *plane = ecs_get(modelWorld, fp->entity, Plane);
+                            for (int i = 0; i < smoothIterations; i++) {
+                                bc_smoothTerrain(plane->chunkMap, smoothThreshold);
+                            }
+                            bc_redraw_model(viewWorld);
                         }
 
                         // TEST: Just copy the same values to the value brush instead of having separate settings

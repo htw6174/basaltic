@@ -323,3 +323,50 @@ void bc_removeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_Gri
 
     bc_applyRiverConnection(cm, &rc);
 }
+
+
+void bc_smoothTerrain(htw_ChunkMap *cm, s32 minProminance) {
+    u32 width = bc_chunkSize;
+    u32 height = bc_chunkSize;
+    u32 cellsPerChunk = width * height;
+
+    for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
+        for (int x = 0; x < cm->chunkCountX; x++, c++) {
+            CellData *cellData = cm->chunks[c].cellData;
+
+            for (int i = 0; i < cellsPerChunk; i++) {
+                CellData *cell = &cellData[i];
+                htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
+
+                CellData *lowestNeighbor;
+                s32 lowestElevation = cell->height;
+                s32 prominance = 0;
+                for (int d = 0; d < HEX_DIRECTION_COUNT; d++) {
+                    htw_geo_GridCoord neighborCoord = POSITION_IN_DIRECTION(cellCoord, d);
+                    CellData *neighbor = htw_geo_getCell(cm, neighborCoord);
+                    prominance += cell->height - neighbor->height;
+                    if (neighbor->height < lowestElevation) {
+                        lowestElevation = neighbor->height;
+                        lowestNeighbor = neighbor;
+                    }
+                }
+
+                if (prominance >= minProminance) {
+                    cell->height--;
+                    lowestNeighbor->height++;
+                }
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
