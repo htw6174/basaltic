@@ -24,6 +24,7 @@ BC_DECL ECS_TAG_DECLARE(EgoWanderer);
 BC_DECL ECS_TAG_DECLARE(Action);
 /// Default action when nothing else is chosen; behavior can depend on entity type e.g. resting, foraging, on lookout, etc.
 BC_DECL ECS_TAG_DECLARE(ActionIdle);
+BC_DECL ECS_TAG_DECLARE(ActionSleep);
 BC_DECL ECS_TAG_DECLARE(ActionMove);
 
 /// Relationship where target is another actor; will typically follow the leader's actions instead of acting indpendently

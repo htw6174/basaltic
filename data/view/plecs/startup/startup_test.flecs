@@ -67,4 +67,13 @@ bcview {
     }
 
     VideoSettings : VideoSettingsDefault
+
+    // TEST: disable shadow pass by default
+    phases.OnPassShadow :- Disabled
+
+    // hotloaded plecs scripts
+    using bc.common
+    terrainDraw :- (ResourceFile, FlecsScriptSource) {path: "view/plecs/terrainDraw.flecs"}
+    debugDraw :- (ResourceFile, FlecsScriptSource) {path: "view/plecs/debugDraw.flecs"}
+    inputMap :- (ResourceFile, FlecsScriptSource) {path: "view/plecs/input.flecs"}
 }

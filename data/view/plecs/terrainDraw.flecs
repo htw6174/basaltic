@@ -1,0 +1,3 @@
+bcview {
+    systems.terrain.TerrainDraw :- (InstanceBuffer, TerrainChunkInstanceData)
+}

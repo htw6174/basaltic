@@ -1,93 +1,4 @@
-
 bcview {
-    // Terrain
-    systems.terrain.TerrainDraw :- (InstanceBuffer, TerrainChunkInstanceData)
-
-    Prefab DebugDrawPrefab {
-        - OVERRIDE|(ShadowPass, DebugShadowPipeline)
-        - OVERRIDE|(TransparentPass, DebugTransparentPipeline)
-        - Elements {24}
-        - Color {1.0, 0.0, 1.0, 1.0}
-        - (InstanceBuffer, DebugInstanceData)
-        - DebugRender
-    }
-
-    Prefab DebugArrowPrefab {
-        - OVERRIDE|(TransparentPass, DebugArrowPipeline)
-        - Elements {6}
-        - Color {1.0, 0.0, 1.0, 1.0}
-        // NOTE: overriding maxInstances only works when set on a prefab; otherwise, the OnAdd observer won't pick up on the initial value before allocating space for the buffer. TODO: should separate buffer declaration and storage into separate components
-        - (InstanceBuffer, ArrowInstanceData) {maxInstances: 65536}
-        - DebugRender
-    }
-
-    // debug draw
-    destinationArrows : DebugArrowPrefab {
-        - Color {0.9, 0.9, 0.9, 1.0}
-        - QueryDesc {expr: "Position, Destination, Plane(up(bc.planes.IsIn)), (bc.actors.Action, bc.actors.Action.ActionMove)"}
-    }
-
-    riverArrows : DebugArrowPrefab {
-        - Color {0.3, 0.3, 1.0, 1.0}
-        - TerrainRender
-    }
-
-    player : DebugDrawPrefab {
-        - Color {0.6, 0.0, 0.8, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.actors.MapVision"}
-    }
-
-    characters : DebugDrawPrefab {
-        - Color {0.3, 0.3, 1.0, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.actors.Individual"}
-    }
-
-    carnivores : DebugDrawPrefab {
-        - Color {0.7, 0.0, 0.0, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Meat)"}
-    }
-
-    berry_pickers : DebugDrawPrefab {
-        - Color {0.7, 0.0, 0.7, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Fruit)"}
-    }
-
-    arbivores : DebugDrawPrefab {
-        - Color {0.0, 0.7, 0.7, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Foliage)"}
-    }
-
-    grazers : DebugDrawPrefab {
-        - Color {0.0, 0.7, 0.0, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.wildlife.Diet, bc.wildlife.Diet.Grasses)"}
-    }
-
-    tectonics : DebugDrawPrefab {
-        - Color {0.7, 0.8, 0.7, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.elementals.PlateShiftStrength"}
-    }
-
-    volcanos : DebugDrawPrefab {
-        - Color {0.9, 0.5, 0.0, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.actors.Ego, bc.actors.Ego.EgoVolcanoSpirit)"}
-    }
-
-    storms : DebugDrawPrefab {
-        - Color {0.5, 0.5, 0.8, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), (bc.actors.Ego, bc.actors.Ego.EgoStormSpirit)"}
-    }
-
-    villages : DebugDrawPrefab {
-        - Color {0.9, 0.9, 0.1, 1.0}
-        - QueryDesc {expr: "Position, Plane(up(bc.planes.IsIn)), bc.tribes.Village"}
-    }
-
-    // TEST: disable shadow pass by default
-    phases.OnPassShadow :- Disabled
-
-    // TEST: default visibility override
-    //Visibility :- Visibility {override: 2}
-
     // brush tools
     AdditiveBrush {
         - Tool
@@ -115,6 +26,7 @@ bcview {
 
     // input map
     Input {
+        // use input systems module for mapping bindings to systems
         using bcview.systems.input
         cameraKeyboardBindings {
             - InputBindGroup

@@ -199,7 +199,10 @@ void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query) {
 
             struct stat fileStat;
             if (stat(flecsScriptSources[i].path, &fileStat) != 0) {
-                // TODO: handle file read error
+                // handle file access error
+                ecs_err("Failed reloading flecs script for entity %s: Could not access resource file \"%s\"", ecs_get_name(it.world, it.entities[i]), flecsScriptSources[i].path);
+                // Disable to prevent repeatedly trying an invalid path
+                ecs_enable(it.world, it.entities[i], false);
                 continue;
             }
             time_t modifyTime = fileStat.st_mtime;
@@ -208,7 +211,8 @@ void bc_reloadFlecsScript(ecs_world_t *world, ecs_entity_t query) {
                 flecsScriptSources[i].accessTime = flecsScriptSources[i].accessTime = time(NULL);
                 int err = ecs_plecs_from_file(it.world, flecsScriptSources[i].path);
                 if (err != 0) {
-                    // TODO: catch file opening or parsing errors, handle/display log message
+                    ecs_err("Failed reading flecs script for entity %s", ecs_get_name(it.world, it.entities[i]));
+                    // TODO: catch specific file opening or parsing errors, handle/display log message
                 }
             }
         }

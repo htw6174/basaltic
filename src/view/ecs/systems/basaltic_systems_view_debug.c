@@ -3,6 +3,7 @@
 #include "basaltic_phases_view.h"
 #include "basaltic_components.h"
 #include "basaltic_worldGen.h"
+#include "bc_flecs_utils.h"
 #include "ccVector.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
@@ -451,7 +452,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     ecs_set(world, debugArrowPipeline, PipelineDescription, {.shader_desc = &debugShaderDescription, .pipeline_desc = &debugArrowPipelineDescription});
 
     ecs_entity_t debugRTPipeline = ecs_set_name(world, 0, "DebugRenderTargetPipeline");
-    ecs_add_pair(world, debugRTPipeline, EcsChildOf, LightingPass);
+    ecs_add_pair(world, debugRTPipeline, EcsChildOf, TransparentPass);
     ecs_set_pair(world, debugRTPipeline, ResourceFile, VertexShaderSource,   {.path = "view/shaders/uv_quad.vert"});
     ecs_set_pair(world, debugRTPipeline, ResourceFile, FragmentShaderSource, {.path = "view/shaders/debug_RT.frag"});
     ecs_set(world, debugRTPipeline, PipelineDescription, {.shader_desc = &debugRTShaderDescription, .pipeline_desc = &debugRTPipelineDescription});
@@ -460,7 +461,7 @@ void BcviewSystemsDebugImport(ecs_world_t *world) {
     // TODO: Some way to setup this in script? Could create some simple meshes in c for use in scripts
     ecs_entity_t renderTargetVis = ecs_set_name(world, 0, "RenderTargetPreview");
     ecs_add_id(world, renderTargetVis, DebugRender);
-    ecs_add_pair(world, renderTargetVis, LightingPass, debugRTPipeline);
+    ecs_add_pair(world, renderTargetVis, TransparentPass, debugRTPipeline);
 
     float dbg_vertices[] = { 0.0f, 0.0f,  1.0f, 0.0f,  0.0f, 1.0f,  1.0f, 1.0f };
     ecs_set(world, renderTargetVis, Mesh, {

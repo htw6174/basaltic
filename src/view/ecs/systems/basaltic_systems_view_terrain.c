@@ -837,58 +837,6 @@ void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTex
     }
 }
 
-void InitTerrainBuffers(ecs_iter_t *it) {
-    RenderDistance *rd = ecs_field(it, RenderDistance, 1);
-
-    for (int i = 0; i < it->count; i++) {
-        ecs_set(it->world, it->entities[i], QueryDesc, {
-            .expr = "[in] bc.planes.Plane, [in] ?bc.planes.Climate"
-        });
-
-        u32 visibilityRadius = rd[i].radius;
-        u32 visibilityDiameter = (visibilityRadius * 2) - 1;
-        u32 renderedChunkCount = visibilityDiameter * visibilityDiameter;
-
-        s32 *loadedChunks = calloc(renderedChunkCount, sizeof(u32));
-        // Initialize loaded chunks to those closest to the origin. TODO: this is related to an issue where initially filling loaded chunks takes several calls to updateTerrainVisibleChunks. This fixes the issue when renderedChunkCount == total chunk count
-        for (int c = 0; c < renderedChunkCount; c++) {
-            loadedChunks[c] = c;
-        }
-
-        // TODO: consider replacing entirely with data texture
-        ecs_set(it->world, it->entities[i], TerrainBuffer, {
-            .renderedChunkRadius = visibilityRadius,
-            .renderedChunkCount = renderedChunkCount,
-            .closestChunks = calloc(renderedChunkCount, sizeof(u32)),
-                .loadedChunks = loadedChunks,
-                .chunkPositions = calloc(renderedChunkCount, sizeof(vec3)),
-        });
-    }
-}
-
-void UpdateHexTerrainBuffers(ecs_iter_t *it) {
-    ModelQuery *queries = ecs_field(it, ModelQuery, 1);
-    TerrainBuffer *terrainBuffers = ecs_field(it, TerrainBuffer, 2);
-    DataTexture *dataTextures = ecs_field(it, DataTexture, 3);
-
-    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
-
-    for (int i = 0; i < it->count; i++) {
-        ecs_iter_t mit = ecs_query_iter(modelWorld, queries[i].query);
-        while (ecs_query_next(&mit)) {
-            Plane *planes = ecs_field(&mit, Plane, 1);
-
-            for (int m = 0; m < mit.count; m++) {
-                htw_ChunkMap *cm = planes[m].chunkMap;
-
-                // TODO: correctly determine center chunk from camera focus
-                u32 centerChunk = bc_getChunkIndexByWorldPosition(cm, 0.0f, 0.0f);
-                updateTerrainVisibleChunks(&planes[m], &terrainBuffers[i], &dataTextures[i], centerChunk);
-            }
-        }
-    }
-}
-
 void UpdateTerrainInstances(ecs_iter_t *it) {
     ModelQuery *queries = ecs_field(it, ModelQuery, 1);
     InstanceBuffer *instanceBuffers = ecs_field(it, InstanceBuffer, 2);
@@ -1169,14 +1117,6 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
 
-    // NOTE: won't run unless VideoSettings has a RenderDistance component before declaring this observer
-    ECS_OBSERVER(world, InitTerrainBuffers, EcsOnAdd,
-        [in] RenderDistance(VideoSettings),
-        [out] TerrainBuffer,
-        [out] ?QueryDesc,
-        [none] bcview.TerrainRender,
-    );
-
     ECS_SYSTEM(world, UpdateTerrainInstances, OnModelChanged,
                [in] ModelQuery,
                [out] (InstanceBuffer, TerrainChunkInstanceData),
@@ -1304,7 +1244,9 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ecs_add_pair(world, terrainDraw, GBufferPass, terrainPipeline);
     ecs_add_pair(world, terrainDraw, ShadowPass, terrainShadowPipeline);
     ecs_add(world, terrainDraw, TerrainRender);
-    ecs_add(world, terrainDraw, TerrainBuffer);
+    ecs_set(world, terrainDraw, QueryDesc, {
+        .expr = "[in] bc.planes.Plane, [in] ?bc.planes.Climate"
+    });
     // TODO: for terrain, size of instance buffer should be based on number of rendered chunks
     //ecs_add_pair(world, terrainDraw, ecs_id(InstanceBuffer), ecs_id(TerrainChunkInstanceData));
     ecs_add(world, terrainDraw, QueryDesc);

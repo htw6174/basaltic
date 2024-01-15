@@ -58,7 +58,7 @@ ECS_STRUCT(RandomizeFloat, {
 ECS_STRUCT(ResourceFile, {
     // update whenever file is read; if modify time on disk is > this, should reload file
     time_t accessTime;
-    char path[256];
+    char *path;
 });
 
 // Target of a ResourceFile relationship

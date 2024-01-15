@@ -29,10 +29,9 @@ void bc_view_setup(bc_WindowContext* wc) {
 
     ECS_IMPORT(vc.ecsWorld, Bcview);
     ECS_IMPORT(vc.ecsWorld, BcviewPhases);
+    ECS_IMPORT(vc.ecsWorld, BcviewSystems);
     // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
     ecs_plecs_from_file(vc.ecsWorld, "view/plecs/startup/startup_test.flecs");
-    ECS_IMPORT(vc.ecsWorld, BcviewSystems);
-    ecs_set_pair(vc.ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "view/plecs/test.flecs"});
 
     ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
 
@@ -76,7 +75,7 @@ u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_Comma
     ecs_singleton_set(vc.ecsWorld, DeltaTime, {dT});
     ecs_singleton_set(vc.ecsWorld, Clock, {(float)wc->milliSeconds / 1000.0});
 
-    // TEST: reload test script
+    // TODO: put this in a rate-limited system, only needs to fire every second or two
     bc_reloadFlecsScript(vc.ecsWorld, 0);
 
     ecs_progress(vc.ecsWorld, dT);

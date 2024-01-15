@@ -20,10 +20,11 @@ void BcActorsImport(ecs_world_t *world) {
     ecs_add_id(world, Action, EcsUnion);
     ecs_add_id(world, Action, EcsOneOf);
 
+    ecs_entity_t oldScope = ecs_set_scope(world, Action);
     ECS_TAG_DEFINE(world, ActionIdle);
-    ecs_add_pair(world, ActionIdle, EcsChildOf, Action);
+    ECS_TAG_DEFINE(world, ActionSleep);
     ECS_TAG_DEFINE(world, ActionMove);
-    ecs_add_pair(world, ActionMove, EcsChildOf, Action);
+    ecs_set_scope(world, oldScope);
 
     /* other */
     ECS_TAG_DEFINE(world, FollowerOf);
