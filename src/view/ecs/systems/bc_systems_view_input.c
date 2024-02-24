@@ -1,5 +1,6 @@
 #include "bc_systems_view_input.h"
 #include "basaltic_components_view.h"
+#include "components/components_input.h"
 #include "htw_core.h"
 #include "bc_flecs_utils.h"
 #include "basaltic_worldGen.h"
@@ -27,8 +28,8 @@ void CameraPan(ecs_iter_t *it) {
         CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.movement;
     }
-    float dX = ic.delta.x * speed * -1.0; // flip sign to match expected movement direction
-    float dY = ic.delta.y * speed;
+    float dX = ic.axis_x * speed * -1.0; // flip sign to match expected movement direction
+    float dY = ic.axis_y * speed;
     // No need to modify z here; TODO: system to drift camera origin.z toward terrain height at origin.xy
     vec3 camDelta = (vec3){{dX, dY, 0.0}};
 
@@ -86,8 +87,8 @@ void CameraOrbit(ecs_iter_t *it) {
         CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.rotation;
     }
-    float pitch = ic.delta.y * speed;
-    float yaw = ic.delta.x * speed * -1.0; // flip sign to match expected movement direction
+    float pitch = ic.axis_y * speed;
+    float yaw = ic.axis_x * speed * -1.0; // flip sign to match expected movement direction
 
     cam->pitch = CLAMP(cam->pitch + pitch, -89.9, 89.9);
     cam->yaw += yaw;
@@ -106,7 +107,7 @@ void CameraZoom(ecs_iter_t *it) {
         speed *= camSpeed.zoom;
     }
     // positive y zooms in
-    float delta = ic.delta.y * speed * -1.0;
+    float delta = ic.axis_y * speed * -1.0;
 
     cam->distance = CLAMP(cam->distance + delta, 0.5, 100.0);
 }
@@ -240,7 +241,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
 
     // Get axis data to multiply value by input strength
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis.x = 1.0};
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis_x = 1.0};
 
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
@@ -254,7 +255,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
 
         // get value from cell by offset and primkind
         s64 value = bc_getMetaComponentMemberInt(fieldPtr, prim->kind);
-        value += ab->value * ic.axis.x;
+        value += ab->value * ic.axis_x;
         bc_setMetaComponentMemberInt(fieldPtr, prim->kind, value);
 
         htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
@@ -326,13 +327,13 @@ void PaintRiverBrush(ecs_iter_t *it) {
 
     // Get axis data to alter action by axis direction. + : create rivers, - : remove rivers
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis.x = 1.0};
+    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis_x = 1.0};
 
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
     htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-    htw_geo_GridCoord relative = {-ic.delta.x, -ic.delta.y};
+    htw_geo_GridCoord relative = {-ic.delta_x, -ic.delta_y};
     //relative = htw_geo_wrapVectorOnChunkMap(cm, relative);
     htw_geo_GridCoord prevHoveredCoord = htw_geo_addGridCoords(hoveredCoord, relative);
     // Only continue if hovered and prevHovered are neighbors
@@ -342,7 +343,7 @@ void PaintRiverBrush(ecs_iter_t *it) {
         return;
     }
 
-    if (ic.axis.x > 0.0) {
+    if (ic.axis_x > 0.0) {
         bc_makeRiverConnection(cm, prevHoveredCoord, hoveredCoord, rb->value);
     } else {
         bc_removeRiverConnection(cm, prevHoveredCoord, hoveredCoord);
@@ -350,11 +351,39 @@ void PaintRiverBrush(ecs_iter_t *it) {
 
     bc_redraw_model(it->world);
 }
+void SetCameraWrapLimits(ecs_iter_t *it) {
+    // singleton
+    ecs_entity_t focus = ecs_field(it, FocusPlane, 1)->entity;
+
+    ecs_world_t *modelWorld = ecs_singleton_get(it->world, ModelWorld)->world;
+    htw_ChunkMap *cm = ecs_get(modelWorld, focus, Plane)->chunkMap;
+
+    ecs_singleton_set(it->world, CameraWrap, {
+        .x = cm->mapWidth / 2,
+        .y = cm->mapHeight / 2
+    });
+
+    float x00, y00;
+    htw_geo_getHexCellPositionSkewed((htw_geo_GridCoord){-cm->mapWidth, -cm->mapHeight}, &x00, &y00);
+    float x10 = htw_geo_getHexPositionX(0, -cm->mapHeight);
+    float x01 = htw_geo_getHexPositionX(-cm->mapWidth, 0);
+    float x11 = 0.0;
+    float y10 = y00;
+    float y01 = 0.0;
+    float y11 = 0.0;
+    ecs_singleton_set(it->world, WrapInstanceOffsets, {
+        .offsets[0] = {{x00, y00, 0.0}},
+        .offsets[1] = {{x01, y01, 0.0}},
+        .offsets[2] = {{x10, y10, 0.0}},
+        .offsets[3] = {{x11, y11, 0.0}}
+    });
+}
 
 void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystemsInput);
 
     ECS_IMPORT(world, Bcview);
+    ECS_IMPORT(world, ComponentsInput);
 
     ECS_SYSTEM(world, LockMouse, 0);
 
@@ -437,5 +466,9 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
         HoveredCell($),
         FocusPlane($),
         ModelWorld($)
+    );
+
+    ECS_OBSERVER(world, SetCameraWrapLimits, EcsOnSet,
+        FocusPlane($)
     );
 }

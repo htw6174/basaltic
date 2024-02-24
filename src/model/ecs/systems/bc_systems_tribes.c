@@ -52,15 +52,16 @@ void BcSystemsTribesImport(ecs_world_t *world) {
         [none] bc.actors.Ego.EgoVillager
     );
 
+    // One reason his seems so hard to implement might be that a system is the wrong abstraction level for this action. Perhaps the actions should be SearchForTarget, Move, AttackTarget, Move, DepositGoods. The activity "Hunt" moves one level up to a behavior
     ECS_SYSTEM(world, ExecuteHunt, Execution,
-        [none] (bc.actors.Action, bc.actions.Action.ActionHunt)
+        [none] (bc.actors.Action, bc.actors.Action.ActionHunt)
     );
 
     ECS_SYSTEM(world, ExecuteEatMeal, Execution,
-        [none] (bc.actors.Action, bc.actions.Action.ActionEatMeal)
+        [none] (bc.actors.Action, bc.actors.Action.ActionEatMeal)
     );
 
     ECS_SYSTEM(world, ExecuteSocalize, Execution,
-        [none] (bc.actors.Action, bc.actions.Action.ActionSocalize)
+        [none] (bc.actors.Action, bc.actors.Action.ActionSocalize)
     );
 }

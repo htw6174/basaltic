@@ -93,14 +93,7 @@ void BcviewImport(ecs_world_t *world) {
     // Interface
     ECS_TAG_DEFINE(world, Previous);
     ECS_META_COMPONENT(world, MouseButton);
-    ECS_META_COMPONENT(world, InputType);
     ECS_META_COMPONENT(world, InputMotion);
-    ECS_META_COMPONENT(world, InputModifier);
-    ECS_COMPONENT_DEFINE(world, KeyCode);
-    ecs_primitive(world, {.entity = ecs_id(KeyCode), .kind = EcsI32});
-    ECS_TAG_DEFINE(world, InputBindGroup);
-    ECS_TAG_DEFINE(world, ActiveBindGroup);
-    ECS_META_COMPONENT(world, InputBinding);
 
     ECS_META_COMPONENT(world, DeltaTime);
     ECS_META_COMPONENT(world, Pointer);

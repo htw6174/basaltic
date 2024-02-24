@@ -24,78 +24,50 @@ bcview {
         - PrefabBrush {prefab: 0}
     }
 
-    // input map
-    Input {
-        // use input systems module for mapping bindings to systems
-        using bcview.systems.input
-        cameraKeyboardBindings {
-            - InputBindGroup
-            w :- InputBinding {key: 119, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-            a :- InputBinding {key: 97, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-            s :- InputBinding {key: 115, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraPan}
-            d :- InputBinding {key: 100, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraPan}
+}
 
-            q :- InputBinding {key: 113, axis: {1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-            e :- InputBinding {key: 101, axis: {-1, 0}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-            r :- InputBinding {key: 114, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
-            f :- InputBinding {key: 102, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraOrbit}
+// input map
+components.input {
+    using bcview.systems.input
+    // Setup binds by key:
+    // This is how the tree will be shown by default, but there are more convient ways to create a group of similar mappings
+    // W {
+    //     forward {
+    //         - InputBinding{system: CameraPan, trigger: INPUT_HELD}
+    //         - Axis{y: 1}
+    //         - (BindGroup, cameraKeyboardBindings)
+    //     }
+    //     // Assign another function to the key:
+    //     walk {
+    //         - InputBinding{system: PlayerMove, trigger: INPUT_HELD}
+    //         - Axis{y: 1}
+    //         - (BindGroup, moveGroup)
+    //     }
+    // }
 
-            x :- InputBinding {key: 120, axis: {0, 1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
-            z :- InputBinding {key: 122, axis: {0, -1}, triggerOn: BC_INPUT_HELD, system: CameraZoom}
-
-            c :- InputBinding {key: 99, system: CameraToPlayer}
+    // Setup binds by group and system:
+    // Use nested with blocks to reduce repitition
+    // All camera bindings:
+    with (BindGroup, cameraKeyboardBindings) {
+        // All pan bindings:
+        // Bug? any whitespace between component name and fields in a 'with' def fails parsing
+        with InputBinding{system: CameraPan, trigger: INPUT_HELD} {
+            // Use dotscope name to add binding as [button_name].[binding_name]
+            W.forward :- Axis{y: 1}
+            S.back :- Axis{y: -1}
+            D.right :- Axis{x: -1}
+            A.left :- Axis{x: 1}
         }
-
-        cameraMouseBindings {
-            - InputBindGroup
-            pan :- InputBinding {button: BC_MOUSE_LEFT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraPan}
-            orbit :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_HELD, motion: BC_MOTION_MOUSE, system: CameraOrbit}
-            // TODO: might be nice to change cursor while left click is held?
-            // bindings to lock mouse while orbiting
-            lockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_PRESSED, system: LockMouse}
-            unlockRight :- InputBinding {button: BC_MOUSE_RIGHT, triggerOn: BC_INPUT_RELEASED, system: UnlockMouse}
+        with InputBinding{system: CameraOrbit, trigger: INPUT_HELD} {
+            Q.yawLeft :- Axis{x: 1}
+            E.yawRight :- Axis{x: -1}
+            R.pitchUp :- Axis{y: 1}
+            F.pitchDown :- Axis{y: -1}
         }
-        //cameraMouseBindings :- Disabled
-
-        middleMouseBindings {
-            - InputBindGroup
-            selectCell :- InputBinding {button: BC_MOUSE_MIDDLE, system: SelectCell}
-            zoom :- InputBinding {motion: BC_MOTION_SCROLL, system: CameraZoom}
+        with InputBinding{system: CameraZoom, trigger: INPUT_HELD} {
+            X.zoomOut :- Axis{y: 1}
+            Z.zoomIn :- Axis{y: -1}
         }
-
-        actorMouseBindings {
-            - InputBindGroup
-            selectCell :- InputBinding {button: BC_MOUSE_LEFT, system: SelectCell}
-            selectEntity :- InputBinding {button: BC_MOUSE_LEFT, system: SelectEntity}
-            spawnPrefab :- InputBinding {button: BC_MOUSE_RIGHT, system: PaintPrefabBrush}
-        }
-        //actorMouseBindings :- Disabled
-
-        playerMouseBindings {
-            - InputBindGroup
-            selectCell :- InputBinding {button: BC_MOUSE_LEFT, system: SelectCell}
-            selectEntity :- InputBinding {button: BC_MOUSE_LEFT, system: SelectEntity}
-            movePlayer :- InputBinding {button: BC_MOUSE_RIGHT, system: SetPlayerDestination}
-        }
-        //playerMouseBindings :- Disabled
-
-        terrainMouseBindings {
-            - InputBindGroup
-            raise :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, system: PaintAdditiveBrush}
-            raiseOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
-            lower :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, system: PaintAdditiveBrush}
-            lowerOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintAdditiveBrush}
-            value :- InputBinding {button: BC_MOUSE_MIDDLE, system: PaintValueBrush}
-            // FIXME: why doesn't tile motion input trigger with middle mouse button?
-            valueOnMove :- InputBinding {button: BC_MOUSE_MIDDLE, motion: BC_MOTION_TILE, system: PaintValueBrush}
-        }
-        //terrainMouseBindings :- Disabled
-
-        riverMouseBindings {
-            - InputBindGroup
-            createOnMove :- InputBinding {button: BC_MOUSE_LEFT, axis: {1, 0}, motion: BC_MOTION_TILE, system: PaintRiverBrush}
-            removeOnMove :- InputBinding {button: BC_MOUSE_RIGHT, axis: {-1, 0}, motion: BC_MOTION_TILE, system: PaintRiverBrush}
-        }
-        //terrainMouseBindings :- Disabled
+        C.recenter :- InputBinding{system: CameraToPlayer}
     }
 }

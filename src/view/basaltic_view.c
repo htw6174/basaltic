@@ -2,7 +2,7 @@
 #include "basaltic_window.h"
 #include "basaltic_sokol_gfx.h"
 #include "basaltic_editor.h"
-#include "basaltic_interaction.h"
+#include "systems/systems_input.h"
 #include "basaltic_uiState.h"
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
@@ -54,11 +54,11 @@ void bc_view_endFrame(bc_WindowContext* wc) {
 }
 
 void bc_view_onInputEvent(bc_CommandBuffer inputBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
-    bc_processInputEvent(vc.ecsWorld, inputBuffer, e, useMouse, useKeyboard);
+    SystemsInput_ProcessEvent(vc.ecsWorld, e);
 }
 
 void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool useKeyboard) {
-    bc_processInputState(vc.ecsWorld, inputBuffer, useMouse, useKeyboard);
+    // TODO: still needed?
 }
 
 u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_CommandBuffer inputBuffer) {
@@ -114,8 +114,6 @@ void bc_view_onModelStart(bc_ModelData *md) {
     ecs_entity_t modelPlaneId = ecs_lookup_fullpath(model->world->ecsWorld, "basaltic.components.planes.Plane");
     ecs_entity_t viewPlaneId = ecs_lookup_fullpath(vc.ecsWorld, "basaltic.components.planes.Plane"); //ecs_id(Plane);
     assert(modelPlaneId == viewPlaneId);
-
-    bc_setCameraWrapLimits(vc.ecsWorld);
 
     bc_editorOnModelStart();
 }

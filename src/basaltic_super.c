@@ -41,6 +41,9 @@ static u64 lastFrameStart;
 
 bc_EngineSettings *loadEngineConfig(char *path);
 
+void startView(bc_WindowContext *wc);
+void stopView();
+
 void startModel(SuperContext *sc);
 void stopModel(SDL_Thread **modelThread, bc_ModelData **modelData);
 void loadModel(char *path);
@@ -73,8 +76,14 @@ static void mainLoop(void) {
     while (SDL_PollEvent(&e) != 0) {
         if (e.type == SDL_QUIT) { // Normal quit
             requestProcessStop(&superContext.appState, &superContext.modelThreadState);
-        } else if (e.type == SDL_KEYDOWN) { // Quit hotkey; don't stop from within app on web builds
+        } else if (e.type == SDL_KEYDOWN) {
+            if (e.key.keysym.sym == SDLK_r && (e.key.keysym.mod & KMOD_CTRL)) { // crtl+r
+                // reload view
+                stopView();
+                startView(wc);
+            }
             if (e.key.keysym.sym == SDLK_q && (e.key.keysym.mod & KMOD_CTRL)) { // crtl+q
+                // Quit; don't stop from within app on web builds
 #ifdef __EMSCRIPTEN__
                 // TODO: should restart wasm module or reload page
 #else
@@ -190,8 +199,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     // TODO: rework imgui editor to use openGL backend from sokol
     editorEngineContext = bc_initEditor(startSettings.enableEditor, &windowContext);
 
-    bc_view_setup(&windowContext);
-    bc_view_setupEditor(); // TODO: roll this into general view setup, or have an option to build without the editor
+    startView(&windowContext);
 
     // TODO: consider rearchitecting this to support multiple model instances running simultainously, allow view to see any/all of them
     superContext.modelData = NULL;
@@ -231,6 +239,8 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         stopModel(&superContext.modelThread, &superContext.modelData);
     }
 
+    stopView();
+
     bc_destroyEditor(&editorEngineContext);
     bc_destroyWindow(&windowContext);
 
@@ -247,6 +257,17 @@ bc_EngineSettings *loadEngineConfig(char *path) {
         .tickRateLimit = 100,
     };
     return engineConfig;
+}
+
+
+void startView(bc_WindowContext *wc) {
+    bc_view_setup(wc);
+    bc_view_setupEditor(); // TODO: roll this into general view setup, or have an option to build without the editor
+}
+
+void stopView() {
+    bc_view_teardown();
+    bc_view_teardownEditor();
 }
 
 void startModel(SuperContext *sc) {
