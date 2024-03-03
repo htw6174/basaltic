@@ -24,50 +24,24 @@ bcview {
         - PrefabBrush {prefab: 0}
     }
 
-}
+    // action bindings
+    actions {
+        using components.input
+        using components.input.Key
+        using bcview.systems.input
+        with (ActionGroup, cameraKeyboard) {
+            camera_pan {
+                - ActionVector {system: CameraPan}
+                - (InputVector, W) {y: 1}
+                - (InputVector, S) {y: -1}
+                - (InputVector, A) {x: 1}
+                - (InputVector, D) {x: -1}
+            }
 
-// input map
-components.input {
-    using bcview.systems.input
-    // Setup binds by key:
-    // This is how the tree will be shown by default, but there are more convient ways to create a group of similar mappings
-    // W {
-    //     forward {
-    //         - InputBinding{system: CameraPan, trigger: INPUT_HELD}
-    //         - Axis{y: 1}
-    //         - (BindGroup, cameraKeyboardBindings)
-    //     }
-    //     // Assign another function to the key:
-    //     walk {
-    //         - InputBinding{system: PlayerMove, trigger: INPUT_HELD}
-    //         - Axis{y: 1}
-    //         - (BindGroup, moveGroup)
-    //     }
-    // }
-
-    // Setup binds by group and system:
-    // Use nested with blocks to reduce repitition
-    // All camera bindings:
-    with (BindGroup, cameraKeyboardBindings) {
-        // All pan bindings:
-        // Bug? any whitespace between component name and fields in a 'with' def fails parsing
-        with InputBinding{system: CameraPan, trigger: INPUT_HELD} {
-            // Use dotscope name to add binding as [button_name].[binding_name]
-            W.forward :- Axis{y: 1}
-            S.back :- Axis{y: -1}
-            D.right :- Axis{x: -1}
-            A.left :- Axis{x: 1}
+            recenter {
+                - ActionButton {system: CameraToPlayer}
+                - (ButtonDown, C)
+            }
         }
-        with InputBinding{system: CameraOrbit, trigger: INPUT_HELD} {
-            Q.yawLeft :- Axis{x: 1}
-            E.yawRight :- Axis{x: -1}
-            R.pitchUp :- Axis{y: 1}
-            F.pitchDown :- Axis{y: -1}
-        }
-        with InputBinding{system: CameraZoom, trigger: INPUT_HELD} {
-            X.zoomOut :- Axis{y: 1}
-            Z.zoomIn :- Axis{y: -1}
-        }
-        C.recenter :- InputBinding{system: CameraToPlayer}
     }
 }

@@ -21,15 +21,15 @@ void CameraPan(ecs_iter_t *it) {
 
     float dT = it->delta_time;
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+    InputVector iv = param ? (*(InputVector*)param) : (InputVector){0};
 
     float speed = powf(cam->distance, 2.0) * dT;
     if (ecs_field_is_set(it, 3)) {
         CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.movement;
     }
-    float dX = ic.axis_x * speed * -1.0; // flip sign to match expected movement direction
-    float dY = ic.axis_y * speed;
+    float dX = iv.x * speed * -1.0; // flip sign to match expected movement direction
+    float dY = iv.y * speed;
     // No need to modify z here; TODO: system to drift camera origin.z toward terrain height at origin.xy
     vec3 camDelta = (vec3){{dX, dY, 0.0}};
 
@@ -80,15 +80,15 @@ void CameraOrbit(ecs_iter_t *it) {
 
     float dT = it->delta_time;
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+    InputVector iv = param ? (*(InputVector*)param) : (InputVector){0};
 
     float speed = dT;
     if (ecs_field_is_set(it, 2)) {
         CameraSpeed camSpeed = *ecs_field(it, CameraSpeed, 2);
         speed *= camSpeed.rotation;
     }
-    float pitch = ic.axis_y * speed;
-    float yaw = ic.axis_x * speed * -1.0; // flip sign to match expected movement direction
+    float pitch = iv.y * speed;
+    float yaw = iv.x * speed * -1.0; // flip sign to match expected movement direction
 
     cam->pitch = CLAMP(cam->pitch + pitch, -89.9, 89.9);
     cam->yaw += yaw;
@@ -99,7 +99,7 @@ void CameraZoom(ecs_iter_t *it) {
 
     float dT = it->delta_time;
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){0};
+    InputVector iv = param ? (*(InputVector*)param) : (InputVector){0};
 
     float speed = dT;
     if (ecs_field_is_set(it, 2)) {
@@ -107,7 +107,7 @@ void CameraZoom(ecs_iter_t *it) {
         speed *= camSpeed.zoom;
     }
     // positive y zooms in
-    float delta = ic.axis_y * speed * -1.0;
+    float delta = iv.y * speed * -1.0;
 
     cam->distance = CLAMP(cam->distance + delta, 0.5, 100.0);
 }
@@ -241,7 +241,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
 
     // Get axis data to multiply value by input strength
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis_x = 1.0};
+    InputVector iv = param ? (*(InputVector*)param) : (InputVector){.x = 1.0};
 
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
@@ -255,7 +255,7 @@ void PaintAdditiveBrush(ecs_iter_t *it) {
 
         // get value from cell by offset and primkind
         s64 value = bc_getMetaComponentMemberInt(fieldPtr, prim->kind);
-        value += ab->value * ic.axis_x;
+        value += ab->value * iv.x;
         bc_setMetaComponentMemberInt(fieldPtr, prim->kind, value);
 
         htw_geo_CubeCoord cubeOffset = htw_geo_gridToCubeCoord(offsetCoord);
@@ -327,14 +327,14 @@ void PaintRiverBrush(ecs_iter_t *it) {
 
     // Get axis data to alter action by axis direction. + : create rivers, - : remove rivers
     void *param = it->param;
-    InputContext ic = param ? (*(InputContext*)param) : (InputContext){.axis_x = 1.0};
+    InputVector iv = param ? (*(InputVector*)param) : (InputVector){.x = 1.0};
 
     ecs_entity_t focusPlane = fp->entity;
     ecs_world_t *modelWorld = mw->world;
     htw_ChunkMap *cm = ecs_get(modelWorld, focusPlane, Plane)->chunkMap;
 
-    htw_geo_GridCoord relative = {-ic.delta_x, -ic.delta_y};
-    //relative = htw_geo_wrapVectorOnChunkMap(cm, relative);
+    // FIXME: probably broke this by dropping relative from input context
+    htw_geo_GridCoord relative = {-iv.x, -iv.y};
     htw_geo_GridCoord prevHoveredCoord = htw_geo_addGridCoords(hoveredCoord, relative);
     // Only continue if hovered and prevHovered are neighbors
     // need to account for world wrapping when computing distance
@@ -343,7 +343,7 @@ void PaintRiverBrush(ecs_iter_t *it) {
         return;
     }
 
-    if (ic.axis_x > 0.0) {
+    if (iv.x > 0.0) {
         bc_makeRiverConnection(cm, prevHoveredCoord, hoveredCoord, rb->value);
     } else {
         bc_removeRiverConnection(cm, prevHoveredCoord, hoveredCoord);

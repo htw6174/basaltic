@@ -20,12 +20,15 @@ ECS_STRUCT(KeyEntityMap, {
 });
 
 // singleton component to store the rule used to find bindings by button
-ECS_STRUCT(BindingRule, {
-    ecs_rule_t *rule;
+ECS_STRUCT(BindingRules, {
+    ecs_rule_t *down;
+    ecs_rule_t *hold;
+    ecs_rule_t *up;
+    ecs_rule_t *vector;
 });
 
 // Relationship used to enable and disable multiple bindings at once; when added to an entity with an InputBinding, if the target entity is disabled then the binding won't trigger
-META_DECL ECS_TAG_DECLARE(InputBindGroup);
+META_DECL ECS_TAG_DECLARE(ActionGroup);
 
 ECS_BITMASK(InputState, {
     INPUT_DEFAULT =  0x00, // Treated the same as INPUT_PRESSED
@@ -52,31 +55,50 @@ ECS_BITMASK(InputModifier, {
     INPUT_KMOD_NUM = 0x1000,
     INPUT_KMOD_CAPS = 0x2000,
     INPUT_KMOD_MODE = 0x4000,
-    INPUT_KMOD_SCROLL = 0x8000
-
+    INPUT_KMOD_SCROLL = 0x8000,
+    // Special value; when the EXCLUSIVE bit is set on a binding's kmod, it will only fire if exactly those modifier keys are held.
+    // Otherwise, a binding will fire if _at least_ the set modifier keys are held
+    // Note that this ignores the toggle keys NUM, CAPS, MODE, and SCROLL
+    INPUT_KMOD_EXCLUSIVE = 0x10000
 });
 
-ECS_STRUCT(InputBinding, {
-    ecs_entity_t system; // system to run when binding is triggered
-    InputState trigger; // state the key must be in for the binding to trigger; can OR together multiple states. Default: Pressed
-    InputModifier modifiers; // modifier combo required for binding to trigger; can OR together multiple states. Default: None
+// ButtonDown/Hold/Up: relationships where the target is a key, mouse button, or controller button.
+// Bind a button to an action by adding to an entity with ActionButton.
+ECS_STRUCT(ButtonDown, {
+    InputModifier kmod;
 });
 
-// Axis direction to pass along from a button press. Useful when making systems that can be triggered by both buttons and joysticks
-ECS_STRUCT(Axis, {
+ECS_STRUCT(ButtonHold, {
+    InputModifier kmod;
+});
+
+ECS_STRUCT(ButtonUp, {
+    InputModifier kmod;
+});
+
+// Add ActionButton to an entity to represent an action users can make; add (Button*, [button]) relationships to bind inputs, and set .system to run a system when any binding is triggered.
+ECS_STRUCT(ActionButton, {
+    ecs_entity_t system;
+});
+
+// Relationship where the target is a key, button, or analog input.
+// Bind these inputs to an action by adding to an entity with ActionVector.
+// Set the direction and sensitivity of a bound input by setting one or more components, e.g. (Axis, Key.Right) {x: 1} maps the right arrow key to +x with sensitivity 1; (Axis, Key.Left) {x: -0.5} maps the left arrow key to -x with half the sensitivity.
+// For analog inputs, axis mapping is done automatically but sensitivity and inversion can be overridden.
+// e.g. (Axis, Mouse.Delta) {x: 1, y: 1} sets the default mouse binding; (Axis, Mouse.Delta) {x: 1.4, y: -1} increases horizontal sensitivity and inverts vertical sensitivity
+ECS_STRUCT(InputVector, {
     float x;
     float y;
+    float z;
 });
 
-// Data passed as system context when a binding is triggered
-// If binding is an analog input, both current axies and delta will be set
-// If binding is a button, axis x&y will be set to the binding's x&y
-typedef struct InputContext {
-    float axis_x;
-    float axis_y;
-    float delta_x;
-    float delta_y;
-} InputContext;
+// Add ActionVector to an entity for actions that rely on analog input; add (Axis, [button or input axis]) relationships to bind a button or analog input to one or more vector components.
+ECS_STRUCT(ActionVector, {
+    ecs_entity_t system;
+    float deadzone;
+    bool normalize;
+    InputVector vector;
+});
 
 void ComponentsInputImport(ecs_world_t *world);
 
