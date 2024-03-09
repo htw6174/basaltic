@@ -1050,7 +1050,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     GlobalUniformsFrag *gf = ecs_field(it, GlobalUniformsFrag, ++f);
     TerrainPipelineUniformsVert *tv = ecs_field(it, TerrainPipelineUniformsVert, ++f);
     TerrainPipelineUniformsFrag *tf = ecs_field(it, TerrainPipelineUniformsFrag, ++f);
-    Mouse *mouse = ecs_field(it, Mouse, ++f);
+    ScaledCursor *cursor = ecs_field(it, ScaledCursor, ++f);
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -1084,7 +1084,7 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
         glReadBuffer(GL_COLOR_ATTACHMENT2);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelPack[i].writableBuffer);
         // NOTE: readpixels is picky about format and type combos. Even though the framebuffer format is RG16I, need to read it using this combo which returns 4 ints
-        glReadPixels(mouse[i].x, mouse[i].y, 1, 1, GL_RGBA_INTEGER, GL_INT, 0);
+        glReadPixels(cursor->x, cursor->y, 1, 1, GL_RGBA_INTEGER, GL_INT, 0);
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 }
@@ -1179,7 +1179,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] GlobalUniformsFrag($),
                [in] TerrainPipelineUniformsVert(up(bcview.GBufferPass)),
                [in] TerrainPipelineUniformsFrag(up(bcview.GBufferPass)),
-               [in] Mouse($),
+               [in] ScaledCursor($),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
                [none] bcview.TerrainRender,

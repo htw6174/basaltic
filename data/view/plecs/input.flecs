@@ -32,15 +32,33 @@ bcview {
         with (ActionGroup, cameraKeyboard) {
             camera_pan {
                 - ActionVector {system: CameraPan}
-                - (InputVector, W) {y: 1}
-                - (InputVector, S) {y: -1}
-                - (InputVector, A) {x: 1}
-                - (InputVector, D) {x: -1}
+                - (InputVector, E) {y: 1}
+                - (InputVector, D) {y: -1}
+                - (InputVector, S) {x: 1}
+                - (InputVector, F) {x: -1}
+            }
+            camera_orbit {
+                - ActionVector {system: CameraOrbit}
+                - (InputVector, R) {x: 1}
+                - (InputVector, W) {x: -1}
+                - (InputVector, T) {y: 1}
+                - (InputVector, G) {y: -1}
+            }
+            camera_zoom {
+                - ActionVector {system: CameraZoom}
+                - (InputVector, X) {y: 1}
+                - (InputVector, Z) {y: -1}
             }
 
             recenter {
                 - ActionButton {system: CameraToPlayer}
                 - (ButtonDown, C)
+            }
+        }
+        with (ActionGroup, cameraMouse) {
+            camera_pan_mouse {
+                - ActionVector {system: CameraPan}
+                - (InputVector, Mouse.Delta) {1, 1}
             }
         }
     }

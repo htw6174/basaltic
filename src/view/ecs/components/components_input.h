@@ -14,12 +14,8 @@
 #define META_DECL
 #endif
 
-// singleton component to store mapping of scancodes to entities
-ECS_STRUCT(KeyEntityMap, {
-    ecs_entity_t entities[512]; // size of SDL_NUM_SCANCODES, hopefully enough for other input backends also
-});
 
-// singleton component to store the rule used to find bindings by button
+// singleton component to store the rules used to find bindings by button or axis
 ECS_STRUCT(BindingRules, {
     ecs_rule_t *down;
     ecs_rule_t *hold;
@@ -29,6 +25,10 @@ ECS_STRUCT(BindingRules, {
 
 // Relationship used to enable and disable multiple bindings at once; when added to an entity with an InputBinding, if the target entity is disabled then the binding won't trigger
 META_DECL ECS_TAG_DECLARE(ActionGroup);
+
+// Tag to specify that the System associated with this action should be run immediately when any triggering event comes in.
+// NOTE: The System will run outside of ecs_process(). The world will not be in readonly mode, and time delta for the system will be 0
+META_DECL ECS_TAG_DECLARE(ImmediateAction);
 
 ECS_BITMASK(InputState, {
     INPUT_DEFAULT =  0x00, // Treated the same as INPUT_PRESSED
@@ -90,6 +90,11 @@ ECS_STRUCT(InputVector, {
     float x;
     float y;
     float z;
+});
+
+// Relationship where target is an entity with InputVector; stores the value of target vector at end of each frame, then at end of PreFrame phase calcs delta from previous and current
+ECS_STRUCT(DeltaVectorOf, {
+    InputVector previous;
 });
 
 // Add ActionVector to an entity for actions that rely on analog input; add (Axis, [button or input axis]) relationships to bind a button or analog input to one or more vector components.

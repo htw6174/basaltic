@@ -133,7 +133,7 @@ void BcviewImport(ecs_world_t *world) {
 
     // Uniform Data
     ECS_META_COMPONENT(world, WindowSize);
-    ECS_META_COMPONENT(world, Mouse);
+    ECS_META_COMPONENT(world, ScaledCursor);
     ECS_META_COMPONENT(world, Visibility);
     ECS_COMPONENT_DEFINE(world, PVMatrix);
     ECS_COMPONENT_DEFINE(world, SunMatrix);
@@ -266,7 +266,7 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_add(world, PVMatrix);
     ecs_singleton_add(world, InverseMatrices);
     ecs_singleton_add(world, DeltaTime);
-    ecs_singleton_add(world, Mouse);
+    ecs_singleton_add(world, ScaledCursor);
     ecs_singleton_add(world, Visibility);
     ecs_singleton_add(world, Clock);
 }

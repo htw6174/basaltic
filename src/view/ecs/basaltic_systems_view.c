@@ -1,6 +1,7 @@
 #include "basaltic_systems_view.h"
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
+#include "components/components_input.h"
 #include "systems/systems_input.h"
 #include "systems/bc_systems_view_input.h"
 #include "systems/basaltic_systems_view_terrain.h"
@@ -279,8 +280,8 @@ int createRenderPass(const RenderPassDescription *rtd, RenderPass *rp, RenderTar
     return 0;
 }
 
-void UniformPointerToMouse(ecs_iter_t *it) {
-    Pointer *pointer = ecs_field(it, Pointer, 1);
+void UniformPointerToScaledCursor(ecs_iter_t *it) {
+    InputVector *pointer = ecs_field(it, InputVector, 1);
     WindowSize *w = ecs_field(it, WindowSize, 2);
 
     float scale = 1.0;
@@ -290,7 +291,7 @@ void UniformPointerToMouse(ecs_iter_t *it) {
 
     float x = (pointer->x * scale) + 0.5;
     float y = ((w->y - pointer->y) * scale) + 0.5;
-    ecs_singleton_set(it->world, Mouse, {x, y});
+    ecs_singleton_set(it->world, ScaledCursor, {x, y});
 }
 
 void UniformCameraToPVMatrix(ecs_iter_t *it) {
@@ -357,10 +358,10 @@ void UpdateGlobalUniformsFrag(ecs_iter_t *it) {
     int f = 0;
     // constant source
     GlobalUniformsFrag *gf = ecs_field(it, GlobalUniformsFrag, ++f);
-    Mouse *mouse = ecs_field(it, Mouse, ++f);
+    ScaledCursor *cursor = ecs_field(it, ScaledCursor, ++f);
     Clock *programClock = ecs_field(it, Clock, ++f);
 
-    gf->mouse = (vec2){{mouse->x, mouse->y}};
+    gf->mouse = (vec2){{cursor->x, cursor->y}};
     gf->time = programClock->seconds;
 }
 
@@ -769,11 +770,12 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_IMPORT(world, BcviewSystemsDebug);
     ECS_IMPORT(world, BcviewSystemsTerrain);
 
-    ECS_SYSTEM(world, UniformPointerToMouse, EcsPreUpdate,
-        [in] Pointer($),
+    // TODO: consider using something that captures both touch and mouse position
+    ECS_SYSTEM(world, UniformPointerToScaledCursor, EcsPreUpdate,
+        [in] InputVector(components.input.Mouse.Position),
         [in] WindowSize($),
         [in] ?RenderScale(VideoSettings),
-        [out] ?Mouse($)
+        [out] ?ScaledCursor($)
     );
 
     // TODO: should eventually replace PVMatrix singleton completely with GlobalUniformsVert?
@@ -793,7 +795,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
 
     ECS_SYSTEM(world, UpdateGlobalUniformsFrag, EcsPreUpdate,
         [out] GlobalUniformsFrag($),
-        [in] Mouse($),
+        [in] ScaledCursor($),
         [in] Clock($)
     );
 

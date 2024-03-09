@@ -217,8 +217,8 @@ ECS_STRUCT(WindowSize, {
     s32 y;
 });
 
-// Pixel coordinates formatted for shader uniform use; origin at bottom-left, scaled by RenderScale, lie on half integer boundary (+0.5, +0.5)
-ECS_STRUCT(Mouse, {
+// Pixel coordinates of a mouse or touch formatted for shader uniform use; origin at bottom-left, scaled by RenderScale, lie on half integer boundary (+0.5, +0.5)
+ECS_STRUCT(ScaledCursor, {
     float x;
     float y;
 });
