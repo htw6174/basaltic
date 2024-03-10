@@ -26,6 +26,9 @@ ECS_STRUCT(BindingRules, {
 // Relationship used to enable and disable multiple bindings at once; when added to an entity with an InputBinding, if the target entity is disabled then the binding won't trigger
 META_DECL ECS_TAG_DECLARE(ActionGroup);
 
+// Relationship where pointer to target is passed to bound system's iterator params
+META_DECL ECS_TAG_DECLARE(ActionParams);
+
 // Tag to specify that the System associated with this action should be run immediately when any triggering event comes in.
 // NOTE: The System will run outside of ecs_process(). The world will not be in readonly mode, and time delta for the system will be 0
 META_DECL ECS_TAG_DECLARE(ImmediateAction);
@@ -79,6 +82,7 @@ ECS_STRUCT(ButtonUp, {
 // Add ActionButton to an entity to represent an action users can make; add (Button*, [button]) relationships to bind inputs, and set .system to run a system when any binding is triggered.
 ECS_STRUCT(ActionButton, {
     ecs_entity_t system;
+    int32_t activated;
 });
 
 // Relationship where the target is a key, button, or analog input.

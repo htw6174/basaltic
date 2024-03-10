@@ -74,32 +74,6 @@ ECS_STRUCT(DeltaTime, {
     float seconds;
 });
 
-// Corresponds to SDL_BUTTON_* defines
-ECS_ENUM(MouseButton, {
-    BC_MOUSE_NONE =     0,
-    BC_MOUSE_LEFT =     1,
-    BC_MOUSE_MIDDLE =   2,
-    BC_MOUSE_RIGHT =    3,
-    BC_MOUSE_X1 =       4,
-    BC_MOUSE_X2 =       5
-});
-
-ECS_BITMASK(InputMotion, {
-    BC_MOTION_NONE =    0x00,
-    BC_MOTION_SCROLL =  0x01, // set by scroll events
-    BC_MOTION_MOUSE =   0x02, // set when mouse position changes
-    BC_MOTION_TILE =    0x04, // set when hovered map cell changes
-});
-
-
-// Pixel coordinates directly from SDL; origin at top-left
-ECS_STRUCT(Pointer, {
-    s32 x;
-    s32 y;
-    s32 lastX;
-    s32 lastY;
-});
-
 ECS_STRUCT(MousePreferences, {
     float sensitivity;
     float verticalSensitivity; // Extra factor applied to vertical movement only

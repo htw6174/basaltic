@@ -100,10 +100,6 @@ void createKeyEntitySDL(ecs_world_t *world, SDL_Scancode scancode) {
         // Don't create entities for nameless scancodes
         return;
     }
-    // ecs_entity_t keyEntity = ecs_entity(world, {
-    //     .name = keyname,
-    //     .add[0] = ecs_make_pair(EcsChildOf, Key)
-    // });
     ecs_entity_t keyEntity = ecs_new_from_path(world, Key, keyname);
     ecs_add(world, keyEntity, InputState);
     kem->entities[scancode] = keyEntity;
@@ -121,11 +117,7 @@ ecs_entity_t getKeyEntitySDL(ecs_world_t *world, SDL_KeyboardEvent key) {
 void createMouseEntitySDL(ecs_world_t *world, int button) {
     MouseEntityMap *mem = ecs_singleton_get_mut(world, MouseEntityMap);
     const char *buttonName = getMouseButtonName(button);
-    ecs_entity_t buttonEntity = ecs_entity(world, {
-        .name = buttonName,
-        .add[0] = ecs_make_pair(EcsChildOf, Mouse)
-    });
-    //ecs_new_from_path(world, Mouse, buttonName);
+    ecs_entity_t buttonEntity = ecs_new_from_path(world, Mouse, buttonName);
     ecs_add(world, buttonEntity, InputState);
     mem->entities[button] = buttonEntity;
     ecs_singleton_modified(world, MouseEntityMap);
@@ -185,7 +177,12 @@ bool processEventSDL(ecs_world_t *world, const SDL_Event *e) {
     }
 
     // search for matching binding, trigger system
-    ecs_rule_t *r = ecs_singleton_get(world, BindingRules)->down;
+    ecs_rule_t *r;
+    if (pressed) {
+        r = ecs_singleton_get(world, BindingRules)->down;
+    } else {
+        r = ecs_singleton_get(world, BindingRules)->up;
+    }
     ecs_iter_t it = ecs_rule_iter(world, r);
     int32_t buttonVar = ecs_rule_find_var(r, "button");
     ecs_iter_set_var(&it, buttonVar, buttonEntity);
@@ -193,9 +190,11 @@ bool processEventSDL(ecs_world_t *world, const SDL_Event *e) {
         ActionButton *actions = ecs_field(&it, ActionButton, 1);
 
         for (int i = 0; i < it.count; i++) {
-            ActionButton action = actions[i];
-            float dT = 0.016; // TODO: get this with the system query
-            ecs_run(world, action.system, dT, NULL);
+            actions[i].activated = true;
+            if (ecs_field_is_set(&it, 3)) {
+                // TODO: pass action context to immediate run systems
+                ecs_run(world, actions[i].system, 0.0, NULL);
+            }
         }
     }
     return true;
@@ -243,6 +242,31 @@ void AccumulateActionVectors(ecs_iter_t *it) {
     }
 }
 
+void RunTriggeredActions(ecs_iter_t *it) {
+    ActionButton *actions = ecs_field(it, ActionButton, 1);
+
+    if (ecs_field_is_set(it, 2)) {
+        ecs_entity_t contextType = ecs_pair_second(it->world, ecs_field_id(it, 2));
+
+        for (int i = 0; i < it->count; i++) {
+            ActionButton action = actions[i];
+            if (action.activated) {
+                // Get action context to pass to system
+                // Because system query doesn't know what ActionContext target is, have to get directly from current entity
+                void *context = ecs_get_mut_id(it->world, it->entities[i], ecs_make_pair(ActionParams, contextType));
+                ecs_run(it->world, action.system, it->delta_time, context);
+            }
+        }
+    } else {
+        for (int i = 0; i < it->count; i++) {
+            ActionButton action = actions[i];
+            if (action.activated) {
+                ecs_run(it->world, action.system, it->delta_time, NULL);
+            }
+        }
+    }
+}
+
 void RunActionVectors(ecs_iter_t *it) {
     ActionVector *actions = ecs_field(it, ActionVector, 1);
 
@@ -282,6 +306,32 @@ void GetDeltaPrevious(ecs_iter_t *it) {
     }
 }
 
+void ClearActionButtons(ecs_iter_t *it) {
+    ActionButton *actions = ecs_field(it, ActionButton, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        actions[i].activated = false;
+    }
+}
+
+void ClearActionVectors(ecs_iter_t *it) {
+    ActionVector *actions = ecs_field(it, ActionVector, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        actions[i].vector = (InputVector){0};
+    }
+}
+
+void EcsEnable(ecs_iter_t *it) {
+    ecs_entity_t target = *(ecs_entity_t*)it->param;
+    ecs_enable(it->world, target, true);
+}
+
+void EcsDisable(ecs_iter_t *it) {
+    ecs_entity_t target = *(ecs_entity_t*)it->param;
+    ecs_enable(it->world, target, false);
+}
+
 void SystemsInputImport(ecs_world_t *world) {
     ECS_MODULE(world, SystemsInput);
 
@@ -313,6 +363,7 @@ void SystemsInputImport(ecs_world_t *world) {
     for (int i = 1; i < 6; i++) {
         createMouseEntitySDL(world, i);
     }
+    // Pixel coordinates directly from SDL; origin at top-left
     MousePosition = ecs_new_from_path(world, Mouse, "Position");
     MouseDelta = ecs_new_from_path(world, Mouse, "Delta");
     ecs_add(world, MousePosition, InputVector);
@@ -325,13 +376,16 @@ void SystemsInputImport(ecs_world_t *world) {
 
     // rules used to find actions associated with an input
     ecs_rule_t *downRule = ecs_rule(world, {
-        .expr = "ActionButton, (ButtonDown, $button)", // TODO: add terms to ignore disabled action groups
+        .expr = "ActionButton, (ButtonDown, $button), ?components.input.ImmediateAction", // TODO: add terms to ignore disabled action groups
+    });
+    ecs_rule_t *upRule = ecs_rule(world, {
+        .expr = "ActionButton, (ButtonUp, $button), ?components.input.ImmediateAction", // TODO: add terms to ignore disabled action groups
     });
     // TODO other rules
     ecs_rule_t *vectorRule = ecs_rule(world, {
-        .expr = "ActionVector, (InputVector, $button)"
+        .expr = "ActionVector, (InputVector, $button), ?components.input.ImmediateAction"
     });
-    ecs_singleton_set(world, BindingRules, {downRule, 0, 0, vectorRule});
+    ecs_singleton_set(world, BindingRules, {downRule, 0, upRule, vectorRule});
 
     ECS_SYSTEM(world, ProcessEvents, EcsPreFrame);
     // re-enable if you want the module to pump events for you
@@ -348,13 +402,32 @@ void SystemsInputImport(ecs_world_t *world) {
         // TODO: after rule engine changes, can guarantee target has InputVector
     );
 
+    ECS_SYSTEM(world, RunTriggeredActions, EcsPreUpdate,
+        [in] ActionButton,
+        [in] ?(components.input.ActionParams, _),
+        [none] !components.input.ImmediateAction
+    );
+
     ECS_SYSTEM(world, RunActionVectors, EcsPreUpdate,
-        [in] ActionVector
+        [in] ActionVector,
+        [none] !components.input.ImmediateAction
     );
 
     ECS_SYSTEM(world, GetDeltaPrevious, EcsPostFrame,
         [out] (DeltaVectorOf, _)
     );
+
+    ECS_SYSTEM(world, ClearActionButtons, EcsPostFrame,
+        [out] ActionButton
+    );
+
+    ECS_SYSTEM(world, ClearActionVectors, EcsPostFrame,
+        [out] ActionVector
+    );
+
+    // builtin Action Systems for common ECS actions
+    ECS_SYSTEM(world, EcsEnable, 0);
+    ECS_SYSTEM(world, EcsDisable, 0);
 }
 
 bool SystemsInput_ProcessEvent(ecs_world_t *world, const void *e) {

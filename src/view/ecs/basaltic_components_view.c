@@ -92,11 +92,8 @@ void BcviewImport(ecs_world_t *world) {
 
     // Interface
     ECS_TAG_DEFINE(world, Previous);
-    ECS_META_COMPONENT(world, MouseButton);
-    ECS_META_COMPONENT(world, InputMotion);
 
     ECS_META_COMPONENT(world, DeltaTime);
-    ECS_META_COMPONENT(world, Pointer);
     ECS_META_COMPONENT(world, MousePreferences);
     ECS_META_COMPONENT(world, Camera);
     ECS_META_COMPONENT(world, CameraWrap);
@@ -259,7 +256,6 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count, should have a component ctor/dtor if it need to alloc
 
     // Input
-    ecs_singleton_add(world, Pointer);
     ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
 
     // Global uniforms

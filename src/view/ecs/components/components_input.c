@@ -7,6 +7,7 @@ void ComponentsInputImport(ecs_world_t *world) {
     ECS_META_COMPONENT(world, BindingRules);
 
     ECS_TAG_DEFINE(world, ActionGroup);
+    ECS_TAG_DEFINE(world, ActionParams);
     ECS_TAG_DEFINE(world, ImmediateAction);
 
     ECS_META_COMPONENT(world, InputState);

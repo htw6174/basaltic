@@ -58,7 +58,18 @@ bcview {
         with (ActionGroup, cameraMouse) {
             camera_pan_mouse {
                 - ActionVector {system: CameraPan}
-                - (InputVector, Mouse.Delta) {1, 1}
+                - (InputVector, Mouse.Delta) {0.1, 0.1}
+                - Disabled
+            }
+            camera_pan_mouse_start {
+                - ActionButton {system: systems.input.EcsEnable}
+                - (ButtonDown, Mouse.Left)
+                - (ActionParams, flecs.meta.entity) {camera_pan_mouse}
+            }
+            camera_pan_mouse_end {
+                - ActionButton {system: systems.input.EcsDisable}
+                - (ButtonUp, Mouse.Left)
+                - (ActionParams, flecs.meta.entity) {camera_pan_mouse}
             }
         }
     }
