@@ -7,6 +7,18 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 
+void AdvanceStep(ecs_iter_t *it) {
+
+}
+
+void AutoStep(ecs_iter_t *it) {
+    // TODO: disable if already autostepping
+}
+
+void PauseStep(ecs_iter_t *it) {
+
+}
+
 // TODO: would like it if mouse didn't move from starting position between lock and unlock, or gets warped back to starting position on unlock
 void LockMouse(ecs_iter_t *it) {
     SDL_SetRelativeMouseMode(true);

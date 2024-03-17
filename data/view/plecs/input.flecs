@@ -29,6 +29,23 @@ bcview {
         using components.input
         using components.input.Key
         using bcview.systems.input
+        using flecs.meta
+
+        with (ActionGroup, stepControl) {
+            advance_step {
+                - ActionButton {system: AdvanceStep}
+                - (ButtonDown, Space)
+            }
+            auto_step {
+                - ActionButton {system: AutoStep}
+                - (ButtonDown, P)
+            }
+            pause_step {
+                - ActionButton {system: PauseStep}
+                - (ButtonDown, Space)
+            }
+        }
+
         with (ActionGroup, cameraKeyboard) {
             camera_pan {
                 - ActionVector {system: CameraPan}
@@ -64,12 +81,31 @@ bcview {
             camera_pan_mouse_start {
                 - ActionButton {system: systems.input.EcsEnable}
                 - (ButtonDown, Mouse.Left)
-                - (ActionParams, flecs.meta.entity) {camera_pan_mouse}
+                - (ActionParams, entity) {camera_pan_mouse}
             }
             camera_pan_mouse_end {
                 - ActionButton {system: systems.input.EcsDisable}
                 - (ButtonUp, Mouse.Left)
-                - (ActionParams, flecs.meta.entity) {camera_pan_mouse}
+                - (ActionParams, entity) {camera_pan_mouse}
+            }
+            camera_orbit_mouse {
+                - ActionVector {system: CameraOrbit}
+                - (InputVector, Mouse.Delta) {0.1, 0.1}
+                - Disabled
+            }
+            camera_orbit_mouse_start {
+                - ActionButton {system: systems.input.EcsEnable}
+                - (ButtonDown, Mouse.Right)
+                - (ActionParams, entity) {camera_orbit_mouse}
+            }
+            camera_orbit_mouse_end {
+                - ActionButton {system: systems.input.EcsDisable}
+                - (ButtonUp, Mouse.Right)
+                - (ActionParams, entity) {camera_orbit_mouse}
+            }
+            camera_zoom_mouse {
+                - ActionVector {system: CameraZoom}
+                - (InputVector, Mouse.Wheel) {0, -1}
             }
         }
     }

@@ -23,6 +23,7 @@ ECS_ENTITY_DECLARE(Joystick);
 // Convient access to axies
 ECS_ENTITY_DECLARE(MousePosition);
 ECS_ENTITY_DECLARE(MouseDelta);
+ECS_ENTITY_DECLARE(MouseWheel);
 
 // Default SDL key names with replacements to make the result safe to use as a Flecs entity name
 const char *sanatizedGetKeyName(SDL_Keycode key) {
@@ -79,13 +80,13 @@ const char *getMouseButtonName(int button) {
         case 1:
             return "Left";
         case 2:
-            return "Right";
-        case 3:
             return "Middle";
+        case 3:
+            return "Right";
         case 4:
-            return "Button4";
+            return "4";
         case 5:
-            return "Button5";
+            return "5";
         default:
             ecs_warn("Unknown mouse button index: %i", button);
             return NULL;
@@ -160,6 +161,9 @@ bool processEventSDL(ecs_world_t *world, const SDL_Event *e) {
             // No button to process, update mouse vectors
             ecs_set(world, MousePosition, InputVector, {e->motion.x, e->motion.y});
             buttonEntity = 0;
+            break;
+        case SDL_MOUSEWHEEL:
+            ecs_set(world, MouseWheel, InputVector, {e->wheel.x, e->wheel.y});
             break;
         default:
             return false;
@@ -306,7 +310,23 @@ void GetDeltaPrevious(ecs_iter_t *it) {
     }
 }
 
-void ClearActionButtons(ecs_iter_t *it) {
+void ResetInputButtons(ecs_iter_t *it) {
+    InputState *states = ecs_field(it, InputState, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        states[i] &= INPUT_HELD;
+    }
+}
+
+void ResetInputVectors(ecs_iter_t *it) {
+    InputVector *vectors = ecs_field(it, InputVector, 1);
+
+    for (int i = 0; i < it->count; i++) {
+        vectors[i] = (InputVector){0};
+    }
+}
+
+void ResetActionButtons(ecs_iter_t *it) {
     ActionButton *actions = ecs_field(it, ActionButton, 1);
 
     for (int i = 0; i < it->count; i++) {
@@ -314,7 +334,7 @@ void ClearActionButtons(ecs_iter_t *it) {
     }
 }
 
-void ClearActionVectors(ecs_iter_t *it) {
+void ResetActionVectors(ecs_iter_t *it) {
     ActionVector *actions = ecs_field(it, ActionVector, 1);
 
     for (int i = 0; i < it->count; i++) {
@@ -366,9 +386,11 @@ void SystemsInputImport(ecs_world_t *world) {
     // Pixel coordinates directly from SDL; origin at top-left
     MousePosition = ecs_new_from_path(world, Mouse, "Position");
     MouseDelta = ecs_new_from_path(world, Mouse, "Delta");
+    MouseWheel = ecs_new_from_path(world, Mouse, "Wheel");
     ecs_add(world, MousePosition, InputVector);
     ecs_add(world, MouseDelta, InputVector);
     ecs_add_pair(world, MouseDelta, ecs_id(DeltaVectorOf), MousePosition);
+    ecs_add(world, MouseWheel, InputVector);
     // Touches: TODO
     // Controllers: TODO
 
@@ -387,28 +409,28 @@ void SystemsInputImport(ecs_world_t *world) {
     });
     ecs_singleton_set(world, BindingRules, {downRule, 0, upRule, vectorRule});
 
-    ECS_SYSTEM(world, ProcessEvents, EcsPreFrame);
+    ECS_SYSTEM(world, ProcessEvents, EcsOnLoad);
     // re-enable if you want the module to pump events for you
     ecs_enable(world, ProcessEvents, false);
 
-    ECS_SYSTEM(world, AccumulateActionVectors, EcsPreFrame,
+    ECS_SYSTEM(world, AccumulateActionVectors, EcsPostLoad,
         [inout] ActionVector,
         [in] (InputVector, *)
     );
 
-    ECS_SYSTEM(world, CalcDeltas, EcsPreFrame,
+    ECS_SYSTEM(world, CalcDeltas, EcsPostLoad,
         [out] InputVector,
         [in] (DeltaVectorOf, _)
-        // TODO: after rule engine changes, can guarantee target has InputVector
+        // TODO: after rule engine changes, can use var to guarantee target has InputVector. Can't use relationship traversal becuase also need value of DeltaVectorOf component (or can I query for both?)
     );
 
-    ECS_SYSTEM(world, RunTriggeredActions, EcsPreUpdate,
+    ECS_SYSTEM(world, RunTriggeredActions, EcsPostLoad,
         [in] ActionButton,
         [in] ?(components.input.ActionParams, _),
         [none] !components.input.ImmediateAction
     );
 
-    ECS_SYSTEM(world, RunActionVectors, EcsPreUpdate,
+    ECS_SYSTEM(world, RunActionVectors, EcsPostLoad,
         [in] ActionVector,
         [none] !components.input.ImmediateAction
     );
@@ -417,11 +439,19 @@ void SystemsInputImport(ecs_world_t *world) {
         [out] (DeltaVectorOf, _)
     );
 
-    ECS_SYSTEM(world, ClearActionButtons, EcsPostFrame,
+    ECS_SYSTEM(world, ResetInputButtons, EcsPostFrame,
+        [inout] InputState
+    );
+
+    ECS_SYSTEM(world, ResetInputVectors, EcsPostFrame,
+        [out] InputVector
+    );
+
+    ECS_SYSTEM(world, ResetActionButtons, EcsPostFrame,
         [out] ActionButton
     );
 
-    ECS_SYSTEM(world, ClearActionVectors, EcsPostFrame,
+    ECS_SYSTEM(world, ResetActionVectors, EcsPostFrame,
         [out] ActionVector
     );
 
