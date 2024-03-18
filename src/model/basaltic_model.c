@@ -33,44 +33,38 @@ int bc_model_start(void* in) {
     // Extract input data
     bc_ModelThreadInput *threadInput = (bc_ModelThreadInput*)in;
 
-    volatile bc_ProcessState *threadState = threadInput->threadState;
-    bc_CommandBuffer inputBuffer = threadInput->inputBuffer;
     bc_ModelSetupSettings *modelSettings = threadInput->modelSettings;
-    bc_ModelData **modelDataRef = threadInput->modelDataRef;
+    bc_ModelData *modelData = threadInput->modelData;
 
-    bc_ModelData *modelData = calloc(1, sizeof(bc_ModelData));
-    *modelData = (bc_ModelData){
-        .world = bc_createWorldState(modelSettings->width, modelSettings->height, modelSettings->seed),
-        .processingBuffer = bc_createCommandBuffer(bc_commandBufferMaxCommandCount, bc_commandBufferMaxArenaSize),
-        .tickInterval = threadInput->interval,
-        .advanceSingleStep = false,
-        .autoStep = false,
-    };
-    *modelDataRef = modelData;
+    SDL_LockMutex(modelData->mutex);
 
+    modelData->world = bc_createWorldState(modelSettings->width, modelSettings->height, modelSettings->seed);
     bc_initializeWorldState(modelData->world);
+
     *threadInput->isModelDataReady = true;
 
-    while (*threadState == BC_PROCESS_STATE_RUNNING) {
-        Uint64 startTime = SDL_GetTicks64(); // TODO: use something other than SDL for timing, so the dependency can be removed?
+    while (!modelData->shouldStopModel) {
+        // wait to be signaled
+        if (SDL_CondWait(modelData->cond, modelData->mutex)) {
+            printf("wat");
+        }
 
-        bc_doLogicTick(modelData, inputBuffer);
+        Uint64 startTime = SDL_GetTicks64();
 
-        // delay until end of frame
+        for (int i = 0; i < modelData->runForSteps; i++) {
+            bc_doLogicTick(modelData->world);
+        }
+
+        // get tick duration for stats
         Uint64 endTime = SDL_GetTicks64();
         Uint64 duration = endTime - startTime;
-        if (duration < modelData->tickInterval) {
-            SDL_Delay(modelData->tickInterval - duration);
-        }
-    }
+        // TODO: where to store model performance stats?
 
+    }
     *threadInput->isModelDataReady = false;
+    bc_destroyWorldState(modelData->world);
+
+    SDL_UnlockMutex(modelData->mutex);
 
     return 0;
-}
-
-void bc_model_cleanup(bc_ModelData *stoppedThreadModelData) {
-    bc_destroyWorldState(stoppedThreadModelData->world);
-    bc_destroyCommandBuffer(stoppedThreadModelData->processingBuffer);
-    free(stoppedThreadModelData);
 }

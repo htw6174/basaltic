@@ -12,7 +12,6 @@
 #include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
 #include "basaltic_logic.h"
-#include "basaltic_commandBuffer.h"
 #include "basaltic_phases_view.h"
 #include "basaltic_components_view.h"
 #include "basaltic_components.h"
@@ -198,7 +197,7 @@ void bc_teardownEditor(void) {
     kh_destroy(CustomInspector, customInspectors);
 }
 
-void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBuffer inputBuffer, ecs_world_t *viewWorld, bc_UiState *ui)
+void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, ecs_world_t *viewWorld, bc_UiState *ui)
 {
     /*
     if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
@@ -238,41 +237,34 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, bc_CommandBu
         dateTimeInspector(world->step);
         igPushItemWidth(200);
 
-        // Tick rate slider
-        igSliderInt("Min Tick Duration", (int*)&model->tickInterval, 0, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+        // Tick rate slider TODO: change for new runforsteps method of scheduling model steps
+        //igSliderInt("Min Tick Duration", (int*)&model->tickInterval, 0, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
         igPopItemWidth();
 
-        bc_WorldCommand reusedCommand = {0};
-
         if (igButton("Advance logic step", (ImVec2){0, 0})) {
-            reusedCommand.commandType = BC_COMMAND_TYPE_STEP_ADVANCE;
-            bc_pushCommandToBuffer(inputBuffer, &reusedCommand, sizeof(reusedCommand));
+            // TODO: run AdvanceStep system
         }
         igSameLine(0, -1);
         if (igButton("Start auto step", (ImVec2){0, 0})) {
-            reusedCommand.commandType = BC_COMMAND_TYPE_STEP_PLAY;
-            bc_pushCommandToBuffer(inputBuffer, &reusedCommand, sizeof(reusedCommand));
+            // TODO: run AutoStep system
         }
         igSameLine(0, -1);
         if (igButton("Stop auto step", (ImVec2){0, 0})) {
-            reusedCommand.commandType = BC_COMMAND_TYPE_STEP_PAUSE;
-            bc_pushCommandToBuffer(inputBuffer, &reusedCommand, sizeof(reusedCommand));
+            // TODO: run PauseStep system
         }
 
         igSpacing();
 
-        /* Ensure the model isn't running before doing anything else */
-        if (!bc_model_isRunning(model)) {
-            if (SDL_SemWaitTimeout(world->lock, 16) != SDL_MUTEX_TIMEDOUT) {
-                // set model ecs world scope, to keep view's external tags/queries separate
-                ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
-                ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
-                ecs_set_scope(world->ecsWorld, viewScope);
-                modelWorldInspector(world, viewWorld);
-                ecsWorldInspector(world->ecsWorld, &modelInspector);
-                ecs_set_scope(world->ecsWorld, oldScope);
-                SDL_SemPost(world->lock);
-            }
+        /* Don't inspect model while it's running */
+        if (SDL_TryLockMutex(model->mutex) == 0) {
+            // set model ecs world scope, to keep view's external tags/queries separate
+            ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
+            ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
+            ecs_set_scope(world->ecsWorld, viewScope);
+            modelWorldInspector(world, viewWorld);
+            ecsWorldInspector(world->ecsWorld, &modelInspector);
+            ecs_set_scope(world->ecsWorld, oldScope);
+            SDL_UnlockMutex(model->mutex);
         }
     }
     igEnd();
@@ -297,11 +289,11 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
             igText("Seed: %s", worldState->seedString);
             dateTimeInspector(worldState->step);
             igPushItemWidth(200);
-            int tps = 1000 / MAX(model->tickInterval, 1);
-            tps = model->tickInterval == 0 ? 10000 : tps;
-            char *ticksFormat = model->tickInterval == 0 ? "Unlimited" : "%d";
-            igSliderInt("Max Ticks per Second", &tps, 1, 10000, ticksFormat, ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
-            model->tickInterval = 1000 / tps;
+            //int tps = 1000 / MAX(model->tickInterval, 1);
+            //tps = model->tickInterval == 0 ? 10000 : tps;
+            //char *ticksFormat = model->tickInterval == 0 ? "Unlimited" : "%d";
+            //igSliderInt("Max Ticks per Second", &tps, 1, 10000, ticksFormat, ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+            //model->tickInterval = 1000 / tps;
             igPopItemWidth();
 
             // TODO: need a better solution for non-guaranteed entities like this in the final GUI. Currently, this relies on order of setup and some menus being default collapsed to avoid crash from failed lookup
@@ -463,52 +455,50 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         // Brush settings
                         PrefabBrush *pb = ecs_singleton_get_mut(viewWorld, PrefabBrush);
                         /* Ensure the model isn't running before doing anything else */
-                        if (!bc_model_isRunning(model)) {
-                            if (SDL_SemWaitTimeout(worldState->lock, 16) != SDL_MUTEX_TIMEDOUT) {
-                                // set model ecs world scope, to keep view's external tags/queries separate
-                                ecs_entity_t oldScope = ecs_get_scope(modelWorld);
-                                ecs_entity_t viewScope = ecs_entity_init(modelWorld, &(ecs_entity_desc_t){.name = "bcview"});
-                                ecs_set_scope(modelWorld, viewScope);
+                        if (SDL_TryLockMutex(model->mutex) == 0) {
+                            // set model ecs world scope, to keep view's external tags/queries separate
+                            ecs_entity_t oldScope = ecs_get_scope(modelWorld);
+                            ecs_entity_t viewScope = ecs_entity_init(modelWorld, &(ecs_entity_desc_t){.name = "bcview"});
+                            ecs_set_scope(modelWorld, viewScope);
 
-                                const char *prefabName = getEntityLabel(modelWorld, pb->prefab);
-                                if (igBeginCombo("Select Prefab", prefabName, 0)) {
-                                    ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){
-                                        .id = EcsPrefab,
-                                        .flags = EcsTermMatchPrefab
-                                    });
-                                    // TODO: dedicated query for top-level prefabs
-                                    //ecs_iter_t it = ecs_query_iter(modelWorld, modelInspector.customQueries[2].query);
-                                    while (ecs_term_next(&it)) {
-                                        for (int i = 0; i < it.count; i++) {
-                                            ecs_entity_t ent = it.entities[i];
-                                            const char *entName = getEntityLabel(modelWorld, ent);
-                                            if (igSelectable_Bool(entName, ent == pb->prefab, 0, IG_SIZE_DEFAULT)) {
-                                                modelInspector.focusEntity = ent;
-                                                pb->prefab = ent;
-                                            }
+                            const char *prefabName = getEntityLabel(modelWorld, pb->prefab);
+                            if (igBeginCombo("Select Prefab", prefabName, 0)) {
+                                ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){
+                                    .id = EcsPrefab,
+                                    .flags = EcsTermMatchPrefab
+                                });
+                                // TODO: dedicated query for top-level prefabs
+                                //ecs_iter_t it = ecs_query_iter(modelWorld, modelInspector.customQueries[2].query);
+                                while (ecs_term_next(&it)) {
+                                    for (int i = 0; i < it.count; i++) {
+                                        ecs_entity_t ent = it.entities[i];
+                                        const char *entName = getEntityLabel(modelWorld, ent);
+                                        if (igSelectable_Bool(entName, ent == pb->prefab, 0, IG_SIZE_DEFAULT)) {
+                                            modelInspector.focusEntity = ent;
+                                            pb->prefab = ent;
                                         }
                                     }
-                                    igEndCombo();
                                 }
-
-                                if (pb->prefab) {
-                                    const char *brief = ecs_doc_get_brief(modelWorld, pb->prefab);
-                                    if (brief != NULL) {
-                                        igTextWrapped(brief);
-                                    }
-                                    if (igCollapsingHeader_TreeNodeFlags("Edit Prefab", ImGuiTreeNodeFlags_None)) {
-                                        // FIXME: cloning prefabs seems to crash flecs
-                                        // if (igButton("Create new Prefab from this", IG_SIZE_DEFAULT)) {
-                                        //     // copy to new prefab
-                                        //     pb->prefab = ecs_clone(world, 0, pb->prefab, true);
-                                        // }
-                                        ecsEntityInspector(modelWorld, &modelInspector);
-                                    }
-                                }
-
-                                ecs_set_scope(modelWorld, oldScope);
-                                SDL_SemPost(worldState->lock);
+                                igEndCombo();
                             }
+
+                            if (pb->prefab) {
+                                const char *brief = ecs_doc_get_brief(modelWorld, pb->prefab);
+                                if (brief != NULL) {
+                                    igTextWrapped(brief);
+                                }
+                                if (igCollapsingHeader_TreeNodeFlags("Edit Prefab", ImGuiTreeNodeFlags_None)) {
+                                    // FIXME: cloning prefabs seems to crash flecs
+                                    // if (igButton("Create new Prefab from this", IG_SIZE_DEFAULT)) {
+                                    //     // copy to new prefab
+                                    //     pb->prefab = ecs_clone(world, 0, pb->prefab, true);
+                                    // }
+                                    ecsEntityInspector(modelWorld, &modelInspector);
+                                }
+                            }
+
+                            ecs_set_scope(modelWorld, oldScope);
+                            SDL_UnlockMutex(model->mutex);
                         } else {
                             igTextColored(IG_COLOR_WARNING, "Simulation currently running, press space to pause and edit prefabs");
                         }

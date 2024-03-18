@@ -53,15 +53,15 @@ void bc_view_endFrame(bc_WindowContext* wc) {
     sg_commit();
 }
 
-void bc_view_onInputEvent(bc_CommandBuffer inputBuffer, SDL_Event *e, bool useMouse, bool useKeyboard) {
+void bc_view_onInputEvent(SDL_Event *e, bool useMouse, bool useKeyboard) {
     SystemsInput_ProcessEvent(vc.ecsWorld, e);
 }
 
-void bc_view_processInputState(bc_CommandBuffer inputBuffer, bool useMouse, bool useKeyboard) {
+void bc_view_processInputState(bool useMouse, bool useKeyboard) {
     // TODO: still needed?
 }
 
-u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_CommandBuffer inputBuffer) {
+u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc) {
     // TODO: should happen in response to SDL resize events instead of every frame
     const WindowSize *currentWindow = ecs_singleton_get(vc.ecsWorld, WindowSize);
     // Only set if changed so that OnSet observers for WindowSize only run when needed
@@ -84,16 +84,19 @@ u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc, bc_Comma
         ModelWorld *mw = ecs_singleton_get_mut(vc.ecsWorld, ModelWorld);
         bool stepChanged = mw->lastRenderedStep < world->step;
         if (stepChanged || mw->renderOutdated) {
-            if (SDL_SemWaitTimeout(world->lock, 4) != SDL_MUTEX_TIMEDOUT) {
+            if (SDL_TryLockMutex(model->mutex) == 0) {
                 // set model ecs world scope, to keep view's external tags/queries separate
-                ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
                 ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
-                ecs_set_scope(world->ecsWorld, viewScope);
+                ecs_entity_t oldScope = ecs_set_scope(world->ecsWorld, viewScope);
                 // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
                 // TODO: could be useful to pass elapsed model steps as delta time
                 ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
                 ecs_set_scope(world->ecsWorld, oldScope);
-                SDL_SemPost(world->lock);
+
+                // TEST
+                model->runForSteps = 1;
+                SDL_UnlockMutex(model->mutex);
+                SDL_CondSignal(model->cond);
             }
         }
         mw->lastRenderedStep = world->step;
@@ -133,8 +136,8 @@ void bc_view_teardownEditor() {
     bc_teardownEditor();
 }
 
-void bc_view_drawEditor(bc_SupervisorInterface *si, bc_CommandBuffer inputBuffer) {
-    bc_drawEditor(si, model, inputBuffer, vc.ecsWorld, vc.ui);
+void bc_view_drawEditor(bc_SupervisorInterface *si) {
+    bc_drawEditor(si, model, vc.ecsWorld, vc.ui);
 }
 
 void bc_view_drawGUI(bc_SupervisorInterface* si) {

@@ -1,16 +1,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <SDL2/SDL_mutex.h>
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
 #include "basaltic_defs.h"
 #include "basaltic_logic.h"
-#include "basaltic_model.h"
 #include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
-#include "basaltic_commandBuffer.h"
 #include "basaltic_components.h"
 #include "components/basaltic_components_planes.h"
 #include "basaltic_systems.h"
@@ -18,12 +15,6 @@
 #include "khash.h"
 
 #include "bc_flecs_utils.h"
-
-typedef struct {
-    bc_CommandBuffer processingBuffer;
-    bool advanceSingleStep;
-    bool autoStep;
-} LogicState;
 
 static void doWorldStep(bc_WorldState *world);
 
@@ -53,8 +44,6 @@ bc_WorldState *bc_createWorldState(u32 chunkCountX, u32 chunkCountY, char* seedS
 
     // TODO: script initialization method for ECS worlds to apply all scripts in a directory at startup
     ecs_set_pair(newWorld->ecsWorld, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
-
-    newWorld->lock = SDL_CreateSemaphore(1);
 
     return newWorld;
 }
@@ -97,46 +86,12 @@ void bc_destroyWorldState(bc_WorldState *world) {
     //ecs_query_fini(world->terrains);
     //ecs_query_fini(world->characters);
     ecs_fini(world->ecsWorld);
-    SDL_SemWait(world->lock);
-    SDL_DestroySemaphore(world->lock);
     free(world->seedString);
     free(world);
 }
 
-int bc_doLogicTick(bc_ModelData *model, bc_CommandBuffer inputBuffer) {
-    // Don't bother locking buffers if there are no pending commands
-    if (!bc_commandBufferIsEmpty(inputBuffer)) {
-        if (bc_transferCommandBuffer(model->processingBuffer, inputBuffer)) {
-            u32 itemsInBuffer = bc_beginBufferProcessing(model->processingBuffer);
-            for (int i = 0; i < itemsInBuffer; i++) {
-                bc_WorldCommand *currentCommand = (bc_WorldCommand*)bc_getNextCommand(model->processingBuffer);
-                if (currentCommand == NULL) {
-                    break;
-                }
-                switch (currentCommand->commandType) {
-                    case BC_COMMAND_TYPE_STEP_ADVANCE:
-                        model->advanceSingleStep = true;
-                        break;
-                    case BC_COMMAND_TYPE_STEP_PLAY:
-                        model->autoStep = true;
-                        break;
-                    case BC_COMMAND_TYPE_STEP_PAUSE:
-                        model->autoStep = false;
-                        break;
-                    default:
-                        fprintf(stderr, "ERROR: invalid command type %i", currentCommand->commandType);
-                        break;
-                }
-            }
-            bc_endBufferProcessing(model->processingBuffer);
-        }
-    }
-
-    if (model->advanceSingleStep || model->autoStep) {
-        doWorldStep(model->world);
-        model->advanceSingleStep = false;
-    }
-
+int bc_doLogicTick(bc_WorldState *world) {
+    doWorldStep(world);
     return 0;
 }
 
@@ -183,27 +138,8 @@ static void worldStepStressTest(bc_WorldState *world) {
 }
 
 static void doWorldStep(bc_WorldState *world) {
-    // TODO: all the rest
-    //worldStepStressTest(world);
-
-    // Waiting here gives the view thread a chance to safely read & render world data
-    SDL_SemWait(world->lock);
-
     bc_reloadFlecsScript(world->ecsWorld, 0);
-
     ecs_progress(world->ecsWorld, 1.0);
     world->step++;
     ecs_singleton_set(world->ecsWorld, Step, {world->step}); // FIXME kind of awkward to track this in 2 different places, but good reasons to keep both
-    SDL_SemPost(world->lock);
-
-    // ecs_world_t *stage = ecs_get_stage(world->ecsWorld, 0);
-    // ecs_iter_t it = ecs_query_iter(stage, world->systems);
-    // while (ecs_query_next(&it)) {
-    //     for (int i = 0; i < it.count; i++) {
-    //         ecs_run(stage, it.entities[i], 1.0, NULL);
-    //     }
-    // }
-    // // TODO: only end readonly mode (flush the buffer and make ecs storage changes) if no other threads are currently reading from the world
-    // ecs_readonly_end(world->ecsWorld);
-    // ecs_readonly_begin(world->ecsWorld);
 }

@@ -33,7 +33,7 @@ bcview {
 
         with (ActionGroup, stepControl) {
             advance_step {
-                - ActionButton {system: AdvanceStep}
+                - ActionButton {system: SingleStep}
                 - (ButtonDown, Space)
             }
             auto_step {

@@ -2,7 +2,6 @@
 #define BASALTIC_WORLDSTATE_H_INCLUDED
 
 #include <math.h>
-#include <SDL2/SDL_mutex.h>
 #include "htw_geomap.h"
 #include "flecs.h"
 
@@ -35,8 +34,6 @@ typedef struct {
     ecs_query_t *planes;
     // Characters
     ecs_query_t *characters;
-    // world access lock
-    SDL_sem *lock;
 } bc_WorldState;
 
 

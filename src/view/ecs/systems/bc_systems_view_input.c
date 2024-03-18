@@ -7,7 +7,7 @@
 #include <math.h>
 #include <SDL2/SDL.h>
 
-void AdvanceStep(ecs_iter_t *it) {
+void SingleStep(ecs_iter_t *it) {
 
 }
 
@@ -397,8 +397,11 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, ComponentsInput);
 
-    ECS_SYSTEM(world, LockMouse, 0);
+    ECS_SYSTEM(world, SingleStep, 0);
+    ECS_SYSTEM(world, AutoStep, 0);
+    ECS_SYSTEM(world, PauseStep, 0);
 
+    ECS_SYSTEM(world, LockMouse, 0);
     ECS_SYSTEM(world, UnlockMouse, 0);
 
     ECS_SYSTEM(world, CameraPan, 0,
