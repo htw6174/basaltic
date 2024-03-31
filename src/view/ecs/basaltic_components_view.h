@@ -2,7 +2,6 @@
 #define BASALTIC_COMPONENTS_VIEW_H_INCLUDED
 
 #include "htw_core.h"
-#include "basaltic_worldState.h"
 #include "basaltic_components.h"
 #include <time.h>
 #include "ccVector.h"
@@ -55,6 +54,12 @@ ECS_STRUCT(ModelWorld, {
     ecs_singleton_modified(view_world, ModelWorld); \
 } \
 
+ECS_STRUCT(ModelStepControl, {
+    s32 stepsPerRun;
+    s32 framesBetweenRuns;
+    bool doSingleRun;
+    bool doAuto;
+});
 
 ECS_STRUCT(ModelQuery, {
     ecs_query_t *query;

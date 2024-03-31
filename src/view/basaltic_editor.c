@@ -9,9 +9,7 @@
 #include "basaltic_defs.h"
 #include "basaltic_interaction.h"
 #include "basaltic_uiState.h"
-#include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
-#include "basaltic_logic.h"
 #include "basaltic_phases_view.h"
 #include "basaltic_components_view.h"
 #include "basaltic_components.h"
@@ -79,7 +77,7 @@ typedef struct {
     bool isWorldGenerated;
     u32 worldChunkWidth;
     u32 worldChunkHeight;
-    char newGameSeed[BC_MAX_SEED_LENGTH];
+    char newGameSeed[256];
 } EditorContext;
 
 static EditorContext ec;
@@ -131,7 +129,7 @@ bool entityButton(ecs_world_t *world, ecs_entity_t e);
 
 /* Specalized Inspectors */
 void modelSetupInspector(bc_SupervisorInterface *si);
-void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld);
+void modelWorldInspector(ecs_world_t *modelWorld, ecs_world_t *viewWorld);
 /** Returns true if the cell was altered */
 bool cellInspector(ecs_world_t *world, ecs_entity_t plane, htw_geo_GridCoord coord, ecs_entity_t *focusEntity);
 void bitmaskToggle(const char *prefix, u32 *bitmask, u32 toggleBit);
@@ -197,7 +195,7 @@ void bc_teardownEditor(void) {
     kh_destroy(CustomInspector, customInspectors);
 }
 
-void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, ecs_world_t *viewWorld, bc_UiState *ui)
+void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelContext *model, ecs_world_t *viewWorld, bc_UiState *ui)
 {
     /*
     if (igCollapsingHeader_BoolPtr("Visibility overrides", NULL, 0)) {
@@ -224,53 +222,60 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelData *model, ecs_world_t 
     if (model == NULL) {
         modelSetupInspector(si);
     } else {
-        bc_WorldState *world = model->world;
         if (igButton("Stop model", (ImVec2){0, 0})) {
             si->signal = BC_SUPERVISOR_SIGNAL_STOP_MODEL;
         }
 
         /* World info that is safe to inspect at any time: */
-        igText("Seed string: %s", world->seedString);
+        // TODO: move this into locked area now that this info is stored in ecs
+        // igText("Seed string: %s", world->seedString);
+        // igValue_Uint("World seed", world->seed);
+        igValue_Uint("Logic step", model->step);
+        dateTimeInspector(model->step);
 
-        igValue_Uint("World seed", world->seed);
-        igValue_Uint("Logic step", world->step);
-        dateTimeInspector(world->step);
+        ModelStepControl *stepper = ecs_singleton_get_mut(viewWorld, ModelStepControl);
         igPushItemWidth(200);
 
         // Tick rate slider TODO: change for new runforsteps method of scheduling model steps
         //igSliderInt("Min Tick Duration", (int*)&model->tickInterval, 0, 1000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+        igSliderInt("Step batch size", (int*)&stepper->stepsPerRun, 1, 10000, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+        igSliderInt("Batch every n frames", (int*)&stepper->framesBetweenRuns, 1, 60, "%d", ImGuiSliderFlags_AlwaysClamp);
         igPopItemWidth();
 
-        if (igButton("Advance logic step", (ImVec2){0, 0})) {
-            // TODO: run AdvanceStep system
+        if (igButton("Advance logic step by batch size", (ImVec2){0, 0})) {
+            stepper->doSingleRun = true;
         }
+        // TODO: can now add an easy "Run for n Steps" button
         igSameLine(0, -1);
         if (igButton("Start auto step", (ImVec2){0, 0})) {
-            // TODO: run AutoStep system
+            stepper->doAuto = true;
         }
         igSameLine(0, -1);
         if (igButton("Stop auto step", (ImVec2){0, 0})) {
-            // TODO: run PauseStep system
+            stepper->doAuto = false;
         }
+
+        ecs_singleton_modified(viewWorld, ModelStepControl);
 
         igSpacing();
 
         /* Don't inspect model while it's running */
         if (SDL_TryLockMutex(model->mutex) == 0) {
+            ecs_world_t *modelWorld = model->world;
             // set model ecs world scope, to keep view's external tags/queries separate
-            ecs_entity_t oldScope = ecs_get_scope(world->ecsWorld);
-            ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
-            ecs_set_scope(world->ecsWorld, viewScope);
-            modelWorldInspector(world, viewWorld);
-            ecsWorldInspector(world->ecsWorld, &modelInspector);
-            ecs_set_scope(world->ecsWorld, oldScope);
+            ecs_entity_t oldScope = ecs_get_scope(modelWorld);
+            ecs_entity_t viewScope = ecs_entity_init(modelWorld, &(ecs_entity_desc_t){.name = "bcview"});
+            ecs_set_scope(modelWorld, viewScope);
+            modelWorldInspector(modelWorld, viewWorld);
+            ecsWorldInspector(modelWorld, &modelInspector);
+            ecs_set_scope(modelWorld, oldScope);
             SDL_UnlockMutex(model->mutex);
         }
     }
     igEnd();
 }
 
-void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *viewWorld) {
+void bc_drawGUI(bc_SupervisorInterface *si, bc_ModelContext *model, ecs_world_t *viewWorld) {
     // enable docking over entire screen
     igDockSpaceOverViewport(igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
 
@@ -280,14 +285,18 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
         }
         igEnd();
     } else {
-        ecs_world_t *modelWorld = model->world->ecsWorld;
+        ecs_world_t *modelWorld = NULL;
+        if (SDL_TryLockMutex(model->mutex) == 0) {
+            modelWorld = model->world;
+            // NOTE: not good practice to have the unlock outside lock scope; will improve when eventually reorganizing GUI
+        }
         if (igBegin("Settings", NULL, 0)) {
-            bc_WorldState *worldState = model->world;
             if (igButton("Create new world", (ImVec2){0, 0})) {
                 si->signal = BC_SUPERVISOR_SIGNAL_STOP_MODEL;
             }
-            igText("Seed: %s", worldState->seedString);
-            dateTimeInspector(worldState->step);
+            // TODO: inspect seed and step
+            //igText("Seed: %s", worldState->seedString);
+            dateTimeInspector(model->step);
             igPushItemWidth(200);
             //int tps = 1000 / MAX(model->tickInterval, 1);
             //tps = model->tickInterval == 0 ? 10000 : tps;
@@ -342,11 +351,11 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
             igText("Tool mode: ");
             if (igBeginTabBar("Tools", ImGuiTabBarFlags_None)) {
                 // Lookup entities to bind to tab state
-                ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.cameraMouseBindings");
-                ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.terrainMouseBindings");
-                ecs_entity_t riverBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.riverMouseBindings");
-                ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.actorMouseBindings");
-                ecs_entity_t playerBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.Input.playerMouseBindings");
+                ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.cameraMouse");
+                ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.terrainMouse");
+                ecs_entity_t riverBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.riverMouse");
+                ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.actorMouse");
+                ecs_entity_t playerBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.playerMouse");
                 if (camBindGroup) {
                     bool camBindActive = igBeginTabItem("Camera", NULL, ImGuiTabItemFlags_None);
                     if (camBindActive) {
@@ -455,7 +464,7 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         // Brush settings
                         PrefabBrush *pb = ecs_singleton_get_mut(viewWorld, PrefabBrush);
                         /* Ensure the model isn't running before doing anything else */
-                        if (SDL_TryLockMutex(model->mutex) == 0) {
+                        if (modelWorld) {
                             // set model ecs world scope, to keep view's external tags/queries separate
                             ecs_entity_t oldScope = ecs_get_scope(modelWorld);
                             ecs_entity_t viewScope = ecs_entity_init(modelWorld, &(ecs_entity_desc_t){.name = "bcview"});
@@ -498,7 +507,6 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                             }
 
                             ecs_set_scope(modelWorld, oldScope);
-                            SDL_UnlockMutex(model->mutex);
                         } else {
                             igTextColored(IG_COLOR_WARNING, "Simulation currently running, press space to pause and edit prefabs");
                         }
@@ -523,14 +531,16 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                         if (tv != NULL) tv->visibility = 0;
 
                         const PlayerEntity *player = ecs_singleton_get(viewWorld, PlayerEntity);
-                        if (!ecs_is_valid(modelWorld, player->entity)) {
-                            // assign player entity
-                            ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){.id = ecs_id(MapVision)});
-                            while(ecs_term_next(&it)) {
-                                if (it.count > 0) {
-                                    ecs_singleton_set(viewWorld, PlayerEntity, {it.entities[0]});
-                                    ecs_iter_fini(&it);
-                                    break;
+                        if (modelWorld) {
+                            if (!ecs_is_valid(modelWorld, player->entity)) {
+                                // assign player entity
+                                ecs_iter_t it = ecs_term_iter(modelWorld, &(ecs_term_t){.id = ecs_id(MapVision)});
+                                while(ecs_term_next(&it)) {
+                                    if (it.count > 0) {
+                                        ecs_singleton_set(viewWorld, PlayerEntity, {it.entities[0]});
+                                        ecs_iter_fini(&it);
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -551,20 +561,19 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
         igEnd();
 
         const FocusPlane *focusPlane = ecs_singleton_get(viewWorld, FocusPlane);
-        if (focusPlane) {
+        if (modelWorld && focusPlane) {
             ecs_entity_t planeEntity = focusPlane->entity;
             if (planeEntity != 0) {
                 // big inspector for selected cell
-                if (!bc_model_isRunning(model)) {
-                    const SelectedCell *selectedCell = ecs_singleton_get(viewWorld, SelectedCell);
-                    ecs_entity_t selectedRoot = plane_GetRootEntity(modelWorld, planeEntity, *selectedCell);
-                    if (selectedRoot != 0) {
-                        const ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-                        if (igBegin("Selected Tile", NULL, flags)) {
-                            relationshipTreeInspector(modelWorld, selectedRoot, IsIn, NULL, true);
-                        }
-                        igEnd();
+                // TODO: ensure this is in a lock
+                const SelectedCell *selectedCell = ecs_singleton_get(viewWorld, SelectedCell);
+                ecs_entity_t selectedRoot = plane_GetRootEntity(modelWorld, planeEntity, *selectedCell);
+                if (selectedRoot != 0) {
+                    const ImGuiWindowFlags flags = ImGuiWindowFlags_None;
+                    if (igBegin("Selected Tile", NULL, flags)) {
+                        relationshipTreeInspector(modelWorld, selectedRoot, IsIn, NULL, true);
                     }
+                    igEnd();
                 }
 
                 // small preview for hovered cell
@@ -575,7 +584,9 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                     // lifezone name
                     const Plane *plane = ecs_get(modelWorld, planeEntity, Plane);
                     const Climate *climate = ecs_get(modelWorld, planeEntity, Climate);
-                    igText("%s", plane_getCellLifezoneName(plane, climate, *hoveredCell));
+                    if (climate) {
+                        igText("%s", plane_getCellLifezoneName(plane, climate, *hoveredCell));
+                    }
 
                     if (hoveredRoot != 0) {
                         const char *label = getEntityLabel(modelWorld, hoveredRoot);
@@ -585,6 +596,10 @@ void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *vi
                 }
                 igEnd();
             }
+        }
+
+        if (modelWorld != NULL) {
+            SDL_UnlockMutex(model->mutex);
         }
     }
 }
@@ -614,28 +629,27 @@ void modelSetupInspector(bc_SupervisorInterface *si) {
         igTextColored(IG_COLOR_WARNING, "Large worlds are currently unoptimized!", 0);
     }
     igText("Seed:");
-    igInputText("##seedInput", ec.newGameSeed, BC_MAX_SEED_LENGTH, 0, NULL, NULL);
+    igInputText("##seedInput", ec.newGameSeed, 256, 0, NULL, NULL);
 
     if (igButton("Generate world", (ImVec2){0, 0})) {
-        bc_ModelSetupSettings newSetupSettings = {
-            .width = ec.worldChunkWidth,
-            .height = ec.worldChunkHeight,
-            .seed = ec.newGameSeed
-        };
-
-        si->modelSettings = newSetupSettings;
+        // TODO: need a new way to set model start settings; should probably just create singletons before running first model step
+        // bc_ModelSetupSettings newSetupSettings = {
+        //     .width = ec.worldChunkWidth,
+        //     .height = ec.worldChunkHeight,
+        //     .seed = ec.newGameSeed
+        // };
         si->signal = BC_SUPERVISOR_SIGNAL_START_MODEL;
     }
 }
 
 // TODO: consider seperating the parts that require viewEcsWorld to another inspector section
-void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
-    ecs_entity_t focusedPlane = ecs_singleton_get(viewEcsWorld, FocusPlane)->entity;
+void modelWorldInspector(ecs_world_t *modelWorld, ecs_world_t *viewWorld) {
+    ecs_entity_t focusedPlane = ecs_singleton_get(viewWorld, FocusPlane)->entity;
     if (focusedPlane != 0) {
-        htw_ChunkMap *cm = ecs_get(world->ecsWorld, focusedPlane, Plane)->chunkMap;
+        htw_ChunkMap *cm = ecs_get(modelWorld, focusedPlane, Plane)->chunkMap;
 
-        const HoveredCell *hovered = ecs_singleton_get(viewEcsWorld, HoveredCell);
-        const SelectedCell *selected = ecs_singleton_get(viewEcsWorld, SelectedCell);
+        const HoveredCell *hovered = ecs_singleton_get(viewWorld, HoveredCell);
+        const SelectedCell *selected = ecs_singleton_get(viewWorld, SelectedCell);
 
         // TODO: have a window attached to the mouse for hovered info, pin selected info here
         static bool inspectSelected = true;
@@ -648,9 +662,9 @@ void modelWorldInspector(bc_WorldState *world, ecs_world_t *viewEcsWorld) {
             focusCoord = *(htw_geo_GridCoord*)hovered;
         }
 
-        if (cellInspector(world->ecsWorld, focusedPlane, focusCoord, &modelInspector.focusEntity)) {
+        if (cellInspector(modelWorld, focusedPlane, focusCoord, &modelInspector.focusEntity)) {
             // Tell view to update chunk map
-            bc_redraw_model(viewEcsWorld);
+            bc_redraw_model(viewWorld);
         }
     }
 

@@ -86,6 +86,7 @@ void BcviewImport(ecs_world_t *world) {
 
 
     ECS_META_COMPONENT(world, ModelWorld);
+    ECS_META_COMPONENT(world, ModelStepControl);
     ECS_META_COMPONENT(world, ModelQuery);
     ECS_META_COMPONENT(world, QueryDesc);
     //ECS_COMPONENT_DEFINE(world, ModelLastRenderedStep);

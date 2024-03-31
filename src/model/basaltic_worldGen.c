@@ -2,7 +2,6 @@
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
-#include "basaltic_worldState.h"
 #include "components/basaltic_components_planes.h"
 
 void bc_elevationBrush(htw_ChunkMap *chunkMap, htw_geo_GridCoord pos, s32 value, u32 radius) {
@@ -66,21 +65,17 @@ void bc_growMountains(htw_ChunkMap *chunkMap, float slope) {
 }
 
 
-htw_ChunkMap *bc_createTerrain(u32 chunkCountX, u32 chunkCountY) {
-    htw_ChunkMap *cm = htw_geo_createChunkMap(bc_chunkSize, chunkCountX, chunkCountY, sizeof(CellData));
+htw_ChunkMap *bc_createTerrain(u32 chunkSize, u32 chunkCountX, u32 chunkCountY) {
+    htw_ChunkMap *cm = htw_geo_createChunkMap(chunkSize, chunkCountX, chunkCountY, sizeof(CellData));
     return cm;
 }
 
 void bc_generateTerrain(htw_ChunkMap *cm, u32 seed) {
-    u32 width = bc_chunkSize;
-    u32 height = bc_chunkSize;
-    u32 cellsPerChunk = width * height;
-
     for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
         for (int x = 0; x < cm->chunkCountX; x++, c++) {
             CellData *cellData = cm->chunks[c].cellData;
 
-            for (int i = 0; i < cellsPerChunk; i++) {
+            for (int i = 0; i < cm->cellsPerChunk; i++) {
                 CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
                 // noise values in 0..1
@@ -326,15 +321,11 @@ void bc_removeRiverConnection(htw_ChunkMap *cm, htw_geo_GridCoord a, htw_geo_Gri
 
 
 void bc_smoothTerrain(htw_ChunkMap *cm, s32 minProminance) {
-    u32 width = bc_chunkSize;
-    u32 height = bc_chunkSize;
-    u32 cellsPerChunk = width * height;
-
     for (int c = 0, y = 0; y < cm->chunkCountY; y++) {
         for (int x = 0; x < cm->chunkCountX; x++, c++) {
             CellData *cellData = cm->chunks[c].cellData;
 
-            for (int i = 0; i < cellsPerChunk; i++) {
+            for (int i = 0; i < cm->cellsPerChunk; i++) {
                 CellData *cell = &cellData[i];
                 htw_geo_GridCoord cellCoord = htw_geo_chunkAndCellToGridCoordinates(cm, c, i);
 

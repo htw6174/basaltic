@@ -11,7 +11,6 @@
 
 typedef struct {
     bc_SupervisorSignal signal;
-    bc_ModelSetupSettings modelSettings;
 } bc_SupervisorInterface;
 
 void bc_view_setup(bc_WindowContext* wc);
@@ -30,7 +29,7 @@ void bc_view_teardownEditor();
 void bc_view_drawEditor(bc_SupervisorInterface* si);
 void bc_view_drawGUI(bc_SupervisorInterface* si);
 
-void bc_view_onModelStart(bc_ModelData *md);
-void bc_view_onModelStop(bc_ModelData *md);
+void bc_view_onModelStart(bc_ModelContext *mctx);
+void bc_view_onModelStop(bc_ModelContext *mctx);
 
 #endif // BASALTIC_VIEW_H_INCLUDED

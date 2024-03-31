@@ -1,3 +1,4 @@
+#include "bc_flecs_utils.h"
 #include "basaltic_components_actors.h"
 #define BC_COMPONENT_IMPL
 #include "bc_components_elementals.h"
@@ -34,4 +35,6 @@ void BcElementalsImport(ecs_world_t *world) {
 
     ECS_COMPONENT_DEFINE(world, Elevation);
     ecs_primitive(world, {.entity = ecs_id(Elevation), .kind = EcsI32});
+
+    bc_loadModuleScript(world, "model/plecs/modules");
 }

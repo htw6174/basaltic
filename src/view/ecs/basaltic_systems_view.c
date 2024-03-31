@@ -3,6 +3,7 @@
 #include "basaltic_phases_view.h"
 #include "components/components_input.h"
 #include "systems/systems_input.h"
+#include "systems/bc_systems_common.h"
 #include "systems/bc_systems_view_input.h"
 #include "systems/basaltic_systems_view_terrain.h"
 #include "systems/basaltic_systems_view_debug.h"
@@ -766,6 +767,7 @@ void BcviewSystemsImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
     ECS_IMPORT(world, SystemsInput);
+    ECS_IMPORT(world, BcSystemsCommon);
     ECS_IMPORT(world, BcviewSystemsInput);
     ECS_IMPORT(world, BcviewSystemsDebug);
     ECS_IMPORT(world, BcviewSystemsTerrain);

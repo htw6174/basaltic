@@ -1,3 +1,4 @@
+#include "bc_flecs_utils.h"
 #include "basaltic_components_actors.h"
 #define BC_COMPONENT_IMPL
 #include "basaltic_components_wildlife.h"
@@ -37,4 +38,6 @@ void BcWildlifeImport(ecs_world_t *world) {
     ECS_TAG_DEFINE(world, Climbing);
     ECS_TAG_DEFINE(world, Amphibious);
     ECS_TAG_DEFINE(world, Aquatic);
+
+    bc_loadModuleScript(world, "model/plecs/modules");
 }

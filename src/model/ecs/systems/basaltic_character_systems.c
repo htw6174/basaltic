@@ -1,13 +1,13 @@
 #include "basaltic_character_systems.h"
 #include "basaltic_components.h"
 #include "basaltic_phases.h"
-#include "basaltic_worldState.h"
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
 #include "flecs.h"
 #include "bc_flecs_utils.h"
 #include <float.h>
+#include <math.h>
 
 // TEST: random movement behavior, pick any adjacent tile to move to
 void setWandererDestinations(ecs_iter_t *it);

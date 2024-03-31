@@ -2,7 +2,6 @@
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
 #include "components/basaltic_components_planes.h"
-#include "basaltic_worldState.h"
 #include "htw_core.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
@@ -120,8 +119,8 @@ static sg_pipeline_desc terrainPipelineDescription = {
 vec3 barycentric(vec2 p, vec2 left, vec2 right);
 vec3 getHexVertBarycentric(vec2 pos, int neighborhoodIndex);
 
-Mesh createHexmapMesh(void);
 Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions);
+Mesh createHexmapMesh(u32 width, u32 height);
 void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTexture *dataTexture, u32 centerChunk);
 
 void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTexture, u32 chunkIndex);
@@ -329,12 +328,8 @@ Mesh createTriGridMesh(u32 width, u32 height, u32 subdivisions) {
     };
 }
 
-/**
- * @brief Creates featureless hexagonal tile surface geometry, detail is added later by shaders
- *
- * @param out_elementCount number of triangle indicies
- */
-Mesh createHexmapMesh(void) {
+// Unused, see createTriGridMesh
+Mesh createHexmapMesh(u32 width, u32 height) {
     /* Overview:
      * each cell is a hexagon made of 7 verticies (one for each corner + 1 in the middle), defining 6 equilateral triangles
      * each of these triangles is divided evenly into 4 more triangles, once per subdivision (subdiv 0 = 6 tris, subdiv 1 = 24 tris)
@@ -348,8 +343,6 @@ Mesh createHexmapMesh(void) {
      */
 
     // determine required size for vertex and triangle buffers
-    const u32 width = bc_chunkSize;
-    const u32 height = bc_chunkSize;
     const u32 cellCount = width * height;
     const u32 vertsPerCell = 7;
     // for connecting to adjacent chunks
@@ -774,9 +767,9 @@ void updateTerrainVisibleChunks(Plane *plane, TerrainBuffer *terrain, DataTextur
 }
 
 void updateDataTextureChunk(Plane *plane, Climate *climate, DataTexture *dataTexture, u32 chunkIndex) {
-    const u32 width = bc_chunkSize;
-    const u32 height = bc_chunkSize;
     htw_ChunkMap *chunkMap = plane->chunkMap;
+    u32 width = chunkMap->chunkSize;
+    u32 height = chunkMap->chunkSize;
 
     // Find bottom-left corner of image region to update
     htw_geo_GridCoord startTexel = htw_geo_chunkAndCellToGridCoordinates(chunkMap, chunkIndex, 0);
@@ -884,8 +877,8 @@ void InitTerrainDataTexture(ecs_iter_t *it) {
             for (int m = 0; m < mit.count; m++) {
                 htw_ChunkMap *cm = planes[m].chunkMap;
 
-                u32 texWidth = bc_chunkSize * cm->chunkCountX;
-                u32 texHeight = bc_chunkSize * cm->chunkCountY;
+                u32 texWidth = cm->chunkSize * cm->chunkCountX;
+                u32 texHeight = cm->chunkSize * cm->chunkCountY;
 
                 sg_image_desc id = {
                     .width = texWidth,
@@ -1223,8 +1216,8 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
     // TODO: give these setup steps a better home
 
     // init mesh
-    //Mesh mesh = createHexmapMesh();
-    Mesh mesh = createTriGridMesh(bc_chunkSize, bc_chunkSize, 1);
+    // TODO: this is now the only place where chunksize needs to be known without having access to a ChunkMap. Should generate mesh in response to ModelWorld change, when terrainDraw doesn't already have a mesh
+    Mesh mesh = createTriGridMesh(64, 64, 1);
 
     // initialize RingBuffer entries
     RingBuffer pixelPackRingBuf = {0};

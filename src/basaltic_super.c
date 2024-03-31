@@ -16,13 +16,14 @@
 typedef struct {
     bc_EngineSettings *engineConfig;
     bc_SupervisorInterface *superInterface;
+    bc_StartupSettings startSettings;
 
     bc_ProcessState appState;
 
     SDL_Thread *modelThread;
 
     bool isModelDataReady;
-    bc_ModelData modelData;
+    bc_ModelContext modelContext;
 } SuperContext;
 
 /* Statics */
@@ -40,19 +41,19 @@ bc_EngineSettings *loadEngineConfig(char *path);
 void startView(bc_WindowContext *wc);
 void stopView();
 
-void startModel(SuperContext *sc);
-void stopModel(SDL_Thread **modelThread, bc_ModelData *modelData);
+void startModel(int argc, char *argv[], SuperContext *sc);
+void stopModel(SDL_Thread **modelThread, bc_ModelContext *modelData);
 void loadModel(char *path);
 void continueModel();
 
-void requestModelStop(bc_ModelData *modelData);
-void requestProcessStop(bc_ProcessState *appState, bc_ModelData *modelData);
+void requestModelStop(bc_ModelContext *modelData);
+void requestProcessStop(bc_ProcessState *appState, bc_ModelContext *modelData);
 
 static void mainLoop(void) {
     u64 frameStart = SDL_GetPerformanceCounter();
 
     bc_WindowContext *wc = &windowContext;
-    bc_ModelData *md = &superContext.modelData;
+    bc_ModelContext *mctx = &superContext.modelContext;
 
     wc->lastFrameDuration = frameStart - lastFrameStart;
     lastFrameStart = frameStart;
@@ -60,7 +61,7 @@ static void mainLoop(void) {
     wc->milliSeconds = SDL_GetTicks64();
 
     if (superContext.isModelDataReady == true && viewHasReceivedModel == false) {
-        bc_view_onModelStart(md);
+        bc_view_onModelStart(mctx);
         viewHasReceivedModel = true;
     }
 
@@ -69,7 +70,7 @@ static void mainLoop(void) {
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
         if (e.type == SDL_QUIT) { // Normal quit
-            requestProcessStop(&superContext.appState, md);
+            requestProcessStop(&superContext.appState, mctx);
         } else if (e.type == SDL_KEYDOWN) {
             if (e.key.keysym.sym == SDLK_r && (e.key.keysym.mod & KMOD_CTRL)) { // crtl+r
                 // reload view
@@ -77,11 +78,11 @@ static void mainLoop(void) {
                 startView(wc);
             }
             if (e.key.keysym.sym == SDLK_q && (e.key.keysym.mod & KMOD_CTRL)) { // crtl+q
-                // Quit; don't stop from within app on web builds
+                // Quit, or restart wasm module on web builds
 #ifdef __EMSCRIPTEN__
-                // TODO: should restart wasm module or reload page
+                // TODO: restart wasm module
 #else
-                requestProcessStop(&superContext.appState, md);
+                requestProcessStop(&superContext.appState, mctx);
 #endif
             }
         } else if (e.type == SDL_WINDOWEVENT) {
@@ -103,6 +104,7 @@ static void mainLoop(void) {
         bc_drawBaseEditor(&editorEngineContext, wc, &superInfo, superContext.engineConfig);
         bc_view_drawEditor(superContext.superInterface);
     } else {
+        // TODO: will eventually replace this with a gui contained in the view
         bc_view_drawGUI(superContext.superInterface);
     }
     bc_endEditor();
@@ -114,16 +116,17 @@ static void mainLoop(void) {
         case BC_SUPERVISOR_SIGNAL_NONE:
             break;
         case BC_SUPERVISOR_SIGNAL_START_MODEL:
-            startModel(&superContext);
+            // TODO: figure out another way to pass model start args back from view or editor
+            startModel(superContext.startSettings.startModelArgCount, superContext.startSettings.startModelArgs, &superContext);
             break;
         case BC_SUPERVISOR_SIGNAL_STOP_MODEL:
-            requestModelStop(md);
+            requestModelStop(mctx);
             break;
         case BC_SUPERVISOR_SIGNAL_RESTART_MODEL:
             // TODO: do I need an option for this?
             break;
         case BC_SUPERVISOR_SIGNAL_STOP_PROCESS:
-            requestProcessStop(&superContext.appState, md);
+            requestProcessStop(&superContext.appState, mctx);
             break;
         default:
             break;
@@ -132,19 +135,17 @@ static void mainLoop(void) {
     superContext.superInterface->signal = BC_SUPERVISOR_SIGNAL_NONE;
 
     // if model thread exists, wait for thread to stop and free resources
-    if (superContext.modelThread != NULL && md->shouldStopModel) {
-        bc_view_onModelStop(md);
-        md = NULL;
+    if (superContext.modelThread != NULL && mctx->shouldStopModel) {
+        bc_view_onModelStop(mctx);
         viewHasReceivedModel = false;
-        // TODO: any reason not to reset isModelDataReady here, instead of in the model thread?
-        stopModel(&superContext.modelThread, &superContext.modelData);
+        stopModel(&superContext.modelThread, &superContext.modelContext);
     }
 
     // frame timings
     u64 frameEnd = SDL_GetPerformanceCounter();
     u64 duration = frameEnd - frameStart;
     u64 frameMod = wc->frame % BC_FRAME_HISTORY_LENGTH;
-    superInfo.frameCPUTimes[frameMod] = duration; // FIXME: wasm release segfaults here? Because??? somehow this is corrupting the stack? TODO: try statically allocating superInfo?
+    superInfo.frameCPUTimes[frameMod] = duration;
     superInfo.frameTotalTimes[frameMod] = wc->lastFrameDuration;
     wc->frame++;
 
@@ -170,14 +171,16 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     superContext = (SuperContext){
         .engineConfig = loadEngineConfig("path does nothing right now!"),
         .superInterface = calloc(1, sizeof(*superContext.superInterface)),
+        .startSettings = startSettings,
 
         .appState = BC_PROCESS_STATE_RUNNING,
 
         .modelThread = NULL,
         .isModelDataReady = false,
-        .modelData = {
+        .modelContext = {
             .mutex = SDL_CreateMutex(),
-            .cond =SDL_CreateCond()
+            .cond =SDL_CreateCond(),
+            .deltaTime = 1.0, // TODO: temporary until view has a mechanism to set this
         },
     };
 
@@ -200,8 +203,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
         case BC_STARTUP_MODE_NO_MODEL:
             break;
         case BC_STARTUP_MODE_START_MODEL:
-            bc_model_argsToStartSettings(startSettings.startModelArgCount, startSettings.startModelArgs, &superContext.superInterface->modelSettings);
-            startModel(&superContext);
+            startModel(startSettings.startModelArgCount, startSettings.startModelArgs, &superContext);
             break;
         case BC_STARTUP_MODE_LOAD_MODEL:
             // TODO
@@ -226,7 +228,7 @@ int bc_startEngine(bc_StartupSettings startSettings) {
     // repeated here just to be safe
     // if game loop has ended, wait for thread to stop and free resources
     if (superContext.modelThread != NULL) {
-        stopModel(&superContext.modelThread, &superContext.modelData);
+        stopModel(&superContext.modelThread, &superContext.modelContext);
     }
 
     stopView();
@@ -260,28 +262,25 @@ void stopView() {
     bc_view_teardownEditor();
 }
 
-void startModel(SuperContext *sc) {
+void startModel(int argc, char *argv[], SuperContext *sc) {
     sc->isModelDataReady = false;
 
     printf("Starting model on new thread...\n");
 
     // NOTE: remember to put anything being passed to another thread in heap memory
     // TODO: need to free this after thread is finished with it
-    bc_ModelThreadInput *logicLoopParams = malloc(sizeof(bc_ModelThreadInput));
-    *logicLoopParams = (bc_ModelThreadInput){
-        .modelSettings = &sc->superInterface->modelSettings,
+    bc_ModelThreadInput *modelInput = malloc(sizeof(bc_ModelThreadInput));
+    *modelInput = (bc_ModelThreadInput){
+        .argc = argc,
+        .argv = argv,
         .isModelDataReady = &sc->isModelDataReady,
-        .modelData = &sc->modelData,
+        .modelContext = &sc->modelContext,
     };
-    sc->modelThread = SDL_CreateThread(bc_model_start, "model", logicLoopParams);
+    sc->modelThread = SDL_CreateThread(bc_model_run, "model", modelInput);
 }
 
-void stopModel(SDL_Thread **modelThread, bc_ModelData *modelData) {
-    SDL_LockMutex(modelData->mutex);
-    modelData->shouldStopModel = true;
-    modelData->runForSteps = 0;
-    SDL_CondSignal(modelData->cond);
-    SDL_UnlockMutex(modelData->mutex);
+void stopModel(SDL_Thread **modelThread, bc_ModelContext *modelData) {
+    requestModelStop(modelData);
     int modelThreadResult;
     SDL_WaitThread(*modelThread, &modelThreadResult);
     *modelThread = NULL;
@@ -301,13 +300,13 @@ void continueModel() {
     // TODO
 }
 
-void requestModelStop(bc_ModelData *modelData) {
+void requestModelStop(bc_ModelContext *modelData) {
     modelData->shouldStopModel = true;
     modelData->runForSteps = 0;
     SDL_CondSignal(modelData->cond);
 }
 
-void requestProcessStop(bc_ProcessState *appState, bc_ModelData *modelData) {
+void requestProcessStop(bc_ProcessState *appState, bc_ModelContext *modelData) {
     *appState = BC_PROCESS_STATE_STOPPED;
     requestModelStop(modelData);
 }

@@ -17,7 +17,7 @@ typedef struct {
 } bc_ViewContext;
 
 static bc_ViewContext vc;
-static bc_ModelData *model;
+static bc_ModelContext *model;
 
 void bc_view_setup(bc_WindowContext* wc) {
     bc_sg_setup();
@@ -69,59 +69,72 @@ u32 bc_view_drawFrame(bc_SupervisorInterface *si, bc_WindowContext *wc) {
         ecs_singleton_set(vc.ecsWorld, WindowSize, {.x = wc->width, .y = wc->height});
     }
 
-    bc_WorldState *world = model == NULL ? NULL : model->world;
-
     float dT = (float)wc->lastFrameDuration / wc->performanceFrequency; // in seconds
     ecs_singleton_set(vc.ecsWorld, DeltaTime, {dT});
     ecs_singleton_set(vc.ecsWorld, Clock, {(float)wc->milliSeconds / 1000.0});
 
-    // TODO: put this in a rate-limited system, only needs to fire every second or two
-    bc_reloadFlecsScript(vc.ecsWorld, 0);
-
     ecs_progress(vc.ecsWorld, dT);
 
+    ecs_world_t *world = model == NULL ? NULL : model->world;
     if (world != NULL) {
         ModelWorld *mw = ecs_singleton_get_mut(vc.ecsWorld, ModelWorld);
-        bool stepChanged = mw->lastRenderedStep < world->step;
+        bool stepChanged = mw->lastRenderedStep < model->step;
         if (stepChanged || mw->renderOutdated) {
             if (SDL_TryLockMutex(model->mutex) == 0) {
                 // set model ecs world scope, to keep view's external tags/queries separate
-                ecs_entity_t viewScope = ecs_entity_init(world->ecsWorld, &(ecs_entity_desc_t){.name = "bcview"});
-                ecs_entity_t oldScope = ecs_set_scope(world->ecsWorld, viewScope);
+                ecs_entity_t viewScope = ecs_entity_init(world, &(ecs_entity_desc_t){.name = "bcview"});
+                ecs_entity_t oldScope = ecs_set_scope(world, viewScope);
                 // Only safe to iterate model queries while the world is in readonly mode, or has exclusive access from one thread
                 // TODO: could be useful to pass elapsed model steps as delta time
                 ecs_run_pipeline(vc.ecsWorld, ModelChangedPipeline, 1.0f);
-                ecs_set_scope(world->ecsWorld, oldScope);
-
-                // TEST
-                model->runForSteps = 1;
+                ecs_set_scope(world, oldScope);
                 SDL_UnlockMutex(model->mutex);
+            }
+        }
+        mw->lastRenderedStep = model->step;
+        mw->renderOutdated = false;
+        ecs_singleton_modified(vc.ecsWorld, ModelWorld);
+
+        // Queue up model steps to run
+        ModelStepControl *stepper = ecs_singleton_get_mut(vc.ecsWorld, ModelStepControl);
+        model->runForSteps = stepper->stepsPerRun;
+        if (stepper->doSingleRun) {
+            stepper->doSingleRun = false;
+            ecs_singleton_modified(vc.ecsWorld, ModelStepControl);
+            SDL_CondSignal(model->cond);
+        } else if (stepper->doAuto) {
+            if (wc->frame % stepper->framesBetweenRuns == 0) {
                 SDL_CondSignal(model->cond);
             }
         }
-        mw->lastRenderedStep = world->step;
-        mw->renderOutdated = false;
-        ecs_singleton_modified(vc.ecsWorld, ModelWorld);
     }
 
     // TODO: return elapsed time in ms
     return 0;
 }
 
-void bc_view_onModelStart(bc_ModelData *md) {
-    model = md;
-    ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world->ecsWorld, .lastRenderedStep = 0, .renderOutdated = true});
-    ecs_singleton_set(vc.ecsWorld, FocusPlane, {model->world->centralPlane});
+void bc_view_onModelStart(bc_ModelContext *mctx) {
+    model = mctx;
+    ecs_singleton_set(vc.ecsWorld, ModelWorld, {.world = model->world, .lastRenderedStep = 0, .renderOutdated = true});
+    // Find first Plane entity in model to use a default focus
+    ecs_entity_t modelPlaneId = ecs_lookup_fullpath(model->world, "bc.planes.Plane");
+    ecs_iter_t planes = ecs_term_iter(model->world, &(ecs_term_t){
+        .id = modelPlaneId
+    });
+    ecs_entity_t firstPlane = ecs_iter_first(&planes);
+    ecs_singleton_set(vc.ecsWorld, FocusPlane, {firstPlane});
 
     // TEST: ensure that import order hasn't caused mismatched component IDs
-    ecs_entity_t modelPlaneId = ecs_lookup_fullpath(model->world->ecsWorld, "basaltic.components.planes.Plane");
-    ecs_entity_t viewPlaneId = ecs_lookup_fullpath(vc.ecsWorld, "basaltic.components.planes.Plane"); //ecs_id(Plane);
+    ecs_entity_t viewPlaneId = ecs_lookup_fullpath(vc.ecsWorld, "bc.planes.Plane"); //ecs_id(Plane);
     assert(modelPlaneId == viewPlaneId);
 
     bc_editorOnModelStart();
+
+    // Progress single step to run EcsOnStart systems
+    SDL_CondSignal(mctx->cond);
 }
 
-void bc_view_onModelStop(bc_ModelData *md) {
+void bc_view_onModelStop(bc_ModelContext *mctx) {
     ecs_singleton_remove(vc.ecsWorld, ModelWorld);
     bc_editorOnModelStop();
     model = NULL;

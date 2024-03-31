@@ -3,9 +3,9 @@
 #include "basaltic_components.h"
 #include "components/basaltic_components_planes.h"
 #include "htw_core.h"
-#include "basaltic_worldState.h"
 #include "basaltic_worldGen.h"
 #include "khash.h"
+#include <math.h>
 
 #define MAX_DROUGHT_TOLERANCE (1<<13)
 

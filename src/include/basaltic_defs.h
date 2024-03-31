@@ -3,6 +3,8 @@
 
 #include "htw_core.h"
 
+typedef struct bc_ModelData bc_ModelData;
+
 typedef enum {
     BC_SUPERVISOR_SIGNAL_NONE,
     BC_SUPERVISOR_SIGNAL_START_MODEL,

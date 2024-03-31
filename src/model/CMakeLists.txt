@@ -4,7 +4,7 @@ project(basaltic LANGUAGES C)
 
 add_compile_definitions($<$<CONFIG:Debug>:DEBUG>)
 
-add_library(basaltic_model basaltic_model.c basaltic_logic.c basaltic_worldGen.c)
+add_library(basaltic_model basaltic_model.c basaltic_worldGen.c)
 
 find_package(SDL2 REQUIRED)
 

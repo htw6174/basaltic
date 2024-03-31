@@ -1,70 +1,68 @@
-#include <stdbool.h>
 #include <SDL2/SDL.h>
 #include "basaltic_model.h"
-#include "basaltic_commandBuffer.h"
-#include "basaltic_logic.h"
+#include "basaltic_components.h"
+#include "basaltic_systems.h"
 
-void bc_model_argsToStartSettings(int argc, char *argv[], bc_ModelSetupSettings *destinationSettings) {
-    // assign defaults
-    destinationSettings->seed = "6174";
-    destinationSettings->width = 3;
-    destinationSettings->height = 3;
+ecs_world_t *model_createWorld(int argc, char *argv[]) {
+#ifdef FLECS_SANITIZE
+    printf("Initializing flecs in sanitizing mode. Expect a significant slowdown.\n");
+#endif
+    ecs_world_t *world = ecs_init();
+    // TODO: configuration for model worker threads
+    //ecs_set_threads(newWorld->ecsWorld, 4);
+    //ecs_set_stage_count(newWorld->ecsWorld, 2);
+    ECS_IMPORT(world, Bc);
+    ECS_IMPORT(world, BcSystems);
 
-    // TODO: have this change settings according to name provided in arg; for now will use no names and expect a specific order
-    for (int i = 0; i < argc; i++) {
-        switch (i) {
-            case 0:
-                destinationSettings->seed = calloc(BC_MAX_SEED_LENGTH, sizeof(char));
-                strcpy(destinationSettings->seed, argv[i]);
-                break;
-            case 1:
-                destinationSettings->width = htw_strToInt(argv[i]);
-                break;
-            case 2:
-                destinationSettings->height = htw_strToInt(argv[i]);
-                break;
-            default:
-                break;
-        }
-    }
+    ecs_singleton_set(world, Args, {argc, argv});
+
+    // FIXME: for now, need to progress world once before it can be considered "ready"
+    ecs_progress(world, 1.0);
+
+    // TODO: script setup as part of a "game" module?
+    //ecs_plecs_from_file(world, "model/plecs/startup/startup_test.flecs");
+    //ecs_set_pair(world, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/startup/startup_test.flecs"});
+    ecs_set_pair(world, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
+
+    return world;
 }
 
-int bc_model_start(void* in) {
+void model_progressWorld(bc_ModelContext *mctx) {
+    Uint64 startTime = SDL_GetTicks64();
+    ecs_progress(mctx->world, mctx->deltaTime);
+    // get tick duration for stats
+    Uint64 endTime = SDL_GetTicks64();
+    Uint64 duration = endTime - startTime;
+    // TODO: where to store model performance stats?
+    mctx->step++;
+}
+
+void model_destroyWorld(ecs_world_t *world) {
+    ecs_fini(world);
+}
+
+int bc_model_run(void* in) {
     // Extract input data
     bc_ModelThreadInput *threadInput = (bc_ModelThreadInput*)in;
+    bc_ModelContext *modelContext = threadInput->modelContext;
 
-    bc_ModelSetupSettings *modelSettings = threadInput->modelSettings;
-    bc_ModelData *modelData = threadInput->modelData;
+    SDL_LockMutex(modelContext->mutex);
 
-    SDL_LockMutex(modelData->mutex);
-
-    modelData->world = bc_createWorldState(modelSettings->width, modelSettings->height, modelSettings->seed);
-    bc_initializeWorldState(modelData->world);
-
+    modelContext->world = model_createWorld(threadInput->argc, threadInput->argv);
     *threadInput->isModelDataReady = true;
 
-    while (!modelData->shouldStopModel) {
+    while (!modelContext->shouldStopModel) {
         // wait to be signaled
-        if (SDL_CondWait(modelData->cond, modelData->mutex)) {
-            printf("wat");
+        SDL_CondWait(modelContext->cond, modelContext->mutex);
+
+        for (int i = 0; i < modelContext->runForSteps; i++) {
+            model_progressWorld(modelContext);
         }
-
-        Uint64 startTime = SDL_GetTicks64();
-
-        for (int i = 0; i < modelData->runForSteps; i++) {
-            bc_doLogicTick(modelData->world);
-        }
-
-        // get tick duration for stats
-        Uint64 endTime = SDL_GetTicks64();
-        Uint64 duration = endTime - startTime;
-        // TODO: where to store model performance stats?
-
     }
     *threadInput->isModelDataReady = false;
-    bc_destroyWorldState(modelData->world);
+    model_destroyWorld(modelContext->world);
 
-    SDL_UnlockMutex(modelData->mutex);
+    SDL_UnlockMutex(modelContext->mutex);
 
     return 0;
 }

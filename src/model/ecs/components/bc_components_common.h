@@ -32,6 +32,11 @@ ECS_ENUM(RandomizerDistribution, {
     RAND_DISTRIBUTION_NORMAL
 });
 
+// Command line arguments
+ECS_STRUCT(Args, {
+    s32 argc;
+    void *argv;
+});
 
 /**
  * @brief RandomizerInt

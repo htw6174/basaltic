@@ -8,8 +8,8 @@
 
 void bc_setupEditor(void);
 void bc_teardownEditor(void);
-void bc_drawEditor(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *viewWorld, bc_UiState *ui);
-void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelData* model, ecs_world_t *viewWorld);
+void bc_drawEditor(bc_SupervisorInterface* si, bc_ModelContext* model, ecs_world_t *viewWorld, bc_UiState *ui);
+void bc_drawGUI(bc_SupervisorInterface* si, bc_ModelContext* model, ecs_world_t *viewWorld);
 
 
 void bc_editorOnModelStart(void);

@@ -1,13 +1,14 @@
-// TODO: move these into startup files for each module, or do setup in c
+using bc.planes
 
-bc.common {
-    Step :- Step {0}
-}
-
-bc.wildlife {
-    GrowthRate :- AlwaysOverride
-}
-
-bc.elementals {
-    SpiritPower :- AlwaysOverride
+// Overworld setup
+Overworld {
+    - Climate {
+        // hot in center of map with a frozen ring enclosing the world
+        poleBiotemp: 4000,
+        equatorBiotemp: -1500,
+        tempChangePerElevationStep: -65,
+        type: CLIMATE_TYPE_RADIAL,
+        // 40c range over a year
+        season: {temperatureRange: 2000, cycleLength: 24 * 360}
+    }
 }
