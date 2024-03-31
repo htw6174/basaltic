@@ -24,6 +24,17 @@ bcview {
         - PrefabBrush {prefab: 0}
     }
 
+    // action groups
+    groups {
+        step_control
+        camera_keyboard
+        camera_mouse
+        terrain_mouse
+        river_mouse
+        actor_mouse
+        player_mouse
+    }
+
     // action bindings
     actions {
         using components.input
@@ -31,7 +42,7 @@ bcview {
         using bcview.systems.input
         using flecs.meta
 
-        with (ActionGroup, stepControl) {
+        with (ActionGroup, groups.step_control) {
             advance_step {
                 - ActionButton {system: SingleStep}
                 - (ButtonDown, Space)
@@ -46,7 +57,7 @@ bcview {
             }
         }
 
-        with (ActionGroup, cameraKeyboard) {
+        with (ActionGroup, groups.camera_keyboard) {
             camera_pan {
                 - ActionVector {system: CameraPan}
                 - (InputVector, E) {y: 1}
@@ -72,7 +83,7 @@ bcview {
                 - (ButtonDown, C)
             }
         }
-        with (ActionGroup, cameraMouse) {
+        with (ActionGroup, groups.camera_mouse) {
             camera_pan_mouse {
                 - ActionVector {system: CameraPan}
                 - (InputVector, Mouse.Delta) {0.1, 0.1}
@@ -106,6 +117,27 @@ bcview {
             camera_zoom_mouse {
                 - ActionVector {system: CameraZoom}
                 - (InputVector, Mouse.Wheel) {0, -1}
+            }
+        }
+        with (ActionGroup, groups.terrain_mouse) {
+            terrain_modify {
+                - ActionVector {system: PaintAdditiveBrush}
+                - (InputVector, Mouse.Left) {1, 0}
+                - (InputVector, Mouse.Right) {-1, 0}
+            }
+            terrain_value {
+                - ActionButton {system: PaintValueBrush}
+                - (ButtonDown, Mouse.Middle)
+            }
+        }
+        with (ActionGroup, groups.river_mouse) {
+        }
+        with (ActionGroup, groups.actor_mouse) {
+        }
+        with (ActionGroup, groups.player_mouse) {
+            move_player {
+                - ActionButton {system: SetPlayerDestination}
+                - (ButtonDown, Mouse.Right)
             }
         }
     }

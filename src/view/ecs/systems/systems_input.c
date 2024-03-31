@@ -159,7 +159,7 @@ bool processEventSDL(ecs_world_t *world, const SDL_Event *e) {
             break;
         case SDL_MOUSEMOTION:
             // No button to process, update mouse vectors
-            ecs_set(world, MousePosition, InputVector, {e->motion.x, e->motion.y});
+            ecs_set(world, MouseDelta, InputVector, {e->motion.xrel, e->motion.yrel});
             buttonEntity = 0;
             break;
         case SDL_MOUSEWHEEL:
@@ -427,12 +427,14 @@ void SystemsInputImport(ecs_world_t *world) {
     ECS_SYSTEM(world, RunTriggeredActions, EcsPostLoad,
         [in] ActionButton,
         [in] ?(components.input.ActionParams, _),
-        [none] !components.input.ImmediateAction
+        [none] !components.input.ImmediateAction,
+        [none] !Disabled(up(components.input.ActionGroup))
     );
 
     ECS_SYSTEM(world, RunActionVectors, EcsPostLoad,
         [in] ActionVector,
-        [none] !components.input.ImmediateAction
+        [none] !components.input.ImmediateAction,
+        [none] !Disabled(up(components.input.ActionGroup))
     );
 
     ECS_SYSTEM(world, GetDeltaPrevious, EcsPostFrame,

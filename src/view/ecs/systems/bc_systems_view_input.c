@@ -8,15 +8,22 @@
 #include <SDL2/SDL.h>
 
 void SingleStep(ecs_iter_t *it) {
+    ModelStepControl *sc = ecs_field(it, ModelStepControl, 1);
 
+    sc->stepsPerRun = 1;
+    sc->doSingleRun = true;
 }
 
 void AutoStep(ecs_iter_t *it) {
-    // TODO: disable if already autostepping
+    ModelStepControl *sc = ecs_field(it, ModelStepControl, 1);
+
+    sc->doAuto = true;
 }
 
 void PauseStep(ecs_iter_t *it) {
+    ModelStepControl *sc = ecs_field(it, ModelStepControl, 1);
 
+    sc->doAuto = false;
 }
 
 // TODO: would like it if mouse didn't move from starting position between lock and unlock, or gets warped back to starting position on unlock
@@ -397,9 +404,9 @@ void BcviewSystemsInputImport(ecs_world_t *world) {
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, ComponentsInput);
 
-    ECS_SYSTEM(world, SingleStep, 0);
-    ECS_SYSTEM(world, AutoStep, 0);
-    ECS_SYSTEM(world, PauseStep, 0);
+    ECS_SYSTEM(world, SingleStep, 0, ModelStepControl($));
+    ECS_SYSTEM(world, AutoStep, 0, ModelStepControl($));
+    ECS_SYSTEM(world, PauseStep, 0, ModelStepControl($));
 
     ECS_SYSTEM(world, LockMouse, 0);
     ECS_SYSTEM(world, UnlockMouse, 0);

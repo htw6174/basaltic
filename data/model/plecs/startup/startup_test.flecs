@@ -1,14 +1,1 @@
-using bc.planes
 
-// Overworld setup
-Overworld {
-    - Climate {
-        // hot in center of map with a frozen ring enclosing the world
-        poleBiotemp: 4000,
-        equatorBiotemp: -1500,
-        tempChangePerElevationStep: -65,
-        type: CLIMATE_TYPE_RADIAL,
-        // 40c range over a year
-        season: {temperatureRange: 2000, cycleLength: 24 * 360}
-    }
-}

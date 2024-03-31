@@ -351,11 +351,11 @@ void bc_drawGUI(bc_SupervisorInterface *si, bc_ModelContext *model, ecs_world_t 
             igText("Tool mode: ");
             if (igBeginTabBar("Tools", ImGuiTabBarFlags_None)) {
                 // Lookup entities to bind to tab state
-                ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.cameraMouse");
-                ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.terrainMouse");
-                ecs_entity_t riverBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.riverMouse");
-                ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.actorMouse");
-                ecs_entity_t playerBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.actions.playerMouse");
+                ecs_entity_t camBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.groups.camera_mouse");
+                ecs_entity_t terrainBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.groups.terrain_mouse");
+                ecs_entity_t riverBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.groups.river_mouse");
+                ecs_entity_t actorBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.groups.actor_mouse");
+                ecs_entity_t playerBindGroup = ecs_lookup_fullpath(viewWorld, "bcview.groups.player_mouse");
                 if (camBindGroup) {
                     bool camBindActive = igBeginTabItem("Camera", NULL, ImGuiTabItemFlags_None);
                     if (camBindActive) {

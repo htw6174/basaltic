@@ -213,6 +213,11 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, HoveredCell, {0});
     ecs_singleton_set(world, SelectedCell, {0});
 
+    ecs_singleton_set(world, ModelStepControl, {
+        .stepsPerRun = 1,
+        .framesBetweenRuns = 1
+    });
+
     ecs_singleton_add(world, GlobalUniformsVert);
     ecs_singleton_add(world, GlobalUniformsFrag);
     // Uniform block descriptions

@@ -16,13 +16,13 @@ ecs_world_t *model_createWorld(int argc, char *argv[]) {
 
     ecs_singleton_set(world, Args, {argc, argv});
 
+    // TODO: script setup as part of a "game" module?
+    //ecs_plecs_from_file(world, "model/plecs/startup/startup_test.flecs");
+    ecs_set_pair(world, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
+
     // FIXME: for now, need to progress world once before it can be considered "ready"
     ecs_progress(world, 1.0);
 
-    // TODO: script setup as part of a "game" module?
-    //ecs_plecs_from_file(world, "model/plecs/startup/startup_test.flecs");
-    //ecs_set_pair(world, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/startup/startup_test.flecs"});
-    ecs_set_pair(world, 0, ResourceFile, FlecsScriptSource, {.path = "model/plecs/test.flecs"});
 
     return world;
 }
