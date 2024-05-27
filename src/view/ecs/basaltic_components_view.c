@@ -1,3 +1,4 @@
+#include "components/components_input.h"
 #define BASALTIC_VIEW_IMPL
 #include "basaltic_components_view.h"
 
@@ -7,6 +8,7 @@ void BcviewImport(ecs_world_t *world) {
 
     // NOTE: Must have this import before any other definitions, to keep component IDs consistent between model and view
     ECS_IMPORT(world, Bc);
+    ECS_IMPORT(world, ComponentsInput);
 
     // Create one ecs_member_t array per vector type, reuse for each component type
     ecs_member_t vecMembers[4] = {
@@ -263,6 +265,8 @@ void BcviewImport(ecs_world_t *world) {
 
     // Input
     ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
+    ecs_entity_t cellDelta = ecs_new_from_path(world, 0, "components.input.Cell.Delta");
+    ecs_add_pair(world, cellDelta, ecs_id(DeltaVectorOf), ecs_id(HoveredCell));
 
     // Global uniforms
     ecs_singleton_add(world, PVMatrix);

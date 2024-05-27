@@ -1,3 +1,5 @@
+using components.input
+using components.input.Key
 bcview {
     // brush tools
     AdditiveBrush {
@@ -37,8 +39,6 @@ bcview {
 
     // action bindings
     actions {
-        using components.input
-        using components.input.Key
         using bcview.systems.input
         using flecs.meta
 
@@ -124,6 +124,10 @@ bcview {
                 - ActionVector {system: PaintAdditiveBrush}
                 - (InputVector, Mouse.Left) {1, 0}
                 - (InputVector, Mouse.Right) {-1, 0}
+            }
+            terrain_raise_on_move {
+                - ActionVector {system: PaintAdditiveBrush}
+                - (InputVector, Cell.Delta) {1, 1}
             }
             terrain_value {
                 - ActionButton {system: PaintValueBrush}

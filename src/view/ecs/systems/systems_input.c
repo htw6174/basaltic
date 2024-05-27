@@ -305,8 +305,10 @@ void GetDeltaPrevious(ecs_iter_t *it) {
     ecs_entity_t target = ecs_pair_second(it->world, ecs_field_id(it, 1));
     const InputVector *targetVec = ecs_get(it->world, target, InputVector);
 
-    for (int i = 0; i < it->count; i++) {
-        deltas[i].previous = targetVec[i];
+    if (targetVec != NULL) {
+        for (int i = 0; i < it->count; i++) {
+            deltas[i].previous = targetVec[i];
+        }
     }
 }
 
