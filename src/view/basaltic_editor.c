@@ -925,31 +925,33 @@ void ecsEntityInspector(ecs_world_t *world, EcsInspectionContext *ic) {
     // Current Components, Tags, Relationships
     // TODO: also need to get components derived from IsA relationships
     const ecs_type_t *type = ecs_get_type(world, e);
-    for (int i = 0; i < type->count; i++) {
-        ecs_id_t id = type->array[i];
-        igPushID_Int(id);
-        // Pairs don't pass ecs_is_valid, so check for pair first
-        if (ecs_id_is_pair(id)) {
-            ecsPairWidget(world, e, id, &ic->focusEntity);
-        } else if (ecs_is_valid(world, id)) {
-            if (ecs_has(world, id, EcsComponent)) {
-                componentInspector(world, e, id, &ic->focusEntity);
+    if (type != NULL) { // if entity has any components
+        for (int i = 0; i < type->count; i++) {
+            ecs_id_t id = type->array[i];
+            igPushID_Int(id);
+            // Pairs don't pass ecs_is_valid, so check for pair first
+            if (ecs_id_is_pair(id)) {
+                ecsPairWidget(world, e, id, &ic->focusEntity);
+            } else if (ecs_is_valid(world, id)) {
+                if (ecs_has(world, id, EcsComponent)) {
+                    componentInspector(world, e, id, &ic->focusEntity);
+                } else {
+                    // TODO: dedicated tag inspector
+                    if (entityButton(world, id)) {
+                        ic->focusEntity = id;
+                    }
+                    igSameLine(0, -1);
+                    if (igSmallButton("x")) {
+                        ecs_remove_id(world, e, id);
+                    }
+                }
             } else {
-                // TODO: dedicated tag inspector
-                if (entityButton(world, id)) {
-                    ic->focusEntity = id;
-                }
-                igSameLine(0, -1);
-                if (igSmallButton("x")) {
-                    ecs_remove_id(world, e, id);
-                }
+                // Type may contain an invalid ID which is still meaningful (e.g. component override)
+                // TODO: detect and handle specific cases like overrides
+                igText("Unknown type: %u %x", id, id >> 32);
             }
-        } else {
-            // Type may contain an invalid ID which is still meaningful (e.g. component override)
-            // TODO: detect and handle specific cases like overrides
-            igText("Unknown type: %u %x", id, id >> 32);
+            igPopID();
         }
-        igPopID();
     }
     igEndDisabled();
 
