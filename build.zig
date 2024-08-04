@@ -30,20 +30,20 @@ pub fn build(b: *std.Build) void {
     });
     htw_libs_build.setCwd(b.path("libs/htw-libs"));
 
-    // cimgui
-    const cimgui_build = b.addSystemCommand(&[_][]const u8{
-        "cmake",
-        "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-        "-DIMPL_SDL=yes",
-        "-DIMPL_OPENGL3=yes",
-        "-DSDL_PATH=\"\"",
-        "../cimgui_build",
-    });
-    cimgui_build.setCwd(b.path("libs/cimgui"));
+    // cimgui TEMP: disabled until the rest of the build system works
+    // const cimgui_build = b.addSystemCommand(&[_][]const u8{
+    //     "cmake",
+    //     "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+    //     "-DIMPL_SDL=yes",
+    //     "-DIMPL_OPENGL3=yes",
+    //     "-DSDL_PATH=\"\"",
+    //     "../cimgui_build",
+    // });
+    // cimgui_build.setCwd(b.path("libs/cimgui"));
 
     const pre_build = b.step("pre-build", "Build non-zig libraries from source");
     pre_build.dependOn(htw_libs_build);
-    pre_build.dependOn(cimgui_build);
+    // pre_build.dependOn(cimgui_build);
 
     // flecs
     const flecs = b.addStaticLibrary(.{ .name = "flecs" });
@@ -67,7 +67,7 @@ pub fn build(b: *std.Build) void {
     view.linkLibrary(flecs);
     view.linkLibrary(model);
     view.addLibraryPath(b.path("libs/cimgui_build"));
-    view.linkSystemLibrary("cimgui");
+    // view.linkSystemLibrary("cimgui");
 
     const exe = b.addExecutable(.{
         .name = "basaltic",
@@ -92,13 +92,13 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("src/include"));
     exe.addIncludePath(b.path("libs"));
     exe.addIncludePath(b.path("libs/htw-libs/include"));
-    exe.addIncludePath(b.path("libs/cimgui"));
+    // exe.addIncludePath(b.path("libs/cimgui"));
 
     exe.linkSystemLibrary("SDL2");
     // Library linking searches user-added paths first
     exe.addLibraryPath(b.path("libs"));
     exe.linkSystemLibrary("htw_libs");
-    exe.linkSystemLibrary("cimgui");
+    // exe.linkSystemLibrary("cimgui");
     exe.linkLibrary(model);
     exe.linkLibrary(view);
 

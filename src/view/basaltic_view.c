@@ -1,7 +1,7 @@
 #include "basaltic_view.h"
 #include "basaltic_window.h"
 #include "basaltic_sokol_gfx.h"
-#include "basaltic_editor.h"
+// #include "basaltic_editor.h"
 #include "systems/systems_input.h"
 #include "basaltic_uiState.h"
 #include "basaltic_components_view.h"
@@ -128,7 +128,7 @@ void bc_view_onModelStart(bc_ModelContext *mctx) {
     ecs_entity_t viewPlaneId = ecs_lookup_fullpath(vc.ecsWorld, "bc.planes.Plane"); //ecs_id(Plane);
     assert(modelPlaneId == viewPlaneId);
 
-    bc_editorOnModelStart();
+    // bc_editorOnModelStart();
 
     // Progress single step to run EcsOnStart systems
     SDL_CondSignal(mctx->cond);
@@ -136,23 +136,23 @@ void bc_view_onModelStart(bc_ModelContext *mctx) {
 
 void bc_view_onModelStop(bc_ModelContext *mctx) {
     ecs_singleton_remove(vc.ecsWorld, ModelWorld);
-    bc_editorOnModelStop();
+    // bc_editorOnModelStop();
     model = NULL;
 }
 
 void bc_view_setupEditor() {
     // TODO: can handle renderer-specific imgui setup here
-    bc_setupEditor();
+    // bc_setupEditor();
 }
 
 void bc_view_teardownEditor() {
-    bc_teardownEditor();
+    // bc_teardownEditor();
 }
 
 void bc_view_drawEditor(bc_SupervisorInterface *si) {
-    bc_drawEditor(si, model, vc.ecsWorld, vc.ui);
+    // bc_drawEditor(si, model, vc.ecsWorld, vc.ui);
 }
 
 void bc_view_drawGUI(bc_SupervisorInterface* si) {
-    bc_drawGUI(si, model, vc.ecsWorld);
+    // bc_drawGUI(si, model, vc.ecsWorld);
 }
