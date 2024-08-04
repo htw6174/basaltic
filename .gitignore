@@ -12,3 +12,5 @@ assets/
 *.kdev4
 *.spv
 imgui.ini
+zig-cache/
+zig-out/
