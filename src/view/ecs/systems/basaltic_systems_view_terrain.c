@@ -2,6 +2,7 @@
 #include "basaltic_components_view.h"
 #include "basaltic_phases_view.h"
 #include "components/basaltic_components_planes.h"
+#include "components/components_input.h"
 #include "htw_core.h"
 #include "sokol_gfx.h"
 #include "basaltic_sokol_gfx.h"
@@ -1043,7 +1044,8 @@ void DrawPipelineHexTerrain(ecs_iter_t *it) {
     GlobalUniformsFrag *gf = ecs_field(it, GlobalUniformsFrag, ++f);
     TerrainPipelineUniformsVert *tv = ecs_field(it, TerrainPipelineUniformsVert, ++f);
     TerrainPipelineUniformsFrag *tf = ecs_field(it, TerrainPipelineUniformsFrag, ++f);
-    ScaledCursor *cursor = ecs_field(it, ScaledCursor, ++f);
+    //ScaledCursor *cursor = ecs_field(it, ScaledCursor, ++f);
+    InputVector *cursor = ecs_field(it, InputVector, ++f);
 
     const WrapInstanceOffsets *wraps = ecs_singleton_get(it->world, WrapInstanceOffsets);
 
@@ -1103,12 +1105,20 @@ void ReadFeedbackBuffer(ecs_iter_t *it) {
     hovered->y = pixels[1];
 }
 
+void UpdateHoveredCellInputAxis(ecs_iter_t *it) {
+    HoveredCell *hovered = ecs_field(it, HoveredCell, 1);
+    InputVector *vec = ecs_field(it, InputVector, 2);
+    vec->x = hovered->x;
+    vec->y = hovered->y;
+}
+
 void BcviewSystemsTerrainImport(ecs_world_t *world) {
     ECS_MODULE(world, BcviewSystemsTerrain);
 
     // ECS_IMPORT(world, BcPlanes); // NOTE: don't worry about importing modules from the model, model components are guaranteed to be imported before any view systems (to keep component IDs identical between worlds)
     ECS_IMPORT(world, Bcview);
     ECS_IMPORT(world, BcviewPhases);
+    ECS_IMPORT(world, ComponentsInput);
 
     ECS_SYSTEM(world, UpdateTerrainInstances, OnModelChanged,
                [in] ModelQuery,
@@ -1172,7 +1182,7 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] GlobalUniformsFrag($),
                [in] TerrainPipelineUniformsVert(up(bcview.GBufferPass)),
                [in] TerrainPipelineUniformsFrag(up(bcview.GBufferPass)),
-               [in] ScaledCursor($),
+               [in] InputVector(components.input.Mouse.Position),
                [none] ModelWorld($),
                [none] WrapInstanceOffsets($),
                [none] bcview.TerrainRender,
@@ -1182,7 +1192,12 @@ void BcviewSystemsTerrainImport(ecs_world_t *world) {
                [in] RingBuffer,
                [out] HoveredCell($),
                [none] bcview.TerrainRender,
-    );
+               );
+
+    ECS_SYSTEM(world, UpdateHoveredCellInputAxis, EcsOnStore,
+               [in] HoveredCell($),
+               [out] InputVector(components.input.Cell.Position)
+               );
 
     // FIXME: temporary half-measure while transitioning to ecs-defined shader and pipeline descriptions
     // Add global and pipeline uniform block descriptions

@@ -264,9 +264,15 @@ void BcviewImport(ecs_world_t *world) {
     ecs_singleton_set(world, DirtyChunkBuffer, {.count = 0, .chunks = calloc(256, sizeof(s32))}); // TODO: should be sized according to FocusPlane chunk count, should have a component ctor/dtor if it need to alloc
 
     // Input
-    ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
+    // switch to root scope so Cell.Delta isn't made in this module
+    ecs_entity_t old_scope = ecs_set_scope(world, 0);
+    //ecs_add_pair(world, ecs_id(HoveredCell), Previous, ecs_id(HoveredCell));
+    ecs_entity_t cellPosition = ecs_new_from_path(world, 0, "components.input.Cell.Position");
+    ecs_add(world, cellPosition, InputVector);
     ecs_entity_t cellDelta = ecs_new_from_path(world, 0, "components.input.Cell.Delta");
-    ecs_add_pair(world, cellDelta, ecs_id(DeltaVectorOf), ecs_id(HoveredCell));
+    ecs_add(world, cellDelta, InputVector);
+    ecs_add_pair(world, cellDelta, ecs_id(DeltaVectorOf), cellPosition);
+    ecs_set_scope(world, old_scope);
 
     // Global uniforms
     ecs_singleton_add(world, PVMatrix);
