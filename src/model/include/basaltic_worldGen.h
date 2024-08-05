@@ -3,7 +3,7 @@
 
 #include "htw_core.h"
 #include "htw_geomap.h"
-#include "components/basaltic_components_planes.h"
+#include "../ecs/components/basaltic_components_planes.h"
 
 void bc_elevationBrush(htw_ChunkMap *chunkMap, htw_geo_GridCoord pos, s32 value, u32 radius);
 void bc_wobbleLine(htw_ChunkMap *chunkMap, htw_geo_GridCoord startPos, u32 lineLength, u32 maxValue);

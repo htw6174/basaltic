@@ -1,7 +1,31 @@
 const std = @import("std");
 
-// This build file will first build the required c/c++ libraries htw-libs and cimgui with their existing cmake toolchains,
-// then add the emitted files as library dependencies
+/// Will recurse directories
+pub fn addAllCSources(b: *std.Build, compile: *std.Build.Step.Compile, root: []const u8) void {
+    var sources = std.ArrayList([]const u8).init(b.allocator);
+
+    // Search for all C/C++ files in `src` and add them
+    {
+        var dir = std.fs.cwd().openDir(root, .{ .iterate = true }) catch @panic("Directory not found");
+
+        var walker = dir.walk(b.allocator) catch @panic("OOM");
+        defer walker.deinit();
+
+        const allowed_exts = [_][]const u8{ ".c", ".cpp", ".cxx", ".c++", ".cc" };
+        while (walker.next() catch null) |entry| {
+            const ext = std.fs.path.extension(entry.basename);
+            const include_file = for (allowed_exts) |e| {
+                if (std.mem.eql(u8, ext, e))
+                    break true;
+            } else false;
+            if (include_file) {
+                // we have to clone the path as walker.next() or walker.deinit() will override/kill it
+                sources.append(b.dupe(entry.path)) catch @panic("OOM");
+            }
+        }
+    }
+    compile.addCSourceFiles(.{ .root = b.path(root), .files = sources.items });
+}
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -24,11 +48,31 @@ pub fn build(b: *std.Build) void {
     // - A build arg is specified to force re-run external toolchains
 
     // Personal library
-    const htw_libs_build = b.addSystemCommand(&[_][]const u8{
-        "cmake",
-        "../htw_libs_build",
+    // const htw_libs_build = b.addSystemCommand(&[_][]const u8{
+    //     "cmake",
+    //     "../htw_libs_build",
+    // });
+    // htw_libs_build.setCwd(b.path("libs/htw-libs"));
+
+    const htw_libs = b.addStaticLibrary(.{
+        .name = "libhtw",
+        .link_libc = true,
+        .target = target,
+        .optimize = optimize,
     });
-    htw_libs_build.setCwd(b.path("libs/htw-libs"));
+    htw_libs.addCSourceFiles(.{ .root = b.path("libs/htw-libs/src"), .files = &.{
+        "htw_core_math.c",
+        "htw_random.c",
+    } });
+    htw_libs.addCSourceFiles(.{ .root = b.path("libs/htw-libs/src/geomap"), .files = &.{
+        "htw_geomap_chunkmap.c",
+        "htw_geomap_generators.c",
+        "htw_geomap_hexgrid.c",
+        "htw_geomap_spatialStorage.c",
+        "htw_geomap_valuemap.c",
+    } });
+    htw_libs.addIncludePath(b.path("libs/htw-libs/include"));
+    htw_libs.installHeadersDirectory(b.path("libs/htw-libs/include"), "", .{});
 
     // cimgui TEMP: disabled until the rest of the build system works
     // const cimgui_build = b.addSystemCommand(&[_][]const u8{
@@ -41,32 +85,76 @@ pub fn build(b: *std.Build) void {
     // });
     // cimgui_build.setCwd(b.path("libs/cimgui"));
 
-    const pre_build = b.step("pre-build", "Build non-zig libraries from source");
-    pre_build.dependOn(htw_libs_build);
+    // const pre_build = b.step("pre-build", "Build non-zig libraries from source");
+    // pre_build.dependOn(htw_libs_build);
     // pre_build.dependOn(cimgui_build);
 
     // flecs
-    const flecs = b.addStaticLibrary(.{ .name = "flecs" });
-    flecs.addCSourceFile(.{ .path = "libs/flecs.c" });
-    //flecs.addIncludePath(b.path("libs"));
+    const flecs = b.addStaticLibrary(.{
+        .name = "flecs",
+        .link_libc = true,
+        .target = target,
+        .optimize = optimize,
+    });
+    flecs.addCSourceFile(.{ .file = b.path("libs/flecs.c") });
+    // NOTE: installHeadersDirectory is used instead of installHeader, even though there is only one header required here.
+    // This is because installHeader emits only an "include" (no extension) file with the contents of the provided header, instead of a file with the same name as the original
+    // This may be a bug with zig 0.13, because anything linked against a lib built this way can't find the expected header
+    flecs.installHeadersDirectory(b.path("libs"), "", .{ .include_extensions = &.{"flecs.h"} });
 
     // Model library
-    const model = b.addSharedLibrary(.{ .name = "basaltic_model" });
-    model.addCSourceFiles(.{ .root = "src/model", .files = &[_][]const u8{
+    const model = b.addSharedLibrary(.{
+        .name = "basaltic_model",
+        .link_libc = true,
+        .target = target,
+        .optimize = optimize,
+    });
+    model.addCSourceFiles(.{ .root = b.path("src/model"), .files = &.{
         "basaltic_model.c",
+        "basaltic_worldGen.c",
     } });
-    model.step.dependOn(pre_build);
+    // Glob match to add all files under model/ecs
+    addAllCSources(b, model, "src/model/ecs");
+    model.installHeadersDirectory(b.path("src/model"), "", .{ .include_extensions = &.{"basaltic_model.h"} });
+    model.addIncludePath(b.path("src/include"));
+    // TODO: should put model- and view-specific header dependencies in the respective modules
+    model.addIncludePath(b.path("src/model/include"));
+    // TODO: consider a better organization for ecs modules that doesn't require so much relative header location knowledge
+    model.addIncludePath(b.path("src/model/ecs"));
+    model.addIncludePath(b.path("src/model/ecs/components"));
+    model.linkLibrary(htw_libs);
     model.linkLibrary(flecs);
 
     // View Library
-    const view = b.addSharedLibrary(.{ .name = "basaltic_view" });
-    view.addCSourceFiles(.{ .root = "src/view", .files = &[_][]const u8{
+    const view = b.addSharedLibrary(.{
+        .name = "basaltic_view",
+        .link_libc = true,
+        .target = target,
+        .optimize = optimize,
+    });
+    view.addCSourceFiles(.{ .root = b.path("src/view"), .files = &.{
         "basaltic_view.c",
+        "basaltic_sokol_gfx.c",
+        "basaltic_uiState.c",
     } });
-    view.step.dependOn(pre_build);
+    addAllCSources(b, view, "src/view/ecs");
+    view.installHeadersDirectory(b.path("src/view"), "", .{ .include_extensions = &.{"basaltic_view.h"} });
+    view.addIncludePath(b.path("src/include"));
+    view.addIncludePath(b.path("src/view/include"));
+    // TODO: sokol is only used in view module, should localize dependency
+    view.addIncludePath(b.path("libs/sokol"));
+    // TODO: same as model, but further: view also wants to know about all of the model's ecs components
+    view.addIncludePath(b.path("src/view/ecs"));
+    view.addIncludePath(b.path("src/view/ecs/components"));
+    view.addIncludePath(b.path("src/model/ecs"));
+    view.addIncludePath(b.path("src/model/ecs/components"));
+    // TODO: remove khash include from component module header. No need to expose it everywhere.
+    view.addIncludePath(b.path("src/model/include"));
+    view.linkSystemLibrary("SDL2");
+    view.linkSystemLibrary("OpenGL");
+    view.linkLibrary(htw_libs);
     view.linkLibrary(flecs);
     view.linkLibrary(model);
-    view.addLibraryPath(b.path("libs/cimgui_build"));
     // view.linkSystemLibrary("cimgui");
 
     const exe = b.addExecutable(.{
@@ -91,14 +179,16 @@ pub fn build(b: *std.Build) void {
     } });
     exe.addIncludePath(b.path("src/include"));
     exe.addIncludePath(b.path("libs"));
-    exe.addIncludePath(b.path("libs/htw-libs/include"));
     // exe.addIncludePath(b.path("libs/cimgui"));
+    // TODO: move general-purpose flecs modules out of model; only need this for components_common
+    exe.addIncludePath(b.path("src/model/ecs/components"));
 
     exe.linkSystemLibrary("SDL2");
     // Library linking searches user-added paths first
-    exe.addLibraryPath(b.path("libs"));
-    exe.linkSystemLibrary("htw_libs");
+    // exe.addLibraryPath(b.path("libs"));
+    // exe.linkSystemLibrary("htw_libs");
     // exe.linkSystemLibrary("cimgui");
+    exe.linkLibrary(htw_libs);
     exe.linkLibrary(model);
     exe.linkLibrary(view);
 
@@ -107,6 +197,9 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(exe);
 
+    const test_step = b.step("test_step", "...");
+    test_step.dependOn(&view.step);
+
     // TODO: copy licenses to install dir
 
     // This *creates* a Run step in the build graph, to be executed when another
@@ -114,9 +207,9 @@ pub fn build(b: *std.Build) void {
     // such a dependency.
     const run_cmd = b.addRunArtifact(exe);
 
-    // TODO: should automatically get good path for data dir (using lazy paths?)
-    const data_path = "../../data/";
-    run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
+    // set working directory relative to build path instead of setting build directory with args
+    //run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
+    run_cmd.setCwd(b.path("data"));
     run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
     run_cmd.addArg("-e"); // Show editor on start
 

@@ -82,6 +82,7 @@ int main(int argc, char *argv[])
 {
     bc_StartupSettings settings = parseArgs(argc, argv);
     chdir(settings.dataDirectory);
+    printf("Using data dir: %s\n", getcwd(NULL, 0));
 
     bc_startEngine(settings);
 

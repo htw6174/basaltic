@@ -2,7 +2,7 @@
 #include "htw_core.h"
 #include "htw_random.h"
 #include "htw_geomap.h"
-#include "components/basaltic_components_planes.h"
+#include "ecs/components/basaltic_components_planes.h"
 
 void bc_elevationBrush(htw_ChunkMap *chunkMap, htw_geo_GridCoord pos, s32 value, u32 radius) {
     u32 area = htw_geo_getHexArea(radius);
@@ -350,14 +350,3 @@ void bc_smoothTerrain(htw_ChunkMap *cm, s32 minProminance) {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-

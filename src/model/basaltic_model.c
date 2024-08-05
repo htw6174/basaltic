@@ -1,7 +1,7 @@
 #include <SDL2/SDL.h>
 #include "basaltic_model.h"
-#include "basaltic_components.h"
-#include "basaltic_systems.h"
+#include "ecs/basaltic_components.h"
+#include "ecs/basaltic_systems.h"
 
 ecs_world_t *model_createWorld(int argc, char *argv[]) {
 #ifdef FLECS_SANITIZE
