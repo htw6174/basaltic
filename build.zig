@@ -45,6 +45,9 @@ pub fn build(b: *std.Build) void {
     const libhtw_dep = b.dependency("libhtw", .{ .target = target, .optimize = optimize });
     const libhtw = libhtw_dep.artifact("libhtw");
 
+    const cimgui_dep = b.dependency("cimgui", .{ .target = target, .optimize = optimize });
+    const cimgui = cimgui_dep.artifact("cimgui");
+
     // cimgui TEMP: disabled until the rest of the build system works
     // const cimgui_build = b.addSystemCommand(&[_][]const u8{
     //     "cmake",
@@ -124,9 +127,9 @@ pub fn build(b: *std.Build) void {
     view.linkSystemLibrary("SDL2");
     view.linkSystemLibrary("OpenGL");
     view.linkLibrary(libhtw);
+    view.linkLibrary(cimgui);
     view.linkLibrary(flecs);
     view.linkLibrary(model);
-    // view.linkSystemLibrary("cimgui");
 
     const exe = b.addExecutable(.{
         .name = "basaltic",
@@ -155,11 +158,8 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("src/model/ecs/components"));
 
     exe.linkSystemLibrary("SDL2");
-    // Library linking searches user-added paths first
-    // exe.addLibraryPath(b.path("libs"));
-    // exe.linkSystemLibrary("libhtw");
-    // exe.linkSystemLibrary("cimgui");
     exe.linkLibrary(libhtw);
+    exe.linkLibrary(cimgui);
     exe.linkLibrary(model);
     exe.linkLibrary(view);
 
@@ -179,7 +179,8 @@ pub fn build(b: *std.Build) void {
     // run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
     run_cmd.setCwd(b.path("data"));
     run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
-    // run_cmd.addArg("-e"); // Show editor on start
+    // FIXME: why does removing this switch cause an early crash?
+    run_cmd.addArg("-e"); // Show editor on start
 
     // By making the run step depend on the install step, it will be run from the
     // installation directory rather than directly from within the cache directory.
