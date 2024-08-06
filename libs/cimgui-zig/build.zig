@@ -82,6 +82,7 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(b.path(root ++ "imgui"));
     lib.addIncludePath(b.path(root ++ "imgui/backends"));
     lib.installHeadersDirectory(b.path(root), "", .{ .include_extensions = &.{"cimgui.h"} });
+    lib.installHeadersDirectory(b.path(root ++ "generator/output"), "", .{ .include_extensions = &.{"cimgui_impl.h"} });
 
     b.installArtifact(lib);
 }

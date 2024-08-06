@@ -277,7 +277,7 @@ void bc_drawEditor(bc_SupervisorInterface *si, bc_ModelContext *model, ecs_world
 
 void bc_drawGUI(bc_SupervisorInterface *si, bc_ModelContext *model, ecs_world_t *viewWorld) {
     // enable docking over entire screen
-    igDockSpaceOverViewport(igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
+    igDockSpaceOverViewport(0, igGetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, ImGuiWindowClass_ImGuiWindowClass());
 
     if (model == NULL) {
         if (igBegin("New World", NULL, 0)) {
@@ -1359,7 +1359,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
                         igPushStyleColor_Vec4(ImGuiCol_Text, IG_COLOR_ENTITY);
                     }
                     // NOTE: igSelectable will, by default, call CloseCurrentPopup when clicked. Set flag to disable this behavior
-                    if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_DontClosePopups, (ImVec2){0, 0})) {
+                    if (igSelectable_Bool(name, e == *selected, ImGuiSelectableFlags_NoAutoClosePopups, (ImVec2){0, 0})) {
                         *selected = e;
                         anyClicked = true;
                     }
@@ -1396,7 +1396,7 @@ bool entityList(ecs_world_t *world, ecs_iter_t *it, ImGuiTextFilter *filter, ImV
     }
     *pageNumber = CLAMP(*pageNumber, 1, pageCount);
     //igEndChild(); // List Window
-    
+
     return anyClicked;
 
     // TODO: make page number optional, display "x more results..." if not provided

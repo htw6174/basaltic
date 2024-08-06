@@ -16,12 +16,10 @@
     // internet connectivity.
     .dependencies = .{
         .libhtw = .{
-            .url = "libs/htw-libs",
-            .hash = "12209bba968638ea15d8da0e89f837e004485e97da9f066b584f5699f124850b4e31",
+            .path = "libs/htw-libs",
         },
         .cimgui = .{
-            .url = "libs/cimgui-zig",
-            .hash = "122052fd8b9a0fa3c8e13c0f962cf8dfd3469dd2af96811a43a509dbb0bf5a72235a",
+            .path = "libs/cimgui-zig",
         },
     },
     .paths = .{

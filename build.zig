@@ -108,6 +108,7 @@ pub fn build(b: *std.Build) void {
     });
     view.addCSourceFiles(.{ .root = b.path("src/view"), .files = &.{
         "basaltic_view.c",
+        "basaltic_editor.c",
         "basaltic_sokol_gfx.c",
         "basaltic_uiState.c",
     } });
