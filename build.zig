@@ -1,6 +1,6 @@
 const std = @import("std");
 
-/// Will recurse directories
+/// NOTE: Will recurse directories
 pub fn addAllCSources(b: *std.Build, compile: *std.Build.Step.Compile, root: []const u8) void {
     var sources = std.ArrayList([]const u8).init(b.allocator);
 
@@ -42,37 +42,8 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // Libraries from git submodules
-    // TODO: set this up so that these commands are run only if:
-    // - The expected output files do not exist OR
-    // - A build arg is specified to force re-run external toolchains
-
-    // Personal library
-    // const htw_libs_build = b.addSystemCommand(&[_][]const u8{
-    //     "cmake",
-    //     "../htw_libs_build",
-    // });
-    // htw_libs_build.setCwd(b.path("libs/htw-libs"));
-
-    const htw_libs = b.addStaticLibrary(.{
-        .name = "libhtw",
-        .link_libc = true,
-        .target = target,
-        .optimize = optimize,
-    });
-    htw_libs.addCSourceFiles(.{ .root = b.path("libs/htw-libs/src"), .files = &.{
-        "htw_core_math.c",
-        "htw_random.c",
-    } });
-    htw_libs.addCSourceFiles(.{ .root = b.path("libs/htw-libs/src/geomap"), .files = &.{
-        "htw_geomap_chunkmap.c",
-        "htw_geomap_generators.c",
-        "htw_geomap_hexgrid.c",
-        "htw_geomap_spatialStorage.c",
-        "htw_geomap_valuemap.c",
-    } });
-    htw_libs.addIncludePath(b.path("libs/htw-libs/include"));
-    htw_libs.installHeadersDirectory(b.path("libs/htw-libs/include"), "", .{});
+    const libhtw_dep = b.dependency("libhtw", .{ .target = target, .optimize = optimize });
+    const libhtw = libhtw_dep.artifact("libhtw");
 
     // cimgui TEMP: disabled until the rest of the build system works
     // const cimgui_build = b.addSystemCommand(&[_][]const u8{
@@ -86,7 +57,7 @@ pub fn build(b: *std.Build) void {
     // cimgui_build.setCwd(b.path("libs/cimgui"));
 
     // const pre_build = b.step("pre-build", "Build non-zig libraries from source");
-    // pre_build.dependOn(htw_libs_build);
+    // pre_build.dependOn(libhtw_build);
     // pre_build.dependOn(cimgui_build);
 
     // flecs
@@ -122,7 +93,7 @@ pub fn build(b: *std.Build) void {
     // TODO: consider a better organization for ecs modules that doesn't require so much relative header location knowledge
     model.addIncludePath(b.path("src/model/ecs"));
     model.addIncludePath(b.path("src/model/ecs/components"));
-    model.linkLibrary(htw_libs);
+    model.linkLibrary(libhtw);
     model.linkLibrary(flecs);
 
     // View Library
@@ -152,7 +123,7 @@ pub fn build(b: *std.Build) void {
     view.addIncludePath(b.path("src/model/include"));
     view.linkSystemLibrary("SDL2");
     view.linkSystemLibrary("OpenGL");
-    view.linkLibrary(htw_libs);
+    view.linkLibrary(libhtw);
     view.linkLibrary(flecs);
     view.linkLibrary(model);
     // view.linkSystemLibrary("cimgui");
@@ -186,9 +157,9 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2");
     // Library linking searches user-added paths first
     // exe.addLibraryPath(b.path("libs"));
-    // exe.linkSystemLibrary("htw_libs");
+    // exe.linkSystemLibrary("libhtw");
     // exe.linkSystemLibrary("cimgui");
-    exe.linkLibrary(htw_libs);
+    exe.linkLibrary(libhtw);
     exe.linkLibrary(model);
     exe.linkLibrary(view);
 
@@ -196,9 +167,6 @@ pub fn build(b: *std.Build) void {
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
     b.installArtifact(exe);
-
-    const test_step = b.step("test_step", "...");
-    test_step.dependOn(&view.step);
 
     // TODO: copy licenses to install dir
 
@@ -208,10 +176,10 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
 
     // set working directory relative to build path instead of setting build directory with args
-    //run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
+    // run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
     run_cmd.setCwd(b.path("data"));
     run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
-    run_cmd.addArg("-e"); // Show editor on start
+    // run_cmd.addArg("-e"); // Show editor on start
 
     // By making the run step depend on the install step, it will be run from the
     // installation directory rather than directly from within the cache directory.
