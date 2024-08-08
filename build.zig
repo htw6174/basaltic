@@ -1,4 +1,5 @@
 const std = @import("std");
+const clangd = @import("clangd.zig");
 
 /// NOTE: Will recurse directories
 pub fn addAllCSources(b: *std.Build, compile: *std.Build.Step.Compile, root: []const u8) void {
@@ -71,21 +72,23 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    model.addCSourceFiles(.{ .root = b.path("src/model"), .files = &.{
-        "basaltic_model.c",
-        "basaltic_worldGen.c",
-    } });
-    // Glob match to add all files under model/ecs
-    addAllCSources(b, model, "src/model/ecs");
-    model.installHeadersDirectory(b.path("src/model"), "", .{ .include_extensions = &.{"basaltic_model.h"} });
-    model.addIncludePath(b.path("src/include"));
-    // TODO: should put model- and view-specific header dependencies in the respective modules
-    model.addIncludePath(b.path("src/model/include"));
-    // TODO: consider a better organization for ecs modules that doesn't require so much relative header location knowledge
-    model.addIncludePath(b.path("src/model/ecs"));
-    model.addIncludePath(b.path("src/model/ecs/components"));
-    model.linkLibrary(libhtw);
-    model.linkLibrary(flecs);
+    {
+        model.addCSourceFiles(.{ .root = b.path("src/model"), .files = &.{
+            "basaltic_model.c",
+            "basaltic_worldGen.c",
+        } });
+        // Glob match to add all files under model/ecs
+        addAllCSources(b, model, "src/model/ecs");
+        model.installHeadersDirectory(b.path("src/model"), "", .{ .include_extensions = &.{"basaltic_model.h"} });
+        model.addIncludePath(b.path("src/include"));
+        // TODO: should put model- and view-specific header dependencies in the respective modules
+        model.addIncludePath(b.path("src/model/include"));
+        // TODO: consider a better organization for ecs modules that doesn't require so much relative header location knowledge
+        model.addIncludePath(b.path("src/model/ecs"));
+        model.addIncludePath(b.path("src/model/ecs/components"));
+        model.linkLibrary(libhtw);
+        model.linkLibrary(flecs);
+    }
 
     // View Library
     const view = b.addSharedLibrary(.{
@@ -94,31 +97,33 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    view.addCSourceFiles(.{ .root = b.path("src/view"), .files = &.{
-        "basaltic_view.c",
-        "basaltic_editor.c",
-        "basaltic_sokol_gfx.c",
-        "basaltic_uiState.c",
-    } });
-    addAllCSources(b, view, "src/view/ecs");
-    view.installHeadersDirectory(b.path("src/view"), "", .{ .include_extensions = &.{"basaltic_view.h"} });
-    view.addIncludePath(b.path("src/include"));
-    view.addIncludePath(b.path("src/view/include"));
-    // TODO: sokol is only used in view module, should localize dependency
-    view.addIncludePath(b.path("libs/sokol"));
-    // TODO: same as model, but further: view also wants to know about all of the model's ecs components
-    view.addIncludePath(b.path("src/view/ecs"));
-    view.addIncludePath(b.path("src/view/ecs/components"));
-    view.addIncludePath(b.path("src/model/ecs"));
-    view.addIncludePath(b.path("src/model/ecs/components"));
-    // TODO: remove khash include from component module header. No need to expose it everywhere.
-    view.addIncludePath(b.path("src/model/include"));
-    view.linkSystemLibrary("SDL2");
-    view.linkSystemLibrary("OpenGL");
-    view.linkLibrary(libhtw);
-    view.linkLibrary(cimgui);
-    view.linkLibrary(flecs);
-    view.linkLibrary(model);
+    {
+        view.addCSourceFiles(.{ .root = b.path("src/view"), .files = &.{
+            "basaltic_view.c",
+            "basaltic_editor.c",
+            "basaltic_sokol_gfx.c",
+            "basaltic_uiState.c",
+        } });
+        addAllCSources(b, view, "src/view/ecs");
+        view.installHeadersDirectory(b.path("src/view"), "", .{ .include_extensions = &.{"basaltic_view.h"} });
+        view.addIncludePath(b.path("src/include"));
+        view.addIncludePath(b.path("src/view/include"));
+        // TODO: sokol is only used in view module, should localize dependency
+        view.addIncludePath(b.path("libs/sokol"));
+        // TODO: same as model, but further: view also wants to know about all of the model's ecs components
+        view.addIncludePath(b.path("src/view/ecs"));
+        view.addIncludePath(b.path("src/view/ecs/components"));
+        view.addIncludePath(b.path("src/model/ecs"));
+        view.addIncludePath(b.path("src/model/ecs/components"));
+        // TODO: remove khash include from component module header. No need to expose it everywhere.
+        view.addIncludePath(b.path("src/model/include"));
+        view.linkSystemLibrary("SDL2");
+        view.linkSystemLibrary("OpenGL");
+        view.linkLibrary(libhtw);
+        view.linkLibrary(cimgui);
+        view.linkLibrary(flecs);
+        view.linkLibrary(model);
+    }
 
     const exe = b.addExecutable(.{
         .name = "basaltic",
@@ -130,28 +135,30 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // Add c source files after creating the exe: Build.Step.Compile
-    // can also specify .flags to apply to this source file
-    // If adding multiple c files with the same flags, use addCSourceFiles
-    exe.addCSourceFile(.{ .file = b.path("src/main.c") });
-    exe.addCSourceFiles(.{ .root = b.path("src"), .files = &.{
-        "basaltic_super.c",
-        "basaltic_window.c",
-        "basaltic_editor_base.c",
-        "bc_flecs_utils.c",
-    } });
-    exe.addIncludePath(b.path("src/include"));
-    exe.addIncludePath(b.path("libs"));
-    // exe.addIncludePath(b.path("libs/cimgui"));
-    // TODO: move general-purpose flecs modules out of model; only need this for components_common
-    exe.addIncludePath(b.path("src/model/ecs/components"));
+    {
+        // Add c source files after creating the exe: Build.Step.Compile
+        // can also specify .flags to apply to this source file
+        // If adding multiple c files with the same flags, use addCSourceFiles
+        exe.addCSourceFile(.{ .file = b.path("src/main.c") });
+        exe.addCSourceFiles(.{ .root = b.path("src"), .files = &.{
+            "basaltic_super.c",
+            "basaltic_window.c",
+            "basaltic_editor_base.c",
+            "bc_flecs_utils.c",
+        } });
+        exe.addIncludePath(b.path("src/include"));
+        exe.addIncludePath(b.path("libs"));
+        // exe.addIncludePath(b.path("libs/cimgui"));
+        // TODO: move general-purpose flecs modules out of model; only need this for components_common
+        exe.addIncludePath(b.path("src/model/ecs/components"));
 
-    exe.linkSystemLibrary("SDL2");
-    exe.linkLibrary(libhtw);
-    exe.linkLibrary(cimgui);
-    exe.linkLibrary(argparse);
-    exe.linkLibrary(model);
-    exe.linkLibrary(view);
+        exe.linkSystemLibrary("SDL2");
+        exe.linkLibrary(libhtw);
+        exe.linkLibrary(cimgui);
+        exe.linkLibrary(argparse);
+        exe.linkLibrary(model);
+        exe.linkLibrary(view);
+    }
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -164,52 +171,57 @@ pub fn build(b: *std.Build) void {
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
     const run_cmd = b.addRunArtifact(exe);
+    {
+        // set working directory relative to build path instead of setting build directory with args
+        run_cmd.setCwd(b.path("data"));
 
-    // set working directory relative to build path instead of setting build directory with args
-    run_cmd.setCwd(b.path("data"));
+        const run_args = .{
+            "-n 3 3",
+            "-e",
+        };
+        run_cmd.addArgs(&run_args);
 
-    const run_args = .{
-        "-n 3 3",
-        "-e",
-    };
-    run_cmd.addArgs(&run_args);
-    // FIXME: something very weird with args, different ordering and inclusion can cause immediate crashes
-    // Would also like to know why running the binary manually appears to use the same args and working directory, and how the binary is so small
-    // run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
-    // run_cmd.addArg("-e"); // Show editor on start
+        // By making the run step depend on the install step, it will be run from the
+        // installation directory rather than directly from within the cache directory.
+        // This is not necessary, however, if the application depends on other installed
+        // files, this ensures they will be present and in the expected location.
+        run_cmd.step.dependOn(b.getInstallStep());
 
-    // By making the run step depend on the install step, it will be run from the
-    // installation directory rather than directly from within the cache directory.
-    // This is not necessary, however, if the application depends on other installed
-    // files, this ensures they will be present and in the expected location.
-    run_cmd.step.dependOn(b.getInstallStep());
+        // This allows the user to pass arguments to the application in the build
+        // command itself, like this: `zig build run -- arg1 arg2 etc`
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+        // This creates a build step. It will be visible in the `zig build --help` menu,
+        // and can be selected like this: `zig build run`
+        // This will evaluate the `run` step rather than the default, which is "install".
+        const run_step = b.step("run", "Run the app");
+        run_step.dependOn(&run_cmd.step);
     }
 
-    // This creates a build step. It will be visible in the `zig build --help` menu,
-    // and can be selected like this: `zig build run`
-    // This will evaluate the `run` step rather than the default, which is "install".
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    const gdb_cmd = .{
+    const debug_cmd = b.addSystemCommand(&.{
         "gdb",
         "--silent",
         "--args",
-        exe.name,
-        // FIXME: how to use lazy path for data dir, when cwd is needed to start gdb in the right place?
-        "-d /home/htw/projects/c/basaltic/data",
-    } ++ run_args;
+    });
+    {
+        debug_cmd.step.dependOn(b.getInstallStep());
+        // note: nearly identical to debug_cmd.addFileArg(exe.getEmittedBin());
+        debug_cmd.addArtifactArg(exe);
+        // NOTE: use instead of `addArgs(run_args)` to capture extra zig build args
+        debug_cmd.argv.appendSlice(b.allocator, run_cmd.argv.items) catch @panic("OOM");
+        debug_cmd.setCwd(b.path("data"));
 
-    const debug_cmd = b.addSystemCommand(&gdb_cmd);
-    debug_cmd.step.dependOn(b.getInstallStep());
-    debug_cmd.setCwd(exe.getEmittedBinDirectory());
+        // Debug step
+        const debug_step = b.step("debug", "Use gdb to run the application");
+        debug_step.dependOn(&debug_cmd.step);
+    }
 
-    // Debug step
-    const debug_step = b.step("debug", "Use gdb to run the app");
-    debug_step.dependOn(&debug_cmd.step);
+    const clangd_emit = b.option(bool, "clangd", "Enable to generate clangd config. Default: true") orelse true;
+    if (clangd_emit) {
+        clangd.CompileCommandsJson.generate(b, exe.root_module, .{
+            //.cstd = .{ .Libc = "any-windows-any" },
+        }) catch std.log.err("Failed to generate clangd config", .{});
+    }
 }

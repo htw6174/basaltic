@@ -1,0 +1,15 @@
+[
+    {
+        "arguments": [
+            "zig cc",
+            "src/main.c",
+            "-D__GNUC__",
+            "-isystem/home/htw/Applications/zig-linux-x86_64-0.13.0/lib/include",
+            "-Isrc/include",
+            "-Ilibs",
+            "-Isrc/model/ecs/components"
+        ],
+        "directory": "/home/htw/projects/c/basaltic",
+        "file": "src/main.c"
+    }
+]

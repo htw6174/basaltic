@@ -372,7 +372,8 @@ const char *plane_getCellLifezoneName(const Plane *plane, const Climate *climate
     s32 biotemp = plane_GetCellBiotemperature(plane, climate, pos);
     s32 petRatio = cell->humidityPreference;
     // TODO: translate biotemp and petRatio into range of name array
-    s32 biotempRemap = sqrt((double)biotemp); // [0, 2400] -> [0, 48]
+    // NOTE: although some compilers were OK with it, technically not allowed to take sqrt(value<0)
+    s32 biotempRemap = (int)floor(sqrt(abs((float)biotemp))); // [0, 2400] -> [0, 48]
     biotempRemap = remap_int(biotempRemap, 2, 48, 1, 5);
     biotemp = biotemp < -1750 ? 0 : biotempRemap;
     if (cell->height < 0) {
