@@ -48,20 +48,8 @@ pub fn build(b: *std.Build) void {
     const cimgui_dep = b.dependency("cimgui", .{ .target = target, .optimize = optimize });
     const cimgui = cimgui_dep.artifact("cimgui");
 
-    // cimgui TEMP: disabled until the rest of the build system works
-    // const cimgui_build = b.addSystemCommand(&[_][]const u8{
-    //     "cmake",
-    //     "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-    //     "-DIMPL_SDL=yes",
-    //     "-DIMPL_OPENGL3=yes",
-    //     "-DSDL_PATH=\"\"",
-    //     "../cimgui_build",
-    // });
-    // cimgui_build.setCwd(b.path("libs/cimgui"));
-
-    // const pre_build = b.step("pre-build", "Build non-zig libraries from source");
-    // pre_build.dependOn(libhtw_build);
-    // pre_build.dependOn(cimgui_build);
+    const argparse_dep = b.dependency("argparse", .{ .target = target, .optimize = optimize });
+    const argparse = argparse_dep.artifact("argparse");
 
     // flecs
     const flecs = b.addStaticLibrary(.{
@@ -146,7 +134,7 @@ pub fn build(b: *std.Build) void {
     // can also specify .flags to apply to this source file
     // If adding multiple c files with the same flags, use addCSourceFiles
     exe.addCSourceFile(.{ .file = b.path("src/main.c") });
-    exe.addCSourceFiles(.{ .root = b.path("src"), .files = &[_][]const u8{
+    exe.addCSourceFiles(.{ .root = b.path("src"), .files = &.{
         "basaltic_super.c",
         "basaltic_window.c",
         "basaltic_editor_base.c",
@@ -161,6 +149,7 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2");
     exe.linkLibrary(libhtw);
     exe.linkLibrary(cimgui);
+    exe.linkLibrary(argparse);
     exe.linkLibrary(model);
     exe.linkLibrary(view);
 
@@ -177,11 +166,17 @@ pub fn build(b: *std.Build) void {
     const run_cmd = b.addRunArtifact(exe);
 
     // set working directory relative to build path instead of setting build directory with args
-    // run_cmd.addArg("-d " ++ data_path); // Default location is correct for a "real" install, for dev need to point to the project's data dir
     run_cmd.setCwd(b.path("data"));
-    run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
-    // FIXME: why does removing this switch cause an early crash?
-    run_cmd.addArg("-e"); // Show editor on start
+
+    const run_args = .{
+        "-n 3 3",
+        "-e",
+    };
+    run_cmd.addArgs(&run_args);
+    // FIXME: something very weird with args, different ordering and inclusion can cause immediate crashes
+    // Would also like to know why running the binary manually appears to use the same args and working directory, and how the binary is so small
+    // run_cmd.addArg("-n 3 3"); // New world, 3x3 chunks
+    // run_cmd.addArg("-e"); // Show editor on start
 
     // By making the run step depend on the install step, it will be run from the
     // installation directory rather than directly from within the cache directory.
@@ -200,4 +195,21 @@ pub fn build(b: *std.Build) void {
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const gdb_cmd = .{
+        "gdb",
+        "--silent",
+        "--args",
+        exe.name,
+        // FIXME: how to use lazy path for data dir, when cwd is needed to start gdb in the right place?
+        "-d /home/htw/projects/c/basaltic/data",
+    } ++ run_args;
+
+    const debug_cmd = b.addSystemCommand(&gdb_cmd);
+    debug_cmd.step.dependOn(b.getInstallStep());
+    debug_cmd.setCwd(exe.getEmittedBinDirectory());
+
+    // Debug step
+    const debug_step = b.step("debug", "Use gdb to run the app");
+    debug_step.dependOn(&debug_cmd.step);
 }

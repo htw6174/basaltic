@@ -2,12 +2,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <limits.h>
-#include <unistd.h>
 #include <SDL2/SDL.h>
+#include "argparse.h"
 #include "basaltic_super.h"
 
 bc_StartupSettings parseArgs(int argc, char *argv[]);
 
+// FIXME: it's possible for a single argv string to contain whitespace; args might not be delivered as expeced e.g.
+// Some methods of running will give argc = 3, argv = {"-n", "3", "3"}
+// While others will give argc = 1, argv = {"-n 3 3"}
 bc_StartupSettings parseArgs(int argc, char *argv[]) {
     // get arg option limits
 #ifdef _WIN32
@@ -33,6 +36,7 @@ bc_StartupSettings parseArgs(int argc, char *argv[]) {
 
     for (int i = 1; i < argc; i++) {
         char *arg = argv[i];
+        printf("arg %d: %s\n", i, arg);
         if (arg[0] == '-') {
             switch (arg[1]) {
                 case 'n':
